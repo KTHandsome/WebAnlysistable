@@ -1,0 +1,387 @@
+{% extends "base.html" %}
+
+{% block title %}
+檢紀資料管理 - EACS Web
+{% endblock %}
+
+
+{% block head %}
+
+<style>
+    .content-title {
+        font-size: 26px;
+        font-weight: bold;
+        margin: 0 0 20px 0;
+        color: #0f7165;
+    }
+
+    .card {
+        background-color: white;
+        border: 1px solid #d9d9d9;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 20px;  
+    }
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    align-items: start;
+}
+
+.card-grid .card {
+    margin-bottom: 0;
+}
+
+@media (max-width: 1100px) {
+    .card-grid {
+        grid-template-columns: 1fr;
+    }
+}    
+
+    .card-title {
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 14px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 170px minmax(260px, 1fr);
+        gap: 16px;
+        margin-bottom: 14px;
+        align-items: center;
+    }
+
+    label {
+        font-weight: bold;
+    }
+
+    input,
+    select {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 9px 10px;
+        border: 1px solid #bfc5cc;
+        border-radius: 4px;
+        font-size: 16px;
+    }
+
+    .button-row {
+        text-align: center;
+        margin-top: 20px;
+    }
+
+    button {
+        padding: 10px 28px;
+        font-size: 16px;
+        border: none;
+        border-radius: 5px;
+        background-color: #2f6fab;
+        color: white;
+        cursor: pointer;
+    }
+
+    button:hover {
+        background-color: #245d90;
+    }
+
+    .message {
+        padding: 12px;
+        border-radius: 5px;
+        margin-bottom: 14px;
+    }
+
+    .success {
+        background-color: #eef8ee;
+        border: 1px solid #8cc58c;
+        color: #206020;
+    }
+
+    .error {
+        background-color: #fff3f3;
+        border: 1px solid #e1a5a5;
+        color: #a00000;
+    }
+
+    @media (max-width: 900px) {
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+{% endblock %}
+
+
+{% block content %}
+
+<div class="content-title">
+    檢紀資料管理
+</div>
+
+
+<div class="card-grid">
+    <div class="card">
+
+        <div class="card-title">
+            匯入年度 MDL / QAQC CSV
+        </div>
+
+        {% if success_message %}
+        <div class="message success">
+            {{ success_message }}
+        </div>
+        {% endif %}
+
+        {% if error_message %}
+        <div class="message error">
+            {{ error_message }}
+        </div>
+        {% endif %}
+
+        <form
+    method="post"
+    action="/control-import"
+    enctype="multipart/form-data"
+>
+
+            <div class="form-row">
+                <label for="ctrl_year">年度</label>
+
+                <select id="ctrl_year" name="ctrl_year">
+                    <option value="2026">2026</option>
+                </select>
+            </div>
+
+            <div class="form-row">
+                <label for="csv_file">CSV 檔案</label>
+
+                <input
+                    type="file"
+                    id="csv_file"
+                    name="csv_file"
+                    accept=".csv"
+                    required
+                >
+            </div>
+
+            <div class="button-row">
+                <button type="submit">
+                    匯入管制資料
+                </button>
+            </div>
+
+        </form>
+
+    </div>
+
+    <div class="card">
+
+    <div class="card-title">
+        匯入方法設定 CSV
+    </div>
+
+    {% if method_success_message %}
+    <div class="message success">
+        {{ method_success_message }}
+    </div>
+    {% endif %}
+
+    {% if method_error_message %}
+    <div class="message error">
+       {{ method_error_message | safe }}
+    </div>
+    {% endif %}
+
+    <form
+        method="post"
+        action="/method-settings-import"
+        enctype="multipart/form-data"
+    >
+
+        <div class="form-row">
+            <label for="method_csv_file">
+                CSV 檔案
+            </label>
+
+            <input
+                type="file"
+                id="method_csv_file"
+                name="method_csv_file"
+                accept=".csv"
+                required
+            >
+        </div>
+
+        <div class="button-row">
+            <button type="submit">
+                匯入方法設定
+            </button>
+        </div>
+
+    </form>
+
+</div>
+
+
+<div class="card">
+
+    <div class="card-title">
+        匯入報表設定 CSV
+    </div>
+
+    {% if report_success_message %}
+    <div class="message success">
+        {{ report_success_message }}
+    </div>
+    {% endif %}
+
+    {% if report_error_message %}
+    <div class="message error">
+        {{ report_error_message | safe }}
+    </div>
+    {% endif %}
+
+    <form
+        method="post"
+        action="/report-settings-import"
+        enctype="multipart/form-data"
+    >
+
+        <div class="form-row">
+
+            <label for="report_csv_file">
+                CSV 檔案
+            </label>
+
+            <input
+                type="file"
+                id="report_csv_file"
+                name="report_csv_file"
+                accept=".csv"
+                required
+            >
+
+        </div>
+
+        <div class="button-row">
+
+            <button type="submit">
+                匯入報表設定
+            </button>
+
+        </div>
+
+    </form>
+
+</div>
+
+<div class="card">
+
+    <div class="card-title">
+        匯入儀器設定 CSV
+    </div>
+
+    {% if instrument_success_message %}
+    <div class="message success">
+        {{ instrument_success_message }}
+    </div>
+    {% endif %}
+
+    {% if instrument_error_message %}
+    <div class="message error">
+        {{ instrument_error_message | safe }}
+    </div>
+    {% endif %}
+
+    <form
+        method="post"
+        action="/instrument-settings-import"
+        enctype="multipart/form-data"
+    >
+
+        <div class="form-row">
+
+            <label for="instrument_csv_file">
+                CSV 檔案
+            </label>
+
+            <input
+                type="file"
+                id="instrument_csv_file"
+                name="instrument_csv_file"
+                accept=".csv"
+                required
+            >
+
+        </div>
+
+        <div class="button-row">
+
+            <button type="submit">
+                匯入儀器設定
+            </button>
+
+        </div>
+
+    </form>
+
+</div>
+
+<div class="card">
+
+    <div class="card-title">
+        匯入方法－儀器關聯 CSV
+    </div>
+
+    {% if method_instrument_success_message %}
+    <div class="message success">
+        {{ method_instrument_success_message }}
+    </div>
+    {% endif %}
+
+    {% if method_instrument_error_message %}
+    <div class="message error">
+        {{ method_instrument_error_message | safe }}
+    </div>
+    {% endif %}
+
+    <form
+        method="post"
+        action="/method-instrument-import"
+        enctype="multipart/form-data"
+    >
+
+        <div class="form-row">
+
+            <label for="method_instrument_csv_file">
+                CSV 檔案
+            </label>
+
+            <input
+                type="file"
+                id="method_instrument_csv_file"
+                name="method_instrument_csv_file"
+                accept=".csv"
+                required
+            >
+
+        </div>
+
+        <div class="button-row">
+
+            <button type="submit">
+                匯入方法－儀器關聯
+            </button>
+
+        </div>
+
+    </form>
+
+</div>
+</div>
+
+
+{% endblock %}

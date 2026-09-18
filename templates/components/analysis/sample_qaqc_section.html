@@ -1,0 +1,481 @@
+<style>
+    .sample-qaqc-table thead {
+        position: relative;
+        z-index: 20;
+    }
+
+    .sample-qaqc-table thead th {
+        position: sticky;
+
+        /*
+         * W434 分析標題固定區下方
+         */
+        top: 56px;
+
+        z-index: 20;
+
+        background-color: #eef4f9;
+
+        box-shadow: 0 1px 0 #ccc;
+    }
+
+    .sample-qaqc-table tbody td {
+        position: relative;
+        z-index: 1;
+
+        background-color: white;
+    }
+
+    .sample-qaqc-table tbody input,
+    .sample-qaqc-table tbody button {
+        position: relative;
+        z-index: 1;
+    }
+</style>
+
+<div style="
+    background-color: white;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    padding: 24px;
+    margin-top: 22px;
+">
+
+    <h3 style="margin-top: 0;">
+        2. 樣品及 QA/QC 計算
+    </h3>
+
+
+    {% if sample_qaqc_rows %}
+
+<input
+    type="hidden"
+    id="analysis-mdl"
+    value="{{ control_data.DETECT_LIMITED }}"
+>
+
+<input
+    type="hidden"
+    id="blank-mdl-multiplier"
+    value="{{ method_data.BLANK_MDL_MULTIPLIER }}"
+>
+
+<input
+    type="hidden"
+    id="qdl-source"
+    value="{{ method_data.QDL_SOURCE }}"
+>
+
+<input
+    type="hidden"
+    id="qdl-multiplier"
+    value="{{ method_data.QDL_MULTIPLIER }}"
+>
+
+<input
+    type="hidden"
+    id="analysis-qdl"
+    value="{{ qdl_value if qdl_value is not none else '' }}"
+>
+
+    {% if calibration_result %}
+
+<input
+    type="hidden"
+    id="calibration-slope"
+    value="{{ calibration_result.slope }}"
+>
+
+<input
+    type="hidden"
+    id="calibration-intercept"
+    value="{{ calibration_result.intercept }}"
+>
+
+{% endif %}
+
+      <table
+    class="sample-qaqc-table"
+    style="
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+    "
+>
+
+            <thead>
+
+                <tr style="background-color: #eef4f9;">
+
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 9px;
+                        width: 50px;
+                    ">
+                        順序
+                    </th>
+
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 9px;
+                        width: 140px;
+                    ">
+                        樣品編號
+                    </th>
+
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 9px;
+                        width: 75px;
+                    ">
+                        取樣體積<br>(mL)
+                    </th>
+
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 9px;
+                        width: 85px;
+                    ">
+                        添加濃度<br>(mg/L)
+                    </th>
+
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 9px;
+                        width: 85px;
+                    ">
+                        最終定量體積<br>(mL)
+                    </th>
+
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 9px;
+                        width: 105px;
+                    ">
+                        測定值
+                    </th>
+
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 9px;
+                        width: 70px;
+                    ">
+                        稀釋倍數(D)
+                    </th>
+
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 9px;
+                        width: 105px;
+                    ">
+                        計算濃度<br>(mg/L)
+                    </th>
+
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 9px;
+                        width: 105px;
+                    ">
+                        判讀結果
+                    </th>
+
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 9px;
+                        width: 220px;
+                    ">
+                        備註
+                    </th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+                {% for row in sample_qaqc_rows %}
+
+                <tr class="sample-qaqc-row">
+
+
+
+<td style="
+    border: 1px solid #ccc;
+    padding: 4px;
+    text-align: center;
+">
+
+<input
+    type="hidden"
+    name="source_sequence_{{ loop.index0 }}"
+    value="{{ row.sequence_no }}"
+>
+
+<input
+    type="hidden"
+    class="display-order-input"
+    name="display_order_{{ loop.index0 }}"
+    value="{{ loop.index }}"
+>
+
+<input
+    type="hidden"
+    name="role_{{ loop.index0 }}"
+    value="{{ row.role }}"
+>
+
+    <div style="
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+    ">
+
+        <button
+            type="button"
+            class="move-row-up row-move-button"
+            title="上移"
+
+        >
+            ↑
+        </button>
+
+        <span
+            class="display-order-text"
+            style="
+                min-width: 22px;
+                text-align: center;
+                line-height: 18px;
+            "
+        >
+            {{ loop.index }}
+        </span>
+
+        <button
+            type="button"
+            class="move-row-down row-move-button"
+            title="下移"
+
+        >
+            ↓
+        </button>
+
+    </div>
+
+</td>
+
+
+                    <td style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                    ">
+
+                        <input
+                            type="text"
+                            name="sample_id_{{ loop.index0 }}"
+                            value="{{ row.sample_id }}"
+                            style="
+                                width: 100%;
+                                box-sizing: border-box;
+                                padding: 5px 6px;
+                                border: 1px solid #bbb;
+                                border-radius: 4px;
+                            "
+                        >
+
+                    </td>
+
+
+                    <td style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                    ">
+
+                        <input
+                            type="number"
+                            name="sample_volume_{{ loop.index0 }}"
+                            value="25"
+                            readonly
+                            style="
+                                width: 100%;
+                                box-sizing: border-box;
+                                padding: 7px 8px;
+                                text-align: right;
+                                background-color: #f3f3f3;
+                                border: 1px solid #ccc;
+                                border-radius: 4px;
+                            "
+                        >
+
+                    </td>
+
+
+                    <td style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                    ">
+
+                        <input
+                            type="number"
+                            step="0.001"
+                            name="spike_concentration_{{ loop.index0 }}"
+                            value="{{ row.spike_concentration }}"
+                            style="
+                                width: 100%;
+                                box-sizing: border-box;
+                                padding: 7px 8px;
+                                text-align: right;
+                                border: 1px solid #bbb;
+                                border-radius: 4px;
+                            "
+                        >
+
+                    </td>
+
+
+                    <td style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                    ">
+
+                        <input
+                            type="number"
+                            name="final_volume_{{ loop.index0 }}"
+                            value="50"
+                            readonly
+                            style="
+                                width: 100%;
+                                box-sizing: border-box;
+                                padding: 7px 8px;
+                                text-align: right;
+                                background-color: #f3f3f3;
+                                border: 1px solid #ccc;
+                                border-radius: 4px;
+                            "
+                        >
+
+                    </td>
+
+
+                    <td style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                    ">
+
+                        <input
+                            type="number"
+                            step="any"
+                            class="sample-signal-input"
+                            name="sample_signal_{{ loop.index0 }}"
+                            value="{{ row.signal }}"
+                            style="
+                                width: 100%;
+                                box-sizing: border-box;
+                                padding: 7px 8px;
+                                text-align: right;
+                                border: 1px solid #bbb;
+                                border-radius: 4px;
+                            "
+                        >
+
+                    </td>
+
+
+                    <td style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                    ">
+
+                        <input
+                            type="number"
+                            step="any"
+                            min="0.001"
+                            class="dilution-factor-input"
+                            name="dilution_factor_{{ loop.index0 }}"
+                            value="1"
+                            style="
+                                width: 100%;
+                                box-sizing: border-box;
+                                padding: 7px 8px;
+                                text-align: right;
+                                border: 1px solid #bbb;
+                                border-radius: 4px;
+                            "
+                        >
+
+                    </td>
+
+
+                    <td 
+                            class="calculated-concentration-cell"
+                            style="
+                                 border: 1px solid #ccc;
+                                 padding: 8px;
+                                 text-align: right;
+                                 color: #666;
+                                 ">
+                        {% if row.calculated_concentration is not none %}
+                        {{ "%.6f"|format(row.calculated_concentration) }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+
+                    <td
+                         class="interpretation-cell"
+                         style="
+                         border: 1px solid #ccc;
+                         padding: 8px;
+                         text-align: center;
+                         color: #444;
+                         "
+                    >
+                    </td>
+
+
+                    <td style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                    ">
+
+                        <input
+                            type="text"
+                            name="remark_{{ loop.index0 }}"
+                            value=""
+                            style="
+                                width: 100%;
+                                box-sizing: border-box;
+                                padding: 7px 8px;
+                                border: 1px solid #bbb;
+                                border-radius: 4px;
+                            "
+                        >
+
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    {% else %}
+
+    <div style="
+        padding: 16px;
+        background-color: #f7f9fb;
+        border: 1px solid #d9e1e8;
+        border-radius: 5px;
+        color: #666;
+    ">
+        尚未建立樣品或 QA/QC 資料。
+    </div>
+
+    {% endif %}
+
+</div>

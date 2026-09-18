@@ -1,0 +1,895 @@
+<div style="
+    background-color: white;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    padding: 24px;
+    margin-top: 22px;
+">
+
+    <h3 style="margin-top: 0;">
+        3. QA/QC 檢核
+    </h3>
+
+
+    {% if qaqc_3a_results %}
+
+        {% for batch in qaqc_3a_results %}
+
+        <div style="
+            margin-top: 18px;
+            margin-bottom: 10px;
+            padding: 10px 14px;
+            background-color: #f5f8fb;
+            border: 1px solid #d6e0e8;
+            border-radius: 5px;
+        ">
+
+            <strong>
+                Batch {{ batch.batch_no }}
+            </strong>
+
+            &nbsp;｜&nbsp;
+
+            類別：
+            <strong>
+                {{ batch.batch_category or "-" }}
+            </strong>
+
+            &nbsp;&nbsp;
+
+        </div>
+
+
+        {% if batch.rows %}
+
+        <table style="
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            margin-bottom: 20px;
+        ">
+
+            <thead>
+            
+                <tr style="
+                        background-color: #eef4f9;
+                    ">
+                
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                        width: 10%;
+                    ">
+                        項目
+                    </th>
+                
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                        width: 10%;
+                    ">
+                        樣品編號
+                    </th>
+                
+                    <th style="
+                        border: 1px solid #ccc;
+                        width: 16%;
+                    ">
+                        添加濃度<br>
+                        (mg/L)
+                    </th>
+                
+                    <th style="
+                        border: 1px solid #ccc;
+                        width: 16%;
+                    ">
+                        計算濃度<br>
+                        (mg/L)
+                    </th>
+                
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                        width: 10%;
+                    ">
+                        判定方式
+                    </th>
+                
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                        width: 10%;
+                    ">
+                        相對誤差/<br>
+                        回收率(%)
+                    </th>
+                
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                        width: 18%;
+                    ">
+                        判定標準
+                    </th>
+                    
+                    <th style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                        width: 10%;
+                    ">
+                        判定
+                    </th>
+                
+                </tr>
+            
+            </thead>
+
+<tbody>`
+
+    {% for row in batch.rows %}
+
+    <tr>
+    
+    
+    
+        <td style="
+                                            border: 1px solid #ccc;
+                                            padding: 8px;
+                                            text-align: center;
+                                            font-weight: bold;
+                                        ">
+            {{ row.role }}
+        </td>
+    
+    
+        <td style="
+                                            border: 1px solid #ccc;
+                                            padding: 8px;
+                                        ">
+            {{ row.sample_id }}
+        </td>
+    
+    
+        <td style="
+                                            border: 1px solid #ccc;
+                                            padding: 8px;
+                                            text-align: right;
+                                        ">
+    
+            {% if row.spike_concentration is not none %}
+            {{ "%.6f"|format(row.spike_concentration) }}
+            {% else %}
+            -
+            {% endif %}
+    
+        </td>
+    
+    
+        <td style="
+                                            border: 1px solid #ccc;
+                                            padding: 8px;
+                                            text-align: right;
+                                        ">
+    
+            {% if row.calculated_concentration is not none %}
+            {{ "%.6f"|format(row.calculated_concentration) }}
+            {% else %}
+            -
+            {% endif %}
+    
+        </td>
+    
+    
+        <td style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                        text-align: center;
+                    ">
+            {{ row.calculation_name }}
+        </td>
+    
+    
+        <td style="
+                        border: 1px solid #ccc;
+                        padding: 8px;
+                        text-align: right;
+                        font-weight: bold;
+                    ">
+    
+{% if row.check_value is not none %}
+
+    {% if row.status == "合格" %}
+
+    <span style="
+        color: #1f5fa8;
+        font-weight: bold;
+    ">
+        {{ "%.1f"|format(row.check_value) }}
+    </span>
+
+    {% else %}
+
+    <span style="
+        color: #c62828;
+        font-weight: bold;
+    ">
+        {{ "%.1f"|format(row.check_value) }}
+    </span>
+
+    {% endif %}
+
+{% else %}
+
+-
+
+{% endif %}
+    
+        </td>
+    
+        <td style="
+        border: 1px solid #ccc;
+        padding: 8px;
+        text-align: center;
+    ">
+    
+            {% if row.calculation_type == "RELATIVE_ERROR" %}
+            {{ row.control_text }}
+            {% else %}
+    
+            {% if row.warning_text %}
+            <div style="
+                    color: #c27c00;
+                    font-size: 12px;
+                    margin-bottom: 4px;
+                ">
+                警告：{{ row.warning_text }}
+            </div>
+            {% endif %}
+    
+            {% if row.control_text %}
+            <div style="
+                    color: #1f5fa8;
+                    font-size: 12px;
+                ">
+                管制：{{ row.control_text }}
+            </div>
+            {% endif %}
+    
+            {% endif %}
+    
+        </td>
+    
+    
+        <td style="
+                                                                                    border: 1px solid #ccc;
+                                                                                    padding: 8px;
+                                                                                    text-align: center;
+                                                                                    font-weight: bold;
+                                                                                ">
+    
+            {% if row.status == "合格" %}
+    
+            <span style="color: #22863a;">
+                合格
+            </span>
+    
+            {% elif row.status == "警告" %}
+    
+            <span style="color: #c77b00;">
+                警告
+            </span>
+    
+            {% elif row.status == "超出管制" %}
+    
+            <span style="color: #c62828;">
+                超出管制
+            </span>
+    
+            {% elif row.status == "待設定標準" %}
+    
+            <span style="color: #777;">
+                待設定標準
+            </span>
+    
+            {% else %}
+    
+            <span style="color: #777;">
+                {{ row.status }}
+            </span>
+    
+            {% endif %}
+    
+        </td>
+    
+    </tr>
+            
+                {% endfor %}
+            
+            </tbody>
+
+        </table>
+
+        {% else %}
+
+        <div style="
+            padding: 12px;
+            color: #777;
+        ">
+            此批次沒有 ICV / QC / CCV 查核資料。
+        </div>
+
+        {% endif %}
+
+
+        {% if batch.precision %}
+
+        <div style="
+            margin-top: 8px;
+            margin-bottom: 24px;
+            border: 1px solid #d6e0e8;
+            border-radius: 6px;
+            overflow: hidden;
+        ">
+
+            <div style="
+                padding: 10px 14px;
+                background-color: #f5f8fb;
+                font-weight: bold;
+                border-bottom: 1px solid #d6e0e8;
+            ">
+                重複分析精密度
+            </div>
+
+            <table style="
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+            ">
+
+                <thead>
+
+                    <tr style="
+                        background-color: #eef4f9;
+                    ">
+
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 10%;
+                        ">
+                            判定來源
+                        </th>
+
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 26%;
+                        ">
+                            樣品 A
+                        </th>
+
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 26%;
+                        ">
+                            樣品 B
+                        </th>
+
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 10%;
+                        ">
+                            RPD (%)
+                        </th>
+
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 9%;
+                        ">
+                            警告上限 (%)
+                        </th>
+
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 9%;
+                        ">
+                            管制上限 (%)
+                        </th>
+
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 10%;
+                        ">
+                            判定
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    <tr>
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: center;
+                            font-weight: bold;
+                        ">
+                            {{ batch.precision.source_name }}
+                        </td>
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: center;
+                        ">
+                            {{ batch.precision.sample_id_a or "-" }}
+                        </td>
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: center;
+                        ">
+                            {{ batch.precision.sample_id_b or "-" }}
+                        </td>
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: right;
+                            font-weight: bold;
+                        ">
+
+{% if batch.precision.rpd is not none %}
+
+    {% if batch.precision.status == "合格" %}
+
+    <span style="
+        color: #1f5fa8;
+        font-weight: bold;
+    ">
+        {{ "%.1f"|format(batch.precision.rpd) }}
+    </span>
+
+    {% else %}
+
+    <span style="
+        color: #c62828;
+        font-weight: bold;
+    ">
+        {{ "%.1f"|format(batch.precision.rpd) }}
+    </span>
+
+    {% endif %}
+
+{% else %}
+
+-
+
+{% endif %}
+
+                        </td>
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: right;
+                        ">
+
+                            {% if batch.precision.uwl is not none %}
+
+                            {{ "%.1f"|format(batch.precision.uwl) }}
+
+                            {% else %}
+
+                            -
+
+                            {% endif %}
+
+                        </td>
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: right;
+                        ">
+
+                            {% if batch.precision.ucl is not none %}
+
+                            {{ "%.1f"|format(batch.precision.ucl) }}
+
+                            {% else %}
+
+                            -
+
+                            {% endif %}
+
+                        </td>
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: center;
+                            font-weight: bold;
+                        ">
+
+                            {% if batch.precision.status == "合格" %}
+
+                            <span style="color: #22863a;">
+                                合格
+                            </span>
+
+                            {% elif batch.precision.status == "警告" %}
+
+                            <span style="color: #c77b00;">
+                                警告
+                            </span>
+
+                            {% elif batch.precision.status == "超出管制" %}
+
+                            <span style="color: #c62828;">
+                                超出管制
+                            </span>
+
+                            {% else %}
+
+                            <span style="color: #777;">
+                                {{ batch.precision.status }}
+                            </span>
+
+                            {% endif %}
+
+                        </td>
+
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+
+            {% if batch.precision.reason %}
+
+            <div style="
+                padding: 9px 14px;
+                background-color: #fff8e8;
+                border-top: 1px solid #ead6a4;
+                color: #8a6500;
+                font-size: 13px;
+            ">
+                {{ batch.precision.reason }}
+            </div>
+
+            {% endif %}
+
+        </div>
+
+        {% endif %}
+
+        {% if batch.spike_recovery %}
+
+        <div style="
+            margin-top: 8px;
+            margin-bottom: 24px;
+            border: 1px solid #d6e0e8;
+            border-radius: 6px;
+            overflow: hidden;
+        ">
+
+            <div style="
+                padding: 10px 14px;
+                background-color: #f5f8fb;
+                font-weight: bold;
+                border-bottom: 1px solid #d6e0e8;
+            ">
+                添加樣品回收率
+            </div>
+
+            <table style="
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+            ">
+
+                <thead>
+
+                    <tr style="
+                        background-color: #eef4f9;
+                    ">
+
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 10%;
+                        ">
+                            項目
+                        </th>
+
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 10%;
+                        ">
+                            樣品編號
+                        </th>
+
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 12%;
+                        ">
+                            原樣品
+                        </th>
+
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 10%;
+                        ">
+                            原樣濃度<br>
+                            (mg/L)
+                        </th>
+
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 10%;
+                        ">
+                            添加後濃度<br>
+                            (mg/L)
+                        </th>
+
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 10%;
+                        ">
+                            添加濃度<br>
+                            (mg/L)
+                        </th>
+
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 10%;
+                        ">
+                            回收率<br>
+                            (%)
+                        </th>
+                        
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 18%;
+                        ">
+                            判定標準
+                        </th>
+                        
+                        <th style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            width: 10%;
+                        ">
+                            判定
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% for row in batch.spike_recovery %}
+
+                    <tr>
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: center;
+                            font-weight: bold;
+                        ">
+                            {{ row.role }}
+                        </td>
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: center;
+                        ">
+                            {{ row.sample_id }}
+                        </td>
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: center;
+                        ">
+                            {{ row.original_sample_id }}
+                        </td>
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: right;
+                        ">
+
+                            {% if row.original_value is not none %}
+                            {{ "%.6f"|format(row.original_value) }}
+                            {% else %}
+                            -
+                            {% endif %}
+
+                        </td>
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: right;
+                        ">
+
+                            {% if row.spiked_value is not none %}
+                            {{ "%.6f"|format(row.spiked_value) }}
+                            {% else %}
+                            -
+                            {% endif %}
+
+                        </td>
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: right;
+                        ">
+
+                            {% if row.spike_concentration is not none %}
+                            {{ "%.6f"|format(row.spike_concentration) }}
+                            {% else %}
+                            -
+                            {% endif %}
+
+                        </td>
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: right;
+                            font-weight: bold;
+                        ">
+
+                            {% if row.recovery is not none %}
+
+                                {% if row.status == "合格" %}
+
+                                <span style="color: #1f5fa8;">
+                                    {{ "%.1f"|format(row.recovery) }}
+                                </span>
+
+                                {% else %}
+
+                                <span style="color: #c62828;">
+                                    {{ "%.1f"|format(row.recovery) }}
+                                </span>
+
+                                {% endif %}
+
+                            {% else %}
+
+                            -
+
+                            {% endif %}
+
+                        </td>
+
+<td style="
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: center;
+">
+
+    {% if row.lwl is not none and row.uwl is not none %}
+
+    <div style="
+        color: #c27c00;
+        font-size: 12px;
+        margin-bottom: 4px;
+    ">
+        警告：
+        {{ "%.1f"|format(row.lwl) }}
+        ～
+        {{ "%.1f"|format(row.uwl) }}%
+    </div>
+
+    {% endif %}
+
+
+    {% if row.lcl is not none and row.ucl is not none %}
+
+    <div style="
+        color: #1f5fa8;
+        font-size: 12px;
+    ">
+        管制：
+        {{ "%.1f"|format(row.lcl) }}
+        ～
+        {{ "%.1f"|format(row.ucl) }}%
+    </div>
+
+    {% endif %}
+
+</td>                        
+
+                        <td style="
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            text-align: center;
+                            font-weight: bold;
+                        ">
+
+                            {% if row.status == "合格" %}
+
+                            <span style="color: #22863a;">
+                                合格
+                            </span>
+
+                            {% elif row.status == "警告" %}
+
+                            <span style="color: #c77b00;">
+                                警告
+                            </span>
+
+                            {% elif row.status == "超出管制" %}
+
+                            <span style="color: #c62828;">
+                                超出管制
+                            </span>
+
+                            {% else %}
+
+                            <span style="color: #777;">
+                                {{ row.status }}
+                            </span>
+
+                            {% endif %}
+
+                        </td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        {% endif %}
+
+
+        {% endfor %}
+
+
+    {% else %}
+
+    <div style="
+        padding: 16px;
+        background-color: #f7f9fb;
+        border: 1px solid #d9e1e8;
+        border-radius: 5px;
+        color: #666;
+    ">
+        尚未建立 QA/QC 檢核結果。
+    </div>
+
+    {% endif %}
+
+</div>

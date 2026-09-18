@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+
+{% block title %}
+W434 砷分析 - EACS
+{% endblock %}
+
+{% block content %}
+
+<div class="analysis-page-header">
+    <style>
+        .analysis-page-header {
+            position: sticky;
+            top: -26px;
+            z-index: 30;
+    
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+    
+            height: 82px;
+    
+            margin: -26px -32px 22px -32px;
+            padding: 26px 32px 12px 32px;
+    
+            background-color: #f4f6f8;
+            border-bottom: 1px solid #d9d9d9;
+        }
+    </style>
+
+    <div style="
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 12px;
+">
+
+        <div style="
+        font-size: 28px;
+        color: #047867;
+        font-weight: bold;
+    ">
+            W434 砷分析
+        </div>
+
+        <div style="
+        font-size: 13px;
+        color: #666;
+        white-space: nowrap;
+    ">
+            版次 {{ analysis_version }} 版
+        </div>
+
+    </div>
+</div>
+
+{% if report_data %}
+
+<div style="
+    margin: 0 0 18px 0;
+    padding: 12px 14px;
+    border: 1px solid #cfd8e3;
+    background-color: #f8fbff;
+    border-radius: 6px;
+    font-size: 14px;
+">
+
+    <div>
+        公司：
+        {{ report_data.COMPANY_NAME }}
+    </div>
+
+    <div>
+        表單：
+        {{ report_data.FORM_TITLE }}
+    </div>
+
+    <div>
+        文件：
+        {{ report_data.DOC_NO }}
+        ／版次：
+        {{ report_data.REVISION }}
+    </div>
+
+    <div>
+        發行日期：
+        {{ report_data.ISSUE_DATE }}
+    </div>
+
+    <div>
+        REPORT_CODE：
+        {{ report_data.REPORT_CODE }}
+    </div>
+
+</div>
+
+{% endif %}
+
+<!-- PDF 匯入 -->
+<div style="
+    background-color: white;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 22px;
+">
+
+    <h3 style="margin-top: 0;">
+        PDF 匯入
+    </h3>
+
+    {% if method_data %}
+
+<div style="
+    margin-bottom: 18px;
+    padding: 12px 14px;
+    background-color: #f5f8fb;
+    border: 1px solid #d6e0e8;
+    border-radius: 5px;
+">
+
+    <strong>方法設定：</strong>
+
+    檢量線 {{ method_data.CALIBRATION_COUNT }} 點
+
+    ／
+
+    每批最大樣品數
+    {{ method_data.MAX_SAMPLE_PER_BATCH }}
+
+    ／
+
+    輸入模式
+    {{ method_data.DATA_ENTRY_MODE }}
+
+</div>
+
+{% endif %}
+
+<div style="
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+">
+
+    <form
+        method="post"
+        enctype="multipart/form-data"
+        style="
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin: 0;
+        "
+    >
+
+        <input
+            type="file"
+            name="pe900_pdf"
+            accept=".pdf,application/pdf"
+            required
+        >
+
+        <button
+            type="submit"
+            style="
+                padding: 9px 22px;
+                background-color: #2f6fab;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+            "
+        >
+            匯入 PDF
+        </button>
+
+    </form>
+
+
+    {% if wavelength_warning and instrument_wavelength is not none %}
+
+    <div
+        id="wavelength-confirm-buttons"
+        style="
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        "
+    >
+
+        <button
+                type="button"
+    class="wavelength-confirm-button"
+    data-choice="instrument"
+    data-wavelength="{{ '%.2f'|format(instrument_wavelength) }}"
+    style="
+        padding: 9px 18px;
+        background-color: #2f6fab;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    "
+         >
+           採用儀器波長
+        </button>
+
+
+        {% if basic_wavelength %}
+
+        <button
+
+    type="button"
+    class="wavelength-confirm-button"
+    data-choice="basic"
+    data-wavelength="{{ basic_wavelength }}"
+    style="
+        padding: 9px 18px;
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    "
+         >
+            保留基本資料波長
+        </button>
+
+        {% endif %}
+
+    </div>
+
+    {% endif %}
+
+</div>
+
+
+    {% if import_error %}
+
+        <div style="
+            margin-top: 16px;
+            padding: 10px 14px;
+            background-color: #fff1f1;
+            border: 1px solid #e3a6a6;
+            color: #a33;
+            border-radius: 5px;
+        ">
+            {{ import_error }}
+        </div>
+
+    {% endif %}
+
+    {% if confirmed_wavelength is not none %}
+
+        <div
+            id="wavelength-status"
+            style="
+            margin-top: 16px;
+            padding: 10px 14px;
+            background-color: #eef8ee;
+            border: 1px solid #8cc58c;
+            color: #206020;
+            border-radius: 5px;
+        ">
+            波長確認：
+            {{ "%.2f"|format(confirmed_wavelength) }} nm
+        </div>
+
+    {% endif %}
+
+    {% if wavelength_warning %}
+
+        <div
+            id="wavelength-status"
+            style="
+            margin-top: 16px;
+            padding: 10px 14px;
+            background-color: #fff8e1;
+            border: 1px solid #e2b93b;
+            color: #8a6500;
+            border-radius: 5px;
+        ">
+            {{ wavelength_warning }}
+        </div>
+
+    {% endif %}
+
+</div>
+
+<div style="
+    margin-bottom: 22px;
+    text-align: right;
+">
+
+    <a
+        href="{{ url_for('export_w434_pdf') }}"
+        style="
+            display: inline-block;
+            padding: 10px 24px;
+            background-color: #2f6fab;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 16px;
+        "
+    >
+        匯出檢驗紀錄表
+    </a>
+
+</div>
+
+{% include "components/analysis/calibration_section.html" %}
+
+{% include "components/analysis/sample_qaqc_section.html" %}
+
+{% include "components/analysis/qaqc_check_section.html" %}
+
+<script>
+async function confirmWavelength(choice, wavelength) {
+
+    const formData = new FormData();
+    formData.append("choice", choice);
+
+    try {
+
+        const response = await fetch(
+            "{{ url_for('confirm_w434_wavelength') }}",
+            {
+                method: "POST",
+                body: formData
+            }
+        );
+
+        if (!response.ok) {
+
+            const message = await response.text();
+
+            alert(
+                message || "波長確認失敗。"
+            );
+
+            return;
+        }
+
+        const statusBox = document.getElementById(
+            "wavelength-status"
+        );
+
+        if (statusBox) {
+
+            statusBox.style.backgroundColor =
+                "#eef8ee";
+
+            statusBox.style.borderColor =
+                "#8cc58c";
+
+            statusBox.style.color =
+                "#206020";
+
+            statusBox.textContent =
+                "波長確認：" +
+                Number(wavelength).toFixed(2) +
+                " nm";
+        }
+
+        const buttons = document.getElementById(
+            "wavelength-confirm-buttons"
+        );
+
+        if (buttons) {
+            buttons.style.display = "none";
+        }
+
+    } catch (error) {
+
+        alert(
+            "波長確認時發生錯誤。"
+        );
+    }
+}
+</script>
+
+<script>
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
+
+        const buttons =
+            document.querySelectorAll(
+                ".wavelength-confirm-button"
+            );
+
+        buttons.forEach(
+            function (button) {
+
+                button.addEventListener(
+                    "click",
+                    function () {
+
+                        const choice =
+                            button.dataset.choice;
+
+                        const wavelength =
+                            button.dataset.wavelength;
+
+                        confirmWavelength(
+                            choice,
+                            wavelength
+                        );
+                    }
+                );
+
+            }
+        );
+
+    }
+);
+</script>
+
+<script
+    src="{{ url_for('static', filename='js/analysis_interpretation.js') }}"
+></script>
+
+<script
+    src="{{ url_for('static', filename='js/analysis_common.js') }}"
+></script>
+
+{% endblock %}
+

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+
+    <title>
+        {% block title %}EACS Web{% endblock %}
+    </title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+    
+        body {
+            margin: 0;
+            font-family: "Microsoft JhengHei", Arial, sans-serif;
+            background-color: #f4f6f8;
+            color: #222;
+    
+            height: 100vh;
+            overflow: hidden;
+        }
+    
+        /* ===== Header ===== */
+        .eacs-header {
+            height: 88px;
+            background-color: white;
+            border-bottom: 1px solid #d9d9d9;
+    
+            display: flex;
+            align-items: center;
+    
+            padding: 12px 24px;
+    
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+    
+            z-index: 1000;
+        }
+    
+        .eacs-logo {
+            width: 64px;
+            height: 64px;
+            object-fit: contain;
+            margin-right: 16px;
+        }
+    
+        .eacs-title {
+            font-size: 32px;
+            font-weight: bold;
+            line-height: 1.2;
+            color: #0b80ee;
+        }
+    
+        .eacs-subtitle {
+            margin-top: 5px;
+            font-size: 13px;
+            color: #5d6760;
+        }
+    
+    
+        /* ===== Main Layout ===== */
+    
+        .eacs-layout {
+            position: fixed;
+    
+            top: 88px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+    
+            display: flex;
+    
+            overflow: hidden;
+        }
+    
+    
+        /* ===== Sidebar ===== */
+    
+        .sidebar {
+            width: 220px;
+    
+            background-color: #263746;
+            color: white;
+    
+            padding-top: 22px;
+    
+            flex-shrink: 0;
+    
+            align-self: stretch;
+    
+            overflow-y: auto;
+        }
+    
+        .sidebar-section {
+            margin-bottom: 24px;
+        }
+    
+        .sidebar-title {
+            padding: 0 20px;
+            margin-bottom: 7px;
+    
+            font-size: 13px;
+            color: #ffffff;
+        }
+    
+        .sidebar-link {
+            display: block;
+    
+            padding: 12px 22px;
+    
+            color: white;
+            text-decoration: none;
+    
+            border-left: 4px solid transparent;
+        }
+    
+        .sidebar-link:hover {
+            background-color: #32495b;
+        }
+    
+        .sidebar-link.active {
+            background-color: #32495b;
+            border-left-color: #1efa7d;
+            font-weight: bold;
+            color: #ffd84d;
+        }
+    
+    
+        /* ===== Main Content ===== */
+    
+        .main-content {
+            flex: 1;
+    
+            padding: 26px 32px;
+    
+            min-width: 0;
+            min-height: 0;
+    
+            overflow-y: auto;
+            overflow-x: hidden;
+    
+            -webkit-overflow-scrolling: touch;
+        }
+    </style>
+
+    {% block head %}{% endblock %}
+</head>
+
+
+<body>
+
+    <!-- Header -->
+    <header class="eacs-header">
+
+        <img
+            src="{{ url_for('static', filename='images/kt_logo.jpg') }}"
+            alt="Logo"
+            class="eacs-logo"
+        >
+
+        <div>
+            <div class="eacs-title">
+                EACS
+            </div>
+
+            <div class="eacs-subtitle">
+                環境檢測分析與品質管制系統
+            </div>
+        </div>
+
+    </header>
+
+
+    <div class="eacs-layout">
+    
+        <!-- Sidebar -->
+        <aside class="sidebar">
+    
+            <div class="sidebar-section">
+    
+                <div class="sidebar-title">
+                    分析作業
+                </div>
+    
+                <a href="/basic-info" class="sidebar-link
+            {% if active_page == 'analysis_basic' %}active{% endif %}">
+                    分析基本資料
+                </a>
+    
+    
+                {% if current_analysis_name and current_analysis_url %}
+    
+                <div class="sidebar-title" style="margin-top: 18px;">
+                    目前分析
+                </div>
+    
+                <a href="{{ current_analysis_url }}" class="sidebar-link
+                {% if active_page == 'analysis_method' %}active{% endif %}">
+                    {{ current_analysis_name }}
+                </a>
+    
+                {% endif %}
+    
+            </div>
+    
+    
+            <div class="sidebar-section">
+    
+                <div class="sidebar-title">
+                    資料管理
+                </div>
+    
+                <a href="/control-import" class="sidebar-link
+                        {% if active_page == 'control' %}active{% endif %}">
+                    檢紀資料管理
+                </a>
+    
+            </div>
+    
+        </aside>
+    
+    
+        <!-- Main -->
+        <main class="main-content">
+    
+            {% block content %}
+            {% endblock %}
+    
+        </main>
+    
+    </div>
+
+
+    {% block script %}
+    {% endblock %}
+
+</body>
+
+</html>

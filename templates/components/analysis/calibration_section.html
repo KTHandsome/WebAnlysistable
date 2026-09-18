@@ -1,0 +1,240 @@
+<div style="
+    background-color: white;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    padding: 24px;
+    margin-top: 22px;
+">
+
+    <h3 style="margin-top: 0;">
+        1. 檢量線
+    </h3>
+
+
+    {% if calibration_result %}
+
+    <div style="
+        display: grid;
+        grid-template-columns: repeat(4, minmax(160px, 1fr));
+        gap: 16px;
+        margin-bottom: 22px;
+    ">
+
+        <div>
+            <strong>斜率 a</strong><br>
+            <span id="calibration-slope-display">
+                {{ "%.5f"|format(calibration_result.slope) }}
+            </span>
+        </div>
+
+        <div>
+            <strong>截距 b</strong><br>
+            <span id="calibration-intercept-display">
+                {{ "%.5f"|format(calibration_result.intercept) }}
+            </span>
+        </div>
+
+        <div>
+            <strong>相關係數 r</strong><br>
+            <span id="calibration-r-display">
+                {{ "%.6f"|format(calibration_result.r) }}
+            </span>
+        </div>
+
+        <div>
+            <strong>判定</strong><br>
+        
+            {% if calibration_result.passed %}
+        
+            <span id="calibration-pass-display" style="
+                color: #22863a;
+                font-weight: bold;
+            ">
+                合格
+            </span>
+        
+            {% else %}
+        
+            <span id="calibration-pass-display" style="
+                color: #c62828;
+                font-weight: bold;
+            ">
+                不合格
+            </span>
+        
+            {% endif %}
+        </div>
+
+    </div>
+
+
+    <div style="
+        margin-bottom: 18px;
+        padding: 12px 14px;
+        background-color: #f5f8fb;
+        border: 1px solid #d6e0e8;
+        border-radius: 5px;
+    ">
+
+        <strong>迴歸式：</strong>
+        
+        <span id="calibration-equation-display">
+            Y =
+            {{ "%.5f"|format(calibration_result.slope) }}
+            X
+        
+            {% if calibration_result.intercept >= 0 %}
+            +
+            {% endif %}
+        
+            {{ "%.5f"|format(calibration_result.intercept) }}
+        </span>
+        
+        &nbsp;&nbsp;
+        
+        <strong>判定標準：</strong>
+        r &gt; 0.995
+
+    </div>
+
+
+    <div style="overflow-x: auto;">
+    
+        <table style="
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+            ">
+    
+            <thead>
+                <tr style="background-color: #eef4f9;">
+    
+                    <th style="
+                border: 1px solid #ccc;
+                padding: 9px;
+            ">
+                        編號
+                    </th>
+    
+                    <th style="
+                border: 1px solid #ccc;
+                padding: 9px;
+            ">
+                        設定濃度 (mg/L)
+                    </th>
+    
+                    <th style="
+                border: 1px solid #ccc;
+                padding: 9px;
+            ">
+                        測定值
+                    </th>
+    
+                    <th style="
+                border: 1px solid #ccc;
+                padding: 9px;
+            ">
+                        回歸濃度 (mg/L)
+                    </th>
+    
+                    <th style="
+                border: 1px solid #ccc;
+                padding: 9px;
+            ">
+                        回歸偏差 (%)
+                    </th>
+    
+                </tr>
+            </thead>
+    
+            <tbody>
+    
+                {% for point in calibration_result.points %}
+    
+                <tr class="calibration-row" data-calibration-x="{{ point.x }}">
+    
+                    <td style="
+                border: 1px solid #ccc;
+                padding: 8px;
+                text-align: center;
+            ">
+                        STD{{ loop.index0 }}
+                    </td>
+    
+    
+                    <td style="
+                border: 1px solid #ccc;
+                padding: 8px;
+                text-align: right;
+            ">
+                        {{ "%.5f"|format(point.x) }}
+                    </td>
+    
+    
+                    <td style="
+                border: 1px solid #ccc;
+                padding: 8px;
+                text-align: right;
+            ">
+    
+                        <input type="number" step="any" class="calibration-signal-input"
+                            name="calibration_signal_{{ loop.index0 }}" value="{{ point.y }}" style="
+                        width: 100%;
+                        box-sizing: border-box;
+                        padding: 7px 8px;
+                        text-align: right;
+                        border: 1px solid #bbb;
+                        border-radius: 4px;
+                    ">
+    
+                    </td>
+    
+    
+                    <td class="calibration-backcalc-cell" style="
+                    border: 1px solid #ccc;
+                    padding: 8px;
+                    text-align: right;
+                ">
+                        {{ "%.7f"|format(point.back_calculated_x) }}
+                    </td>
+    
+    
+                    <td class="calibration-error-cell" style="
+                    border: 1px solid #ccc;
+                    padding: 8px;
+                    text-align: right;
+                ">
+    
+                        {% if point.back_calculation_error_percent is not none %}
+                        {{ "%.2f"|format(point.back_calculation_error_percent) }}
+                        {% else %}
+                        -
+                        {% endif %}
+    
+                    </td>
+    
+                </tr>
+    
+                {% endfor %}
+    
+            </tbody>
+    
+        </table>
+    
+    </div>
+
+    {% else %}
+
+    <div style="
+        padding: 16px;
+        background-color: #f7f9fb;
+        border: 1px solid #d9e1e8;
+        border-radius: 5px;
+        color: #666;
+    ">
+        尚未建立檢量線資料。
+    </div>
+
+    {% endif %}
+
+</div>

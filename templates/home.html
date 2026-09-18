@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>EACS Web</title>
+
+    <style>
+        body {
+            font-family: "Microsoft JhengHei", Arial, sans-serif;
+            background-color: #f4f6f8;
+            margin: 0;
+        }
+
+        .page-container {
+            width: 1100px;
+            margin: 30px auto;
+        }
+
+        .page-title {
+            font-size: 30px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 28px;
+        }
+
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .menu-card {
+            display: block;
+            text-decoration: none;
+            color: #222;
+            background-color: white;
+            border: 1px solid #d9d9d9;
+            border-radius: 10px;
+            padding: 28px;
+            transition: 0.15s;
+        }
+
+        .menu-card:hover {
+            border-color: #2f6fab;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .menu-title {
+            font-size: 22px;
+            font-weight: bold;
+            color: #2f6fab;
+            margin-bottom: 10px;
+        }
+
+        .menu-description {
+            color: #666;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="page-container">
+
+    <div class="page-title">
+        EACS Web
+    </div>
+
+    <div class="subtitle">
+        環境檢測分析與品質管制系統
+    </div>
+
+    <div class="menu-grid">
+
+        <a class="menu-card" href="/control-import">
+            <div class="menu-title">
+                檢紀資料管理
+            </div>
+
+            <div class="menu-description">
+                匯入年度 MDL / QAQC 管制資料，
+                管理各年度分析方法與品質管制條件。
+            </div>
+        </a>
+
+        <a class="menu-card" href="/basic-info">
+            <div class="menu-title">
+                分析檢驗紀錄
+            </div>
+
+            <div class="menu-description">
+                建立分析基本資料，
+                查詢對應年度 MDL 與 QA/QC 管制條件。
+            </div>
+        </a>
+
+    </div>
+
+</div>
+
+</body>
+</html>

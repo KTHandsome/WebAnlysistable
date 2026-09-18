@@ -6,3 +6,11 @@ __pycache__/
 *.sqlite
 *.sqlite3
 .env
+# Local runtime / control data
+data/
+
+# Local instrument test files
+test_data/
+
+# Generated test reports
+test_*.pdf
