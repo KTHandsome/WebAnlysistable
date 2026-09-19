@@ -28,6 +28,21 @@ from analysis.analysis_state import (
 
 from reports.w434_pdf import build_w434_pdf
 
+from exports.w434_lims_mapper import (
+    build_w434_lims_export_data
+)
+
+from exports.lims_excel_exporter import (
+    build_lims_excel
+)
+
+from auth_session import (
+    clear_current_user,
+    get_current_user,
+    login_required,
+    set_current_user
+)
+
 import os
 import csv
 import io
@@ -36,6 +51,95 @@ import tempfile
 app = Flask(__name__)
 app.secret_key = "eacs-development-secret-key"
 
+@app.context_processor
+def inject_current_user():
+
+    return {
+        "current_user":
+            get_current_user()
+    }
+
+@app.route(
+    "/login",
+    methods=["GET", "POST"]
+)
+def login():
+
+    error_message = None
+
+    if request.method == "POST":
+
+        user_id = request.form.get(
+            "user_id",
+            ""
+        ).strip()
+
+        password = request.form.get(
+            "password",
+            ""
+        )
+
+        if not user_id:
+
+            error_message = (
+                "請輸入帳號。"
+            )
+
+        elif not password:
+
+            error_message = (
+                "請輸入密碼。"
+            )
+
+        else:
+
+            error_message = (
+                "目前非公司環境，"
+                "尚未啟用 LIMS 帳號驗證。"
+            )
+
+    return render_template(
+        "login.html",
+        error_message=error_message
+    )
+
+
+@app.route(
+    "/dev-login",
+    methods=["POST"]
+)
+def dev_login():
+
+    set_current_user(
+        user_id="DEV",
+        employee_id="A11503-03",
+        employee_name="測試人員",
+        group_id="04",
+        group_name="分析部",
+        dept_no="C",
+        dept_name="分析課",
+        job_title="檢驗員"
+    )
+
+    return redirect(
+        url_for(
+            "home"
+        )
+    )
+
+
+@app.route(
+    "/logout"
+)
+def logout():
+
+    clear_current_user()
+
+    return redirect(
+        url_for(
+            "login"
+        )
+    )
 
 @app.route("/")
 def home():
@@ -789,6 +893,7 @@ def split_analysis_rows(rows):
     return calibration_rows, sample_qaqc_rows
 
 @app.route("/analysis/w43401", methods=["GET", "POST"])
+@login_required
 def analysis_w43401():
 
     preview_rows = []
@@ -835,6 +940,93 @@ def analysis_w43401():
 
         if report_error:
             load_error = report_error
+
+    # ========================================
+    # 儲存分析資料後重新顯示既有分析狀態
+    # 不重新執行 PDF 匯入 / 初始化流程
+    # ========================================
+    if (
+        request.method == "GET"
+        and request.args.get("saved") == "1"
+    ):
+
+        saved_state = load_analysis_state(
+            "W434_CURRENT"
+        )
+
+        if saved_state:
+
+            return render_template(
+                "methods/w43401.html",
+                active_page="analysis_method",
+                current_analysis_name="W434 砷分析",
+                current_analysis_url="/analysis/w43401",
+                analysis_version="1.00",
+
+                preview_rows=saved_state.get(
+                    "preview_rows",
+                    []
+                ),
+
+                calibration_rows=saved_state.get(
+                    "calibration_rows",
+                    []
+                ),
+
+                sample_qaqc_rows=saved_state.get(
+                    "sample_qaqc_rows",
+                    []
+                ),
+
+               sample_data_saved=saved_state.get(
+                     "sample_data_saved",
+                      False
+                ),
+
+                import_error=None,
+
+                uploaded_filename=saved_state.get(
+                    "uploaded_filename"
+                ),
+
+                method_data=method_data,
+                control_data=control_data,
+                report_data=report_data,
+
+                calibration_result=saved_state.get(
+                    "calibration_result"
+                ),
+
+                qdl_value=saved_state.get(
+                    "qdl_value"
+                ),
+
+                confirmed_wavelength=saved_state.get(
+                    "confirmed_wavelength"
+                ),
+
+                wavelength_warning=saved_state.get(
+                    "wavelength_warning"
+                ),
+
+                instrument_wavelength=saved_state.get(
+                    "instrument_wavelength"
+                ),
+
+                basic_wavelength=(
+                    form_data.get(
+                        "wavelength",
+                        ""
+                    ).strip()
+                    if form_data
+                    else ""
+                ),
+
+                qaqc_3a_results=saved_state.get(
+                    "qaqc_results",
+                    []
+                )
+            )
 
     if load_error:
         import_error = load_error
@@ -1048,6 +1240,10 @@ def analysis_w43401():
 
     for row in sample_qaqc_rows:
 
+        row["sample_volume"] = 25
+        row["final_volume"] = 50
+        row["dilution_factor"] = 1
+        row["remark"] = ""
         row["calculated_concentration"] = None
 
         if row.get("role") not in simple_roles:
@@ -1059,9 +1255,9 @@ def analysis_w43401():
                 signal=row["signal"],
                 slope=calibration_result["slope"],
                 intercept=calibration_result["intercept"],
-                sample_volume=25,
-                final_volume=50,
-                dilution_factor=1
+                sample_volume=row["sample_volume"],
+                final_volume=row["final_volume"],
+                dilution_factor=row["dilution_factor"]
             )
 
             row["calculated_concentration"] = (
@@ -1237,6 +1433,9 @@ def analysis_w43401():
                 "sample_qaqc_rows":
                     sample_qaqc_rows,
 
+                "sample_data_saved":
+                 False,    
+
                 "included_batches":
                     included_batches,
 
@@ -1272,6 +1471,7 @@ def analysis_w43401():
         preview_rows=preview_rows,
         calibration_rows=calibration_rows,
         sample_qaqc_rows=sample_qaqc_rows,
+        sample_data_saved=False,
         import_error=import_error,
         uploaded_filename=uploaded_filename,
         method_data=method_data,
@@ -1424,6 +1624,283 @@ def confirm_w434_wavelength():
 
     return "", 204
 
+@app.route(
+    "/analysis/w43401/update-samples",
+    methods=["POST"]
+)
+def update_w434_samples():
+
+    analysis_state = load_analysis_state(
+        "W434_CURRENT"
+    )
+
+    if not analysis_state:
+
+        return (
+            "尚未找到 W434 分析資料，請先匯入儀器 PDF。",
+            400
+        )
+
+    sample_qaqc_rows = analysis_state.get(
+        "sample_qaqc_rows",
+        []
+    )
+
+    calibration_result = analysis_state.get(
+        "calibration_result"
+    )
+
+    if not sample_qaqc_rows:
+
+        return (
+            "尚未找到樣品及 QA/QC 資料。",
+            400
+        )
+
+    if not calibration_result:
+
+        return (
+            "尚未取得有效檢量線，無法重新計算。",
+            400
+        )
+
+    try:
+
+        row_count = int(
+            request.form.get(
+                "row_count",
+                "0"
+            )
+        )
+
+    except ValueError:
+
+        return (
+            "樣品資料筆數格式錯誤。",
+            400
+        )
+
+    row_map = {}
+
+    for row in sample_qaqc_rows:
+
+        sequence_key = str(
+            row.get(
+                "sequence_no",
+                ""
+            )
+        )
+
+        row_map[sequence_key] = row
+
+    updated_rows = []
+
+    for index in range(row_count):
+
+        source_sequence = (
+            request.form.get(
+                "source_sequence_"
+                + str(index),
+                ""
+            )
+            .strip()
+        )
+
+        if source_sequence not in row_map:
+            continue
+
+        row = row_map[source_sequence]
+
+        sample_id = (
+            request.form.get(
+                "sample_id_"
+                + str(index),
+                ""
+            )
+            .strip()
+        )
+
+        signal_text = (
+            request.form.get(
+                "sample_signal_"
+                + str(index),
+                ""
+            )
+            .strip()
+        )
+
+        dilution_text = (
+            request.form.get(
+                "dilution_factor_"
+                + str(index),
+                "1"
+            )
+            .strip()
+        )
+
+        sample_volume_text = (
+            request.form.get(
+                "sample_volume_"
+                + str(index),
+                "25"
+            )
+            .strip()
+        )
+
+        final_volume_text = (
+            request.form.get(
+                "final_volume_"
+                + str(index),
+                "50"
+            )
+            .strip()
+        )
+
+        spike_concentration = (
+            request.form.get(
+                "spike_concentration_"
+                + str(index),
+                ""
+            )
+            .strip()
+        )
+
+        remark = (
+            request.form.get(
+                "remark_"
+                + str(index),
+                ""
+            )
+            .strip()
+        )
+
+        try:
+
+            display_order = int(
+                request.form.get(
+                    "display_order_"
+                    + str(index),
+                    str(index + 1)
+                )
+            )
+
+            signal = float(
+                signal_text
+            )
+
+            dilution_factor = float(
+                dilution_text
+            )
+
+            sample_volume = float(
+                sample_volume_text
+            )
+
+            final_volume = float(
+                final_volume_text
+            )
+
+        except ValueError:
+
+            return (
+                "第 "
+                + str(index + 1)
+                + " 筆樣品含有無效的數值。",
+                400
+            )
+
+        if dilution_factor <= 0:
+
+            return (
+                "第 "
+                + str(index + 1)
+                + " 筆稀釋倍數必須大於 0。",
+                400
+            )
+
+        if sample_volume <= 0:
+
+            return (
+                "第 "
+                + str(index + 1)
+                + " 筆取樣體積必須大於 0。",
+                400
+            )
+
+        if final_volume <= 0:
+
+            return (
+                "第 "
+                + str(index + 1)
+                + " 筆最終定量體積必須大於 0。",
+                400
+            )
+
+        row["sample_id"] = sample_id
+        row["signal"] = signal
+        row["sample_volume"] = sample_volume
+        row["final_volume"] = final_volume
+        row["dilution_factor"] = dilution_factor
+        row["spike_concentration"] = (
+            spike_concentration
+        )
+        row["remark"] = remark
+        row["display_order"] = display_order
+
+        try:
+
+            result = calculate_sample_concentration(
+                signal=signal,
+                slope=calibration_result["slope"],
+                intercept=calibration_result["intercept"],
+                sample_volume=sample_volume,
+                final_volume=final_volume,
+                dilution_factor=dilution_factor
+            )
+
+            row["calculated_concentration"] = (
+                result[
+                    "calculated_concentration"
+                ]
+            )
+
+        except ValueError:
+
+            row[
+                "calculated_concentration"
+            ] = None
+
+        updated_rows.append(
+            row
+        )
+
+    updated_rows.sort(
+        key=lambda row: row.get(
+            "display_order",
+            9999
+        )
+    )
+
+    analysis_state[
+        "sample_qaqc_rows"
+    ] = updated_rows
+
+    analysis_state[
+    "sample_data_saved"
+] = True
+
+    save_analysis_state(
+        "W434_CURRENT",
+        analysis_state
+    )
+
+    return redirect(
+        url_for(
+            "analysis_w43401",
+            saved="1"
+        )
+    )
+
 @app.route("/analysis/w43401/export-pdf")
 def export_w434_pdf():
 
@@ -1506,6 +1983,145 @@ def export_w434_pdf():
     return send_file(
         pdf_buffer,
         mimetype="application/pdf",
+        as_attachment=True,
+        download_name=download_name
+    )
+
+@app.route("/analysis/w43401/export-lims")
+def export_w434_lims():
+
+    form_data = session.get(
+        "basic_info_form"
+    )
+
+    if not form_data:
+
+        return (
+            "尚未建立分析基本資料。",
+            400
+        )
+
+    (
+        control_data,
+        method_data,
+        load_error
+    ) = load_control_and_method_data(
+        form_data
+    )
+
+    if load_error:
+
+        return (
+            load_error,
+            400
+        )
+
+    analysis_state = load_analysis_state(
+        "W434_CURRENT"
+    )
+
+    if not analysis_state:
+
+        return (
+            "尚未找到 W434 分析結果，請先完成分析資料。",
+            400
+        )
+
+    export_data = (
+        build_w434_lims_export_data(
+            form_data=form_data,
+            control_data=control_data,
+            analysis_state=analysis_state,
+            analyst=""
+        )
+    )
+
+    if not export_data.qc_rows:
+
+        return (
+            "目前沒有可匯出的 LIMS 品管資料。",
+            400
+        )
+
+    if not export_data.analysis_rows:
+
+        return (
+            "目前沒有可匯出的正式樣品資料。",
+            400
+        )
+
+    template_path = os.path.join(
+        app.root_path,
+        "resources",
+        "lims",
+        "lims匯入表格.xlsx"
+    )
+
+    if not os.path.exists(
+        template_path
+    ):
+
+        return (
+            "找不到 LIMS Excel 範本。",
+            500
+        )
+
+    analysis_method = (
+        control_data.get(
+            "EM_NO",
+            ""
+        )
+        .strip()
+    )
+
+    user_data = get_current_user() or {}
+
+    analyst_id = (
+    user_data.get(
+        "employee_id",
+        ""
+    )
+    .strip()
+)
+
+    analyst_name = (
+    user_data.get(
+        "employee_name",
+        ""
+    )
+    .strip()
+)   
+
+    excel_buffer = build_lims_excel(
+    template_path=template_path,
+    export_data=export_data,
+    analyst_id=analyst_id,
+    analyst_name=analyst_name,
+    analysis_method=analysis_method
+)
+
+    exam_no = (
+        control_data.get(
+            "EXAMNO",
+            ""
+        )
+        .strip()
+    )
+
+    if not exam_no:
+        exam_no = "LIMS"
+
+    download_name = (
+        exam_no
+        + "_LIMS_Import.xlsx"
+    )
+
+    return send_file(
+        excel_buffer,
+        mimetype=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        ),
         as_attachment=True,
         download_name=download_name
     )

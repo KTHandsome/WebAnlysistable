@@ -33,6 +33,76 @@ def build_w434_pdf(
 
     page_width, page_height = A4
 
+        # ========================================
+    # 共用頁尾
+    # 每一頁均顯示：
+    # 審核 / 驗算 / 分析 + 頁碼
+    # ========================================
+    def draw_page_footer(
+        page_no,
+        total_pages
+    ):
+
+        usable_width = (
+            page_width
+            - left_margin
+            - right_margin
+        )
+
+        footer_col_width = (
+            usable_width / 3
+        )
+
+        # -----------------------------
+        # 簽核欄
+        # -----------------------------
+        signature_y = 38
+
+        pdf_canvas.setFont(
+            "MicrosoftJhengHei",
+            9
+        )
+
+        pdf_canvas.drawString(
+            left_margin,
+            signature_y,
+            "審核："
+        )
+
+        pdf_canvas.drawString(
+            left_margin
+            + footer_col_width,
+            signature_y,
+            "驗算："
+        )
+
+        pdf_canvas.drawString(
+            left_margin
+            + footer_col_width * 2,
+            signature_y,
+            "分析："
+        )
+
+        # -----------------------------
+        # 頁碼
+        # -----------------------------
+        page_number_y = 14
+
+        pdf_canvas.setFont(
+            "MicrosoftJhengHei",
+            7.5
+        )
+
+        pdf_canvas.drawCentredString(
+            page_width / 2,
+            page_number_y,
+            "第 "
+            + str(page_no)
+            + " 頁 / 共 "
+            + str(total_pages)
+            + " 頁"
+        )
+
     # -----------------------------
     # 基本版面參數
     # -----------------------------
@@ -594,29 +664,94 @@ def build_w434_pdf(
         "二、樣品及品管分析結果"
     )
 
-    sample_table_top_y = (
-        sample_title_y - 10
-    )
+    # -----------------------------
+    # 取得實際分析計算條件
+    # -----------------------------
+    sample_volume = None
+    final_volume = None   
 
+    for row in sample_qaqc_rows:
+
+        if sample_volume is None:
+             value = row.get(
+            "sample_volume"
+        )
+             if value is not None:
+                final_volume = value       
+        if (
+        sample_volume is not None
+        and final_volume is not None
+    ):
+         break
+
+    sample_volume_text = (
+    format(
+        sample_volume,
+        "g"
+    )
+    if sample_volume is not None
+    else "-"
+)
+    final_volume_text = (
+    format(
+        final_volume,
+        "g"
+    )
+    if final_volume is not None
+    else "-"
+)
+    # -----------------------------
+    # 品保驗算必要計算條件
+    # -----------------------------
+    pdf_canvas.setFont(
+    "MicrosoftJhengHei",
+    7.5
+)    
+    condition_y = (
+    sample_title_y - 14
+)   
+    pdf_canvas.drawString(
+    left_margin,
+    condition_y,
+    "計算條件：取樣體積 "
+    + sample_volume_text
+    + " mL"
+    + "　｜　最終定量體積 "
+    + final_volume_text
+    + " mL"
+)
+    formula_y = (
+    sample_title_y - 26
+)
+    pdf_canvas.drawString(
+    left_margin,
+    formula_y,
+    "計算式：計算濃度 = 測定濃度 × "
+    "(最終定量體積 / 取樣體積) × "
+    "稀釋倍數(D)"
+)
+    sample_table_top_y = (
+    sample_title_y - 34
+)
     sample_row_height = 17
 
     sample_column_widths = [
-        45,   # 序號
-        105,  # 樣品編號
-        65,   # 類型
-        85,   # 吸光度
-        105,  # 添加濃度
-        110   # 計算濃度
-    ]
+    45,   # 序號
+    105,  # 樣品編號
+    80,   # 稀釋倍數
+    75,   # 測定值
+    100,  # 添加濃度
+    110   # 計算濃度
+]
 
     sample_headers = [
-        "序號",
-        "樣品編號",
-        "類型",
-        "吸光度",
-        "添加濃度 (mg/L)",
-        "計算濃度 (mg/L)"
-    ]
+    "序號",
+    "樣品編號",
+    "稀釋倍數(D)",
+    "測定值",
+    "添加濃度 (mg/L)",
+    "計算濃度 (mg/L)"
+]
 
     current_x = left_margin
 
@@ -668,10 +803,10 @@ def build_w434_pdf(
             ""
         )
 
-        role = row.get(
-            "role",
-            ""
-        )
+        dilution_factor = row.get(
+    "dilution_factor",
+    1
+)
 
         signal = row.get(
             "signal"
@@ -695,9 +830,14 @@ def build_w434_pdf(
             if sample_id
             else "-",
 
-            role
-            if role
-            else "-",
+            (
+        str(dilution_factor)
+           if dilution_factor not in {
+             None,
+             ""
+              }
+           else "1"
+            ),
 
             (
                 format(
@@ -1078,48 +1218,14 @@ def build_w434_pdf(
             current_x += width
 
     # -----------------------------
-    # 頁尾簽核欄
+    # 本頁頁尾
+    # 目前尚未啟用跨頁，因此固定 1 / 1
+    # 下一階段跨頁時改由各頁傳入實際頁次
     # -----------------------------
-    footer_y = 28
-
-    pdf_canvas.setFont(
-        "MicrosoftJhengHei",
-        9
+    draw_page_footer(
+        page_no=1,
+        total_pages=1
     )
-
-    usable_width = (
-    page_width
-    - left_margin
-    - right_margin
-)
-    
-    footer_col_width = (
-    usable_width / 3
-    )
-
-
-    # 左：審核
-    pdf_canvas.drawString(
-        left_margin,
-        footer_y,
-        "審核："
-    )
-
-    # 中：驗算
-    pdf_canvas.drawString(
-        left_margin
-        + footer_col_width,
-         footer_y,
-        "驗算："
-)
-
-    # 右：分析
-    pdf_canvas.drawString(
-    left_margin
-    + footer_col_width * 2,
-    footer_y,
-    "分析："
-)
 
     pdf_canvas.showPage()
     pdf_canvas.save()

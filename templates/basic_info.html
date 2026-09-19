@@ -4,511 +4,770 @@
 分析檢驗紀錄 - EACS Web
 {% endblock %}
 
-
-{% block head %}
-
-<style>
-    .content-title {
-        font-size: 26px;
-        font-weight: bold;
-        margin: 0 0 22px 0;
-    }
-
-    .card {
-        background-color: white;
-        border: 1px solid #d9d9d9;
-        border-radius: 8px;
-        padding: 24px;
-        margin-bottom: 20px;
-    }
-
-    .card-title {
-        font-size: 20px;
-        font-weight: bold;
-        margin-bottom: 20px;
-    }
-
-.form-grid {
-    display: grid;
-    grid-template-columns: 90px 320px 90px 320px;
-    gap: 14px 24px;
-    align-items: center;
-    justify-content: start;
-}
-
-label {
-    font-weight: bold;
-    align-self: center;
-}
-
-    input,
-    select {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 8px 10px;
-        border: 1px solid #bfc5cc;
-        border-radius: 4px;
-        font-size: 16px;
-    }
-
-    .hint {
-        color: #777;
-        font-size: 13px;
-        margin-top: 4px;
-    }
-
-    .button-row {
-        margin-top: 24px;
-        text-align: center;
-    }
-
-    button {
-        padding: 10px 28px;
-        font-size: 16px;
-        border: none;
-        border-radius: 5px;
-        background-color: #2f6fab;
-        color: white;
-        cursor: pointer;
-    }
-
-    button:hover {
-        background-color: #245d90;
-    }
-
-    .control-grid {
-        display: grid;
-        grid-template-columns: 220px minmax(180px, 1fr) 220px minmax(180px, 1fr);
-        gap: 12px 18px;
-        align-items: center;
-    }
-
-    .control-label {
-        font-weight: bold;
-    }
-
-    .control-value {
-        background-color: #f7f7f7;
-        padding: 7px 10px;
-        border-radius: 4px;
-        min-height: 34px;
-    }
-
-    .section-divider {
-        margin: 18px 0;
-        border-top: 1px solid #dddddd;
-    }
-
-    @media (max-width: 1100px) {
-        .form-grid,
-        .control-grid {
-            grid-template-columns: 150px 1fr;
-        }
-    }
-</style>
-
-{% endblock %}
-
-
 {% block content %}
 
-    <div class="card">
+<div class="page-header">
 
-        <div class="card-title">
-            基本資料
-        </div>
+    <h1 class="page-title">
+        分析基本資料
+    </h1>
 
-<form method="post">
-    <div class="form-grid">
-
-        <label for="ctrl_year">管制年度</label>
-        <select id="ctrl_year" name="ctrl_year">
-            <option value="2026" {% if form_data.ctrl_year=="2026" %}selected{% endif %}>
-                2026
-            </option>
-        </select>
-
-        <label for="category">檢測類別</label>
-<select id="category" name="category">
-
-    <option value="A" {% if form_data.category=="A" %}selected{% endif %}>
-        固定源空氣樣品
-    </option>
-
-    <option value="B" {% if form_data.category=="B" %}selected{% endif %}>
-        生物植體
-    </option>
-
-    <option value="C" {% if form_data.category=="C" %}selected{% endif %}>
-        溫泉水樣品
-    </option>
-
-    <option value="D" {% if form_data.category=="D" %}selected{% endif %}>
-        飲用水樣品
-    </option>
-
-    <option value="E" {% if form_data.category=="E" %}selected{% endif %}>
-        環衛用藥
-    </option>
-
-    <option value="G" {% if form_data.category=="G" %}selected{% endif %}>
-        地下水樣品
-    </option>
-
-    <option value="H" {% if form_data.category=="H" %}selected{% endif %}>
-        毒性及關注化學物質
-    </option>
-
-    <option value="I" {% if form_data.category=="I" %}selected{% endif %}>
-        工業分析
-    </option>
-
-    <option value="K" {% if form_data.category=="K" %}selected{% endif %}>
-        交通樣品
-    </option>
-
-    <option value="M" {% if form_data.category=="M" %}selected{% endif %}>
-        底泥樣品
-    </option>
-
-    <option value="N" {% if form_data.category=="N" %}selected{% endif %}>
-        噪音振動
-    </option>
-
-    <option value="O" {% if form_data.category=="O" %}selected{% endif %}>
-        環衛採樣
-    </option>
-
-    <option value="P" {% if form_data.category=="P" %}selected{% endif %}>
-        空氣樣品
-    </option>
-
-    <option value="R" {% if form_data.category=="R" %}selected{% endif %}>
-        廢棄物樣品
-    </option>
-
-    <option value="S" {% if form_data.category=="S" %}selected{% endif %}>
-        土壤樣品
-    </option>
-
-    <option value="T" {% if form_data.category=="T" %}selected{% endif %}>
-        績效查核樣品
-    </option>
-
-    <option value="W" {% if form_data.category=="W" %}selected{% endif %}>
-        水質樣品
-    </option>
-
-</select>
-
-
-        <label for="exam_name">測項名稱</label>
-        <input type="text" id="exam_name" name="exam_name" placeholder="例如：砷" value="{{ form_data.exam_name }}">
-
-        <label for="method_code">分析方法</label>
-        <input type="text" id="method_code" name="method_code" placeholder="例如：W434"
-            value="{{ form_data.method_code }}">
-
-<label for="instrument_id">儀器編號</label>
-
-<div>
-
-    <select
-        id="instrument_id"
-        name="instrument_id"
-    >
-
-        <option value="">
-            請選擇儀器
-        </option>
-
-        {% for instrument in instrument_options %}
-
-<option
-    value="{{ instrument.LABPARTID }}"
-    {% if form_data.instrument_id == instrument.LABPARTID %}
-    selected
-    {% endif %}
->
-    {{ instrument.MODAL }}
-</option>
-
-        {% endfor %}
-
-    </select>
-
-    <div class="hint">
-        依分析方法自動帶入可使用儀器
+    <div class="page-subtitle">
+        設定分析年度、檢測類別、方法、儀器與分析日期，
+        並載入對應的年度管制資料。
     </div>
 
 </div>
 
-<label for="form_date">填表日期</label>
-<input
-    type="date"
-    id="form_date"
-    name="form_date"
-    value="{{ form_data.form_date }}"
->
 
-<label for="analysis_start_date">分析日期起</label>
-<input
-    type="date"
-    id="analysis_start_date"
-    name="analysis_start_date"
-    value="{{ form_data.analysis_start_date }}"
->
+<div class="eacs-card">
 
-<label for="analysis_end_date">分析日期迄</label>
-<input
-    type="date"
-    id="analysis_end_date"
-    name="analysis_end_date"
-    value="{{ form_data.analysis_end_date }}"
->
+    <h2 class="eacs-card-title">
+        基本資料
+    </h2>
 
-        <label for="wavelength">波長</label>
-        <div>
-            <input type="number" id="wavelength" name="wavelength" step="0.01" placeholder="可留空"
-                value="{{ form_data.wavelength }}">
-            <div class="hint">
-                僅適用特定金屬分析
+    <form method="post">
+
+        <div class="eacs-form-grid">
+
+
+            <!-- 管制年度 -->
+            <div class="eacs-form-field">
+
+                <label
+                    for="ctrl_year"
+                    class="eacs-form-label"
+                >
+                    管制年度
+                </label>
+
+                <select
+                    id="ctrl_year"
+                    name="ctrl_year"
+                    class="eacs-form-control"
+                >
+                    <option
+                        value="2026"
+                        {% if form_data.ctrl_year == "2026" %}
+                        selected
+                        {% endif %}
+                    >
+                        2026
+                    </option>
+                </select>
+
             </div>
+
+
+            <!-- 檢測類別 -->
+            <div class="eacs-form-field">
+
+                <label
+                    for="category"
+                    class="eacs-form-label"
+                >
+                    檢測類別
+                </label>
+
+                <select
+                    id="category"
+                    name="category"
+                    class="eacs-form-control"
+                >
+
+                    <option value="A" {% if form_data.category=="A" %}selected{% endif %}>
+                        固定源空氣樣品
+                    </option>
+
+                    <option value="B" {% if form_data.category=="B" %}selected{% endif %}>
+                        生物植體
+                    </option>
+
+                    <option value="C" {% if form_data.category=="C" %}selected{% endif %}>
+                        溫泉水樣品
+                    </option>
+
+                    <option value="D" {% if form_data.category=="D" %}selected{% endif %}>
+                        飲用水樣品
+                    </option>
+
+                    <option value="E" {% if form_data.category=="E" %}selected{% endif %}>
+                        環衛用藥
+                    </option>
+
+                    <option value="G" {% if form_data.category=="G" %}selected{% endif %}>
+                        地下水樣品
+                    </option>
+
+                    <option value="H" {% if form_data.category=="H" %}selected{% endif %}>
+                        毒性及關注化學物質
+                    </option>
+
+                    <option value="I" {% if form_data.category=="I" %}selected{% endif %}>
+                        工業分析
+                    </option>
+
+                    <option value="K" {% if form_data.category=="K" %}selected{% endif %}>
+                        交通樣品
+                    </option>
+
+                    <option value="M" {% if form_data.category=="M" %}selected{% endif %}>
+                        底泥樣品
+                    </option>
+
+                    <option value="N" {% if form_data.category=="N" %}selected{% endif %}>
+                        噪音振動
+                    </option>
+
+                    <option value="O" {% if form_data.category=="O" %}selected{% endif %}>
+                        環衛採樣
+                    </option>
+
+                    <option value="P" {% if form_data.category=="P" %}selected{% endif %}>
+                        空氣樣品
+                    </option>
+
+                    <option value="R" {% if form_data.category=="R" %}selected{% endif %}>
+                        廢棄物樣品
+                    </option>
+
+                    <option value="S" {% if form_data.category=="S" %}selected{% endif %}>
+                        土壤樣品
+                    </option>
+
+                    <option value="T" {% if form_data.category=="T" %}selected{% endif %}>
+                        績效查核樣品
+                    </option>
+
+                    <option value="W" {% if form_data.category=="W" %}selected{% endif %}>
+                        水質樣品
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <!-- 測項名稱 -->
+            <div class="eacs-form-field">
+
+                <label
+                    for="exam_name"
+                    class="eacs-form-label"
+                >
+                    測項名稱
+                </label>
+
+                <input
+                    type="text"
+                    id="exam_name"
+                    name="exam_name"
+                    class="eacs-form-control"
+                    placeholder="例如：砷"
+                    value="{{ form_data.exam_name }}"
+                >
+
+            </div>
+
+
+            <!-- 分析方法 -->
+            <div class="eacs-form-field">
+
+                <label
+                    for="method_code"
+                    class="eacs-form-label"
+                >
+                    分析方法
+                </label>
+
+                <input
+                    type="text"
+                    id="method_code"
+                    name="method_code"
+                    class="eacs-form-control"
+                    placeholder="例如：W434"
+                    value="{{ form_data.method_code }}"
+                >
+
+            </div>
+
+
+            <!-- 儀器 -->
+            <div class="eacs-form-field">
+
+                <label
+                    for="instrument_id"
+                    class="eacs-form-label"
+                >
+                    儀器
+                </label>
+
+                <select
+                    id="instrument_id"
+                    name="instrument_id"
+                    class="eacs-form-control"
+                >
+
+                    <option value="">
+                        請選擇儀器
+                    </option>
+
+                    {% for instrument in instrument_options %}
+
+                    <option
+                        value="{{ instrument.LABPARTID }}"
+                        {% if form_data.instrument_id == instrument.LABPARTID %}
+                        selected
+                        {% endif %}
+                    >
+                        {{ instrument.MODAL }}
+                    </option>
+
+                    {% endfor %}
+
+                </select>
+
+            </div>
+
+
+            <!-- 填表日期 -->
+            <div class="eacs-form-field">
+
+                <label
+                    for="form_date"
+                    class="eacs-form-label"
+                >
+                    填表日期
+                </label>
+
+                <input
+                    type="date"
+                    id="form_date"
+                    name="form_date"
+                    class="eacs-form-control"
+                    value="{{ form_data.form_date }}"
+                >
+
+            </div>
+
+
+            <!-- 分析日期起 -->
+            <div class="eacs-form-field">
+
+                <label
+                    for="analysis_start_date"
+                    class="eacs-form-label"
+                >
+                    分析日期起
+                </label>
+
+                <input
+                    type="date"
+                    id="analysis_start_date"
+                    name="analysis_start_date"
+                    class="eacs-form-control"
+                    value="{{ form_data.analysis_start_date }}"
+                >
+
+            </div>
+
+
+            <!-- 分析日期迄 -->
+            <div class="eacs-form-field">
+
+                <label
+                    for="analysis_end_date"
+                    class="eacs-form-label"
+                >
+                    分析日期迄
+                </label>
+
+                <input
+                    type="date"
+                    id="analysis_end_date"
+                    name="analysis_end_date"
+                    class="eacs-form-control"
+                    value="{{ form_data.analysis_end_date }}"
+                >
+
+            </div>
+
+
+            <!-- 波長 -->
+            <div class="eacs-form-field">
+
+                <label
+                    for="wavelength"
+                    class="eacs-form-label"
+                >
+                    波長
+                </label>
+
+                <input
+                    type="number"
+                    id="wavelength"
+                    name="wavelength"
+                    class="eacs-form-control"
+                    step="0.01"
+                    placeholder="可留空"
+                    value="{{ form_data.wavelength }}"
+                >
+
+            </div>
+
+
         </div>
 
-    </div>
 
-    <div class="button-row">
-        <button type="submit">
-            查詢管制資料
-        </button>
-    </div>
+        <div
+            style="
+                display: flex;
+                justify-content: center;
+                margin-top: 24px;
+            "
+        >
 
-</form>
+            <button
+                type="submit"
+                class="eacs-button eacs-button-primary"
+            >
+                查詢管制資料
+            </button>
 
-    </div>
+        </div>
 
-<div class="card">
+    </form>
 
-    <div class="card-title">
+</div>
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
         分析方法設定
+    </h2>
+
+    <div class="eacs-info-grid">
+
+
+        <!-- 資料輸入方式 -->
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                資料輸入方式
+            </div>
+
+            <div class="eacs-info-value">
+
+                {% set entry_mode =
+                    method_data.get("DATA_ENTRY_MODE", "")
+                    | trim
+                    | upper
+                    if method_data
+                    else ""
+                %}
+
+                {% if entry_mode == "BOTH" %}
+
+                <label style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    margin-right: 24px;
+                    font-weight: 400;
+                ">
+                    <input
+                        type="radio"
+                        name="data_entry_mode"
+                        value="MANUAL"
+                        checked
+                        onchange="updateDataEntryMode()"
+                        style="width: auto;"
+                    >
+                    手動輸入
+                </label>
+
+                <label style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-weight: 400;
+                ">
+                    <input
+                        type="radio"
+                        name="data_entry_mode"
+                        value="IMPORT"
+                        onchange="updateDataEntryMode()"
+                        style="width: auto;"
+                    >
+                    匯入
+                </label>
+
+                {% elif entry_mode == "MANUAL" %}
+
+                <label style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-weight: 400;
+                ">
+                    <input
+                        type="radio"
+                        name="data_entry_mode"
+                        value="MANUAL"
+                        checked
+                        style="width: auto;"
+                    >
+                    手動輸入
+                </label>
+
+                {% elif entry_mode == "IMPORT" %}
+
+                <label style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-weight: 400;
+                ">
+                    <input
+                        type="radio"
+                        name="data_entry_mode"
+                        value="IMPORT"
+                        checked
+                        style="width: auto;"
+                    >
+                    匯入
+                </label>
+
+                {% else %}
+                -
+                {% endif %}
+
+            </div>
+
+        </div>
+
+
+        <!-- 每批最大樣品數 -->
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                每批最大樣品數
+            </div>
+
+            <div class="eacs-info-value">
+                {{ method_data.MAX_SAMPLE_PER_BATCH if method_data else "-" }}
+            </div>
+
+        </div>
+
+
+        <!-- 檢量線點數 -->
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                檢量線點數
+            </div>
+
+            <div class="eacs-info-value">
+                {{ method_data.CALIBRATION_COUNT if method_data else "-" }}
+            </div>
+
+        </div>
+
+
+        <!-- 匯入格式 -->
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                匯入格式
+            </div>
+
+            <div class="eacs-info-value">
+                {{
+                    method_data.IMPORT_TYPE
+                    if method_data and method_data.IMPORT_TYPE
+                    else "-"
+                }}
+            </div>
+
+        </div>
+
     </div>
 
-    <div class="control-grid">
-
-        <div class="control-label">資料輸入方式</div>
-        <div class="control-value">
-
-            {% set entry_mode = method_data.get("DATA_ENTRY_MODE", "") | trim | upper if method_data else "" %}
-
-            {% if entry_mode == "BOTH" %}
-
-            <label style="margin-right: 24px; font-weight: normal;">
-                <input type="radio" name="data_entry_mode" value="MANUAL" checked onchange="updateDataEntryMode()"
-                    style="width: auto;">
-                手動輸入
-            </label>
-
-            <label style="font-weight: normal;">
-                <input type="radio" name="data_entry_mode" value="IMPORT" onchange="updateDataEntryMode()"
-                    style="width: auto;">
-                匯入
-            </label>
-
-            {% elif entry_mode == "MANUAL" %}
-
-            <label style="font-weight: normal;">
-                <input type="radio" name="data_entry_mode" value="MANUAL" checked style="width: auto;">
-                手動輸入
-            </label>
-
-            {% elif entry_mode == "IMPORT" %}
-
-            <label style="font-weight: normal;">
-                <input type="radio" name="data_entry_mode" value="IMPORT" checked style="width: auto;">
-                匯入
-            </label>
-
-            {% else %}
-            -
-            {% endif %}
-
-        </div>
-        <div class="control-label">每批最大樣品數</div>
-        <div class="control-value">
-            {{ method_data.MAX_SAMPLE_PER_BATCH if method_data else "-" }}
-        </div>
-
-        <div class="control-label">檢量線點數</div>
-        <div class="control-value">
-            {{ method_data.CALIBRATION_COUNT if method_data else "-" }}
-        </div>
-
-        <div class="control-label">匯入格式</div>
-        <div class="control-value">
-            {{ method_data.IMPORT_TYPE if method_data and method_data.IMPORT_TYPE else "-" }}
-        </div>
-
-    </div>
 
     {% if method_data %}
 
-    <div id="manual-entry-actions" style="
-        margin-top: 20px;
-        text-align: center;
-    ">
-        <button type="button" onclick="alert('手動輸入功能下一階段建置')">
-            進入手動輸入
-        </button>
-    </div>
-
-    {% if
-    method_data
-    and method_data.METHOD_CODE|upper == "W434"
-    and method_data.IMPORT_TYPE|upper == "PE900_PDF"
-%}
-
-<div
-    id="import-entry-actions"
-    style="
-        margin-top: 22px;
-        text-align: center;
-    "
->
-
-    <a
-        href="{{ url_for('analysis_w43401') }}"
+    <!-- 手動輸入 -->
+    <div
+        id="manual-entry-actions"
         style="
-            display: inline-block;
-            text-decoration: none;
-            background-color: #2f6fab;
-            color: white;
-            padding: 12px 28px;
-            border-radius: 5px;
-            font-size: 16px;
+            margin-top: 24px;
+            text-align: center;
         "
     >
-        匯入 PDF
-    </a>
 
-</div>
+        <button
+            type="button"
+            class="eacs-button eacs-button-primary"
+            onclick="alert('手動輸入功能下一階段建置')"
+        >
+            進入手動輸入
+        </button>
 
-{% endif %}
+    </div>
+
+
+    {% if
+        method_data
+        and method_data.METHOD_CODE|upper == "W434"
+        and method_data.IMPORT_TYPE|upper == "PE900_PDF"
+    %}
+
+    <div
+        id="import-entry-actions"
+        style="
+            margin-top: 24px;
+            text-align: center;
+        "
+    >
+
+        <a
+            href="{{ url_for('analysis_w43401') }}"
+            class="eacs-button eacs-button-primary"
+        >
+            匯入 PDF
+        </a>
+
+    </div>
+
+    {% endif %}
 
     {% endif %}
 
 </div>
 
 
-    <div class="card">
-    
-        <div class="card-title">
-            年度管制資料
-        </div>
-    
-        {% if error_message %}
-        <div style="
-        background-color: #fff3f3;
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        年度管制資料
+    </h2>
+
+
+    {% if error_message %}
+
+    <div style="
+        background-color: var(--eacs-danger-bg);
         border: 1px solid #e1a5a5;
-        color: #a00000;
-        padding: 12px;
-        margin-bottom: 18px;
-        border-radius: 5px;
+        color: var(--eacs-danger);
+        padding: 12px 14px;
+        margin-bottom: 20px;
+        border-radius: 6px;
     ">
-            {{ error_message }}
-        </div>
-        {% endif %}
-    
-        <div class="control-grid">
-    
-            <div class="control-label">測項代碼</div>
-            <div class="control-value">
+        {{ error_message }}
+    </div>
+
+    {% endif %}
+
+
+    <!-- 基本管制資料 -->
+    <div class="eacs-info-grid">
+
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                測項代碼
+            </div>
+
+            <div class="eacs-info-value">
                 {{ control_data.EXAMNO if control_data else "-" }}
             </div>
-    
-            <div class="control-label">正式方法</div>
-            <div class="control-value">
+
+        </div>
+
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                正式方法
+            </div>
+
+            <div class="eacs-info-value">
                 {{ control_data.EM_NO if control_data else "-" }}
             </div>
-    
-    
-            <div class="control-label">單位</div>
-            <div class="control-value">
+
+        </div>
+
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                單位
+            </div>
+
+            <div class="eacs-info-value">
                 {{ control_data.CTRL_UNIT if control_data else "-" }}
             </div>
-    
-            <div class="control-label">MDL</div>
-            <div class="control-value">
+
+        </div>
+
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                MDL
+            </div>
+
+            <div class="eacs-info-value">
                 {{ control_data.DETECT_LIMITED if control_data else "-" }}
             </div>
-    
-    
-            <div class="control-label">QDL</div>
-            <div class="control-value">
-                {{ control_data.QDL if control_data and control_data.QDL else "-" }}
-            </div>
-    
+
         </div>
-    
-        <div class="section-divider"></div>
-    
-        <div class="control-grid">
-    
-            <div class="control-label">重複分析警告上限</div>
-            <div class="control-value">
+
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                QDL
+            </div>
+
+            <div class="eacs-info-value">
+                {{
+                    control_data.QDL
+                    if control_data and control_data.QDL
+                    else "-"
+                }}
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div style="
+        height: 1px;
+        background-color: var(--eacs-border-light);
+        margin: 26px 0;
+    "></div>
+
+
+    <div style="
+        font-size: 17px;
+        font-weight: 700;
+        margin-bottom: 16px;
+        color: var(--eacs-text);
+    ">
+        QA/QC 管制界限
+    </div>
+
+
+    <div class="eacs-info-grid">
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                重複分析警告上限
+            </div>
+            <div class="eacs-info-value">
                 {{ control_data.DC_UWL if control_data else "-" }}
             </div>
-    
-            <div class="control-label">重複分析管制上限</div>
-            <div class="control-value">
+        </div>
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                重複分析管制上限
+            </div>
+            <div class="eacs-info-value">
                 {{ control_data.DC_UCL if control_data else "-" }}
             </div>
-    
-    
-            <div class="control-label">查核樣品警告上限</div>
-            <div class="control-value">
+        </div>
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                查核樣品警告上限
+            </div>
+            <div class="eacs-info-value">
                 {{ control_data.QC_UWL if control_data else "-" }}
             </div>
-    
-            <div class="control-label">查核樣品管制上限</div>
-            <div class="control-value">
+        </div>
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                查核樣品管制上限
+            </div>
+            <div class="eacs-info-value">
                 {{ control_data.QC_UCL if control_data else "-" }}
             </div>
-    
-            <div class="control-label">查核樣品警告下限</div>
-            <div class="control-value">
+        </div>
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                查核樣品警告下限
+            </div>
+            <div class="eacs-info-value">
                 {{ control_data.QC_LWL if control_data else "-" }}
             </div>
-    
-            <div class="control-label">查核樣品管制下限</div>
-            <div class="control-value">
+        </div>
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                查核樣品管制下限
+            </div>
+            <div class="eacs-info-value">
                 {{ control_data.QC_LCL if control_data else "-" }}
             </div>
-    
-    
-            <div class="control-label">添加分析警告上限</div>
-            <div class="control-value">
+        </div>
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                添加分析警告上限
+            </div>
+            <div class="eacs-info-value">
                 {{ control_data.SPIKE_UWL if control_data else "-" }}
             </div>
-    
-            <div class="control-label">添加分析管制上限</div>
-            <div class="control-value">
+        </div>
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                添加分析管制上限
+            </div>
+            <div class="eacs-info-value">
                 {{ control_data.SPIKE_UCL if control_data else "-" }}
             </div>
-    
-            <div class="control-label">添加分析警告下限</div>
-            <div class="control-value">
+        </div>
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                添加分析警告下限
+            </div>
+            <div class="eacs-info-value">
                 {{ control_data.SPIKE_LWL if control_data else "-" }}
             </div>
-    
-            <div class="control-label">添加分析管制下限</div>
-            <div class="control-value">
+        </div>
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                添加分析管制下限
+            </div>
+            <div class="eacs-info-value">
                 {{ control_data.SPIKE_LCL if control_data else "-" }}
             </div>
-    
         </div>
-    
+
+
     </div>
+
+</div>
 
     {% endblock %}
 

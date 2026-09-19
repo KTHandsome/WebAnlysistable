@@ -48,6 +48,18 @@
 
     {% if sample_qaqc_rows %}
 
+<form
+    id="sample-qaqc-form"
+    method="post"
+    action="{{ url_for('update_w434_samples') }}"
+>
+
+<input
+    type="hidden"
+    name="row_count"
+    value="{{ sample_qaqc_rows|length }}"
+>
+
 <input
     type="hidden"
     id="analysis-mdl"
@@ -297,7 +309,7 @@
                         <input
                             type="number"
                             name="sample_volume_{{ loop.index0 }}"
-                            value="25"
+                            value="{{ row.sample_volume if row.sample_volume is defined else 25 }}"
                             readonly
                             style="
                                 width: 100%;
@@ -344,7 +356,7 @@
                         <input
                             type="number"
                             name="final_volume_{{ loop.index0 }}"
-                            value="50"
+                            value="{{ row.final_volume if row.final_volume is defined else 50 }}"
                             readonly
                             style="
                                 width: 100%;
@@ -395,7 +407,7 @@
                             min="0.001"
                             class="dilution-factor-input"
                             name="dilution_factor_{{ loop.index0 }}"
-                            value="1"
+                            value="{{ row.dilution_factor if row.dilution_factor is defined else 1 }}"
                             style="
                                 width: 100%;
                                 box-sizing: border-box;
@@ -444,7 +456,7 @@
                         <input
                             type="text"
                             name="remark_{{ loop.index0 }}"
-                            value=""
+                            value="{{ row.remark if row.remark is defined else '' }}"
                             style="
                                 width: 100%;
                                 box-sizing: border-box;
@@ -463,6 +475,9 @@
             </tbody>
 
         </table>
+
+
+</form>
 
     {% else %}
 

@@ -293,25 +293,137 @@ W434 砷分析 - EACS
 
 </div>
 
-<div style="
-    margin-bottom: 22px;
-    text-align: right;
-">
+<div
+    class="analysis-action-bar"
+    style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 22px;
+        padding: 12px 16px;
+        background-color: white;
+        border: 1px solid #d8dee5;
+        border-radius: 8px;
+        flex-wrap: wrap;
+    "
+>
 
-    <a
-        href="{{ url_for('export_w434_pdf') }}"
-        style="
-            display: inline-block;
-            padding: 10px 24px;
-            background-color: #2f6fab;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            font-size: 16px;
-        "
-    >
-        匯出檢驗紀錄表
-    </a>
+    <div style="
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #6b7280;
+        font-size: 14px;
+    ">
+
+{% if sample_qaqc_rows %}
+
+    {% if sample_data_saved %}
+
+    <span style="
+        display: inline-block;
+        padding: 5px 10px;
+        background-color: #eef6f4;
+        border: 1px solid #cfe3de;
+        border-radius: 999px;
+        color: #0f766e;
+        font-weight: 600;
+    ">
+        分析資料已儲存
+    </span>
+
+    {% else %}
+
+    <span style="
+        display: inline-block;
+        padding: 5px 10px;
+        background-color: #fff7e6;
+        border: 1px solid #f1d29a;
+        border-radius: 999px;
+        color: #9a6700;
+        font-weight: 600;
+    ">
+        分析資料已載入，尚未儲存
+    </span>
+
+    {% endif %}
+
+{% else %}
+
+<span>
+    尚未載入分析資料
+</span>
+
+{% endif %}
+
+    </div>
+
+
+    <div style="
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    ">
+
+        {% if sample_qaqc_rows %}
+
+        <button
+            type="submit"
+            form="sample-qaqc-form"
+            style="
+                padding: 10px 20px;
+                background-color: #2563a6;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 15px;
+                cursor: pointer;
+            "
+        >
+            儲存分析資料
+        </button>
+
+        <a
+            href="{{ url_for('export_w434_pdf') }}"
+            style="
+                display: inline-block;
+                padding: 10px 20px;
+                background-color: white;
+                color: #2563a6;
+                border: 1px solid #2563a6;
+                text-decoration: none;
+                border-radius: 5px;
+                font-size: 15px;
+            "
+        >
+            匯出檢驗紀錄表
+        </a>
+
+        <a
+          href="{{ url_for('export_w434_lims') }}"
+    style="
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        min-height:42px;
+        padding:0 18px;
+        border:1px solid #0f766e;
+        border-radius:7px;
+        background-color:white;
+        color:#0f766e;
+        font-weight:600;
+        text-decoration:none;
+        box-sizing:border-box;
+    "
+>
+    匯出 LIMS
+</a>
+
+        {% endif %}
+
+    </div>
 
 </div>
 
