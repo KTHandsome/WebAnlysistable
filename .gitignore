@@ -14,3 +14,6 @@ test_data/
 
 # Generated test reports
 test_*.pdf
+
+/lims匯入表格.xlsx
+/test_lims_export.xlsx
