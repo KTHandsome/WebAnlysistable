@@ -128,22 +128,26 @@ def dev_login():
     )
 
 
-@app.route(
-    "/logout"
-)
+@app.route("/logout")
 def logout():
 
-    clear_current_user()
+    session.clear()
 
     return redirect(
-        url_for(
-            "login"
-        )
+        url_for("login")
     )
 
 @app.route("/")
 def home():
-    return redirect(url_for("basic_info"))
+
+    if get_current_user() is None:
+        return redirect(
+            url_for("login")
+        )
+
+    return redirect(
+        url_for("basic_info")
+    )
 
 
 def load_control_and_method_data(form_data):
@@ -584,6 +588,7 @@ def load_instrument_options(form_data):
     return instrument_options
 
 @app.route("/basic-info", methods=["GET", "POST"])
+@login_required
 def basic_info():
 
     control_data = None
@@ -645,8 +650,8 @@ def basic_info():
             ).strip(),
 
             "analysis_end_date": request.form.get(
-                 "analysis_end_date",
-                 ""
+                "analysis_end_date",
+                ""
             ).strip(),
 
             "form_date": request.form.get(
@@ -660,11 +665,36 @@ def basic_info():
             ).strip()
         }
 
+        next_action = (
+            request.form.get(
+                "next_action",
+                ""
+            )
+            .strip()
+        )
+
         instrument_options = (
             load_instrument_options(
                 form_data
             )
         )
+
+        # 若只有一台適用儀器，
+        # 第一次查詢後直接自動選定。
+        if (
+            not form_data.get(
+                "instrument_id"
+            )
+            and len(
+                instrument_options
+            ) == 1
+        ):
+
+            form_data[
+                "instrument_id"
+            ] = instrument_options[0][
+                "LABPARTID"
+            ]
 
         selected_instrument = None
 
@@ -686,20 +716,19 @@ def basic_info():
 
         if selected_instrument:
 
-            form_data["instrument_model"] = (
+            form_data[
+                "instrument_model"
+            ] = (
                 selected_instrument.get(
                     "MODAL",
                     ""
-                ).strip()
+                )
+                .strip()
             )
 
-        else:
-
-            form_data["instrument_model"] = ""
-
-        session["basic_info_form"] = (
-            form_data
-        )
+        session[
+            "basic_info_form"
+        ] = form_data
 
         if form_data.get(
             "instrument_id"
@@ -721,10 +750,25 @@ def basic_info():
             if instrument_options:
 
                 error_message = (
-                    "請選擇儀器編號後再查詢。"
+                    "請選擇儀器後繼續。"
                 )
 
+        if (
+            next_action == "import_w434"
+            and method_data
+            and form_data.get(
+                "instrument_id"
+            )
+        ):
+
+            return redirect(
+                url_for(
+                    "analysis_w43401"
+                )
+            )
+
     else:
+
         instrument_options = (
             load_instrument_options(
                 form_data
@@ -732,10 +776,18 @@ def basic_info():
         )
 
         if (
-            form_data.get("ctrl_year")
-            and form_data.get("exam_name")
-            and form_data.get("method_code")
-            and form_data.get("instrument_id")
+            form_data.get(
+                "ctrl_year"
+            )
+            and form_data.get(
+                "exam_name"
+            )
+            and form_data.get(
+                "method_code"
+            )
+            and form_data.get(
+                "instrument_id"
+            )
         ):
 
             (
@@ -1497,6 +1549,7 @@ def analysis_w43401():
     "/analysis/w43401/confirm-wavelength",
     methods=["POST"]
 )
+@login_required
 def confirm_w434_wavelength():
 
     choice = request.form.get(
@@ -1628,6 +1681,7 @@ def confirm_w434_wavelength():
     "/analysis/w43401/update-samples",
     methods=["POST"]
 )
+@login_required
 def update_w434_samples():
 
     analysis_state = load_analysis_state(
@@ -1902,6 +1956,7 @@ def update_w434_samples():
     )
 
 @app.route("/analysis/w43401/export-pdf")
+@login_required
 def export_w434_pdf():
 
     form_data = session.get(
@@ -1988,6 +2043,7 @@ def export_w434_pdf():
     )
 
 @app.route("/analysis/w43401/export-lims")
+@login_required
 def export_w434_lims():
 
     form_data = session.get(
@@ -2127,6 +2183,7 @@ def export_w434_lims():
     )
 
 @app.route("/control-import", methods=["GET", "POST"])
+@login_required
 def control_import():
 
     success_message = None
@@ -2320,6 +2377,7 @@ def control_import():
     )
 
 @app.route("/method-settings-import", methods=["POST"])
+@login_required
 def method_settings_import():
 
     uploaded_file = request.files.get("method_csv_file")
@@ -2870,6 +2928,7 @@ def method_settings_import():
     )
 
 @app.route("/report-settings-import", methods=["POST"])
+@login_required
 def report_settings_import():
 
     uploaded_file = request.files.get(
@@ -3203,6 +3262,7 @@ def report_settings_import():
     )
 
 @app.route("/instrument-settings-import", methods=["POST"])
+@login_required
 def instrument_settings_import():
 
     uploaded_file = request.files.get(
@@ -3418,6 +3478,7 @@ def instrument_settings_import():
     )
 
 @app.route("/method-instrument-import", methods=["POST"])
+@login_required
 def method_instrument_import():
 
     uploaded_file = request.files.get(
