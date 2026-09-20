@@ -7,6 +7,7 @@ from flask import (
     session,
     send_file
 )
+from datetime import timedelta
 from parsers.pe900_parser import parse_pe900_pdf
 from calculations.w43401 import (
     calculate_calibration,
@@ -36,11 +37,25 @@ from exports.lims_excel_exporter import (
     build_lims_excel
 )
 
+from services.analysis_record_service import (
+    save_w434_analysis_record
+)
+
 from auth_session import (
     clear_current_user,
     get_current_user,
     login_required,
     set_current_user
+)
+
+from database import SessionLocal
+
+from models import (
+    AnalysisCalibrationPoint,
+    AnalysisCalibrationSummary,
+    AnalysisQaqcResult,
+    AnalysisRecord,
+    AnalysisSample
 )
 
 import os
@@ -50,6 +65,27 @@ import tempfile
 
 app = Flask(__name__)
 app.secret_key = "eacs-development-secret-key"
+
+@app.template_filter(
+    "taiwan_datetime"
+)
+def taiwan_datetime(
+    value
+):
+
+    if value is None:
+        return ""
+
+    local_value = (
+        value
+        + timedelta(
+            hours=8
+        )
+    )
+
+    return local_value.strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
 
 @app.context_processor
 def inject_current_user():
@@ -587,6 +623,330 @@ def load_instrument_options(form_data):
 
     return instrument_options
 
+@app.route("/analysis-records")
+@login_required
+def analysis_records():
+
+    ctrl_year = request.args.get(
+        "ctrl_year",
+        ""
+    ).strip()
+
+    category = request.args.get(
+        "category",
+        ""
+    ).strip()
+
+    status = request.args.get(
+        "status",
+        ""
+    ).strip()
+
+    exam_name = request.args.get(
+        "exam_name",
+        ""
+    ).strip()
+
+    method_code = request.args.get(
+        "method_code",
+        ""
+    ).strip()
+
+    instrument_id = request.args.get(
+        "instrument_id",
+        ""
+    ).strip()
+
+    analyst_name = request.args.get(
+        "analyst_name",
+        ""
+    ).strip()
+
+    analysis_date_start = request.args.get(
+        "analysis_date_start",
+        ""
+    ).strip()
+
+    analysis_date_end = request.args.get(
+        "analysis_date_end",
+        ""
+    ).strip()
+
+    db = SessionLocal()
+
+    try:
+
+        query = db.query(
+            AnalysisRecord
+        )
+
+        # ========================================
+        # 管制年度
+        # ========================================
+
+        if ctrl_year:
+
+            query = query.filter(
+                AnalysisRecord.ctrl_year
+                == ctrl_year
+            )
+
+        # ========================================
+        # 檢測類別
+        # ========================================
+
+        if category:
+
+            query = query.filter(
+                AnalysisRecord.category
+                == category
+            )
+
+        # ========================================
+        # 狀態
+        # ========================================
+
+        if status:
+
+            query = query.filter(
+                AnalysisRecord.status
+                == status
+            )
+
+        # ========================================
+        # 測項
+        # ========================================
+
+        if exam_name:
+
+            query = query.filter(
+                AnalysisRecord.exam_name
+                .contains(
+                    exam_name
+                )
+            )
+
+        # ========================================
+        # 方法
+        # ========================================
+
+        if method_code:
+
+            query = query.filter(
+                AnalysisRecord.method_code
+                .contains(
+                    method_code
+                )
+            )
+
+        # ========================================
+        # 儀器
+        # ========================================
+
+        if instrument_id:
+
+            query = query.filter(
+                AnalysisRecord.instrument_id
+                == instrument_id
+            )
+
+        # ========================================
+        # 分析人員
+        # ========================================
+
+        if analyst_name:
+
+            query = query.filter(
+                AnalysisRecord.analyst_name
+                .contains(
+                    analyst_name
+                )
+            )
+
+        # ========================================
+        # 分析日期
+        # ========================================
+
+        # ========================================
+        # 分析日期區間
+        #
+        # 查詢條件與紀錄期間只要有交集
+        # 就視為符合
+        # ========================================
+
+        if (
+             analysis_date_start
+             and analysis_date_end
+        ):
+
+             query = query.filter(
+             AnalysisRecord.analysis_start_date
+              <= analysis_date_end,
+             AnalysisRecord.analysis_end_date
+             >= analysis_date_start
+        )
+        elif analysis_date_start:
+
+             query = query.filter(
+             AnalysisRecord.analysis_end_date
+             >= analysis_date_start
+        )
+        elif analysis_date_end:
+
+            query = query.filter(
+            AnalysisRecord.analysis_start_date
+             <= analysis_date_end
+            )          
+
+        records = (
+            query
+            .order_by(
+                AnalysisRecord.created_at.desc(),
+                AnalysisRecord.id.desc()
+            )
+            .all()
+        )
+
+        search_data = {
+            "ctrl_year":
+                ctrl_year,
+
+            "category":
+                category,
+
+            "status":
+                status,
+
+            "exam_name":
+                exam_name,
+
+            "method_code":
+                method_code,
+
+            "instrument_id":
+                instrument_id,
+
+            "analyst_name":
+                analyst_name,
+
+            "analysis_date_start":
+                analysis_date_start,
+
+            "analysis_date_end":
+                analysis_date_end
+        }
+
+        return render_template(
+            "analysis_records.html",
+            records=records,
+            search_data=search_data,
+            active_page="analysis_records"
+        )
+
+    finally:
+
+        db.close()
+
+@app.route(
+    "/analysis-records/<analysis_id>"
+)
+@login_required
+def analysis_record_detail(
+    analysis_id
+):
+
+    db = SessionLocal()
+
+    try:
+
+        record = (
+            db.query(
+                AnalysisRecord
+            )
+            .filter(
+                AnalysisRecord.analysis_id
+                == analysis_id
+            )
+            .first()
+        )
+
+        if record is None:
+
+            return (
+                "查無此分析紀錄。",
+                404
+            )
+
+        samples = (
+             db.query(
+                 AnalysisSample
+             )
+            .filter(
+                 AnalysisSample.analysis_id
+              == analysis_id
+            )
+            .order_by(
+                AnalysisSample.display_order,
+                AnalysisSample.id
+              )
+           .all()
+         )
+
+        qaqc_results = (
+            db.query(
+               AnalysisQaqcResult
+            )
+           .filter(
+               AnalysisQaqcResult.analysis_id
+              == analysis_id
+            )
+           .order_by(
+            AnalysisQaqcResult.display_order,
+            AnalysisQaqcResult.id
+            )
+            .all()
+        )
+
+        calibration_summary = (
+            db.query(
+                AnalysisCalibrationSummary
+            )
+            .filter(
+                AnalysisCalibrationSummary.analysis_id
+                == analysis_id
+            )
+            .first()
+        )
+
+        calibration_points = (
+            db.query(
+                AnalysisCalibrationPoint
+            )
+            .filter(
+                AnalysisCalibrationPoint.analysis_id
+                == analysis_id
+            )
+            .order_by(
+                AnalysisCalibrationPoint.display_order,
+                AnalysisCalibrationPoint.id
+            )
+            .all()
+        )
+
+        return render_template(
+            "analysis_record_detail.html",
+            record=record,
+            calibration_summary=calibration_summary,
+            calibration_points=calibration_points,
+            samples=samples,
+            qaqc_results=qaqc_results,
+            active_page="analysis_records"
+        )
+
+    finally:
+
+        db.close()
+
 @app.route("/basic-info", methods=["GET", "POST"])
 @login_required
 def basic_info():
@@ -948,6 +1308,30 @@ def split_analysis_rows(rows):
 @login_required
 def analysis_w43401():
 
+    existing_state = load_analysis_state(
+        "W434_CURRENT"
+    )
+
+    existing_formal_analysis_id = ""
+
+    if existing_state:
+
+        existing_formal_analysis_id = str(
+            existing_state.get(
+                "formal_analysis_id",
+                ""
+            )
+            or ""
+        ).strip()    
+
+    formal_analysis_id = str(
+        session.get(
+            "w434_formal_analysis_id",
+            ""
+        )
+        or ""
+    ).strip()    
+    
     preview_rows = []
     calibration_rows = []
     sample_qaqc_rows = []
@@ -1510,7 +1894,11 @@ def analysis_w43401():
                     wavelength_warning,
 
                 "uploaded_filename":
-                    uploaded_filename
+                    uploaded_filename,
+
+                "formal_analysis_id":
+                   formal_analysis_id
+                    
             }
         )
 
@@ -1952,6 +2340,107 @@ def update_w434_samples():
         url_for(
             "analysis_w43401",
             saved="1"
+        )
+    )
+
+@app.route(
+    "/analysis/w43401/save-record",
+    methods=["POST"]
+)
+@login_required
+def save_w434_record():
+
+    form_data = session.get(
+        "basic_info_form"
+    )
+
+    if not form_data:
+
+        return (
+            "尚未建立分析基本資料。",
+            400
+        )
+
+    (
+        control_data,
+        method_data,
+        load_error
+    ) = load_control_and_method_data(
+        form_data
+    )
+
+    if load_error:
+
+        return (
+            load_error,
+            400
+        )
+
+    analysis_state = load_analysis_state(
+        "W434_CURRENT"
+    )
+
+    if not analysis_state:
+
+        return (
+            "尚未找到 W434 暫存分析資料。",
+            400
+        )
+
+    current_user = (
+        get_current_user()
+        or {}
+    )
+
+    try:
+
+        save_result = (
+            save_w434_analysis_record(
+                form_data=form_data,
+                control_data=control_data,
+                method_data=method_data,
+                analysis_state=analysis_state,
+                current_user=current_user
+            )
+        )
+
+    except ValueError as ex:
+
+        return (
+            str(ex),
+            400
+        )
+
+    except Exception as ex:
+
+        return (
+            "建立正式分析紀錄失敗："
+            + str(ex),
+            500
+        )
+
+    analysis_state[
+        "formal_analysis_id"
+    ] = save_result[
+        "analysis_id"
+    ]
+
+    session[
+    "w434_formal_analysis_id"
+] = save_result[
+    "analysis_id"
+]
+
+    save_analysis_state(
+        "W434_CURRENT",
+        analysis_state
+    )
+
+    return redirect(
+        url_for(
+            "analysis_w43401",
+            saved="1",
+            formal_saved="1"
         )
     )
 

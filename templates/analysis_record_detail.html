@@ -1,0 +1,1431 @@
+{% extends "base.html" %}
+
+{% block title %}
+分析紀錄明細 - EACS Web
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+
+    <h1 class="page-title">
+        分析紀錄明細
+    </h1>
+
+    <div class="page-subtitle">
+        查看正式分析紀錄與分析明細。
+    </div>
+
+</div>
+
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        基本資料
+    </h2>
+
+    <div class="eacs-info-grid">
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                分析紀錄 ID
+            </div>
+            <div class="eacs-info-value">
+                {{ record.id }}
+            </div>
+        </div>
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                狀態
+            </div>
+            <div class="eacs-info-value">
+
+                {% if record.status == "DRAFT" %}
+                    草稿
+                {% else %}
+                    {{ record.status }}
+                {% endif %}
+
+            </div>
+        </div>
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                測項
+            </div>
+            <div class="eacs-info-value">
+                {{ record.exam_name }}
+            </div>
+        </div>
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                方法
+            </div>
+            <div class="eacs-info-value">
+                {{ record.method_code }}
+            </div>
+        </div>
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                正式方法
+            </div>
+            <div class="eacs-info-value">
+                {{ record.method_name }}
+            </div>
+        </div>
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                儀器
+            </div>
+            <div class="eacs-info-value">
+                {{ record.instrument_model }}
+            </div>
+        </div>
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                分析日期
+            </div>
+            <div class="eacs-info-value">
+
+                {{ record.analysis_start_date }}
+
+                {% if
+                    record.analysis_end_date
+                    and record.analysis_end_date
+                    != record.analysis_start_date
+                %}
+                    ～ {{ record.analysis_end_date }}
+                {% endif %}
+
+            </div>
+        </div>
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                分析人員
+            </div>
+            <div class="eacs-info-value">
+                {{ record.analyst_name }}
+            </div>
+        </div>
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                波長
+            </div>
+            <div class="eacs-info-value">
+
+                {% if record.wavelength is not none %}
+                    {{ "%.2f"|format(record.wavelength) }} nm
+                {% else %}
+                    -
+                {% endif %}
+
+            </div>
+        </div>
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                來源檔案
+            </div>
+            <div class="eacs-info-value">
+                {{ record.source_filename or "-" }}
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        檢量線
+    </h2>
+
+    {% if calibration_summary %}
+
+    <div
+        style="
+            display: grid;
+            grid-template-columns: repeat(
+                4,
+                minmax(160px, 1fr)
+            );
+            gap: 16px;
+            margin-bottom: 18px;
+        "
+    >
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                斜率 a
+            </div>
+
+            <div class="eacs-info-value">
+                {{ "%.5f"|format(
+    calibration_summary.slope
+) }}
+            </div>
+
+        </div>
+
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                截距 b
+            </div>
+
+            <div class="eacs-info-value">
+                {{ "%.5f"|format(
+    calibration_summary.intercept
+) }}
+            </div>
+
+        </div>
+
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                相關係數 r
+            </div>
+
+            <div
+                class="eacs-info-value"
+                style="
+                    color: #2563a6;
+                    font-weight: 700;
+                "
+            >
+                {{ "%.4f"|format(
+    calibration_summary.correlation_r
+) }}
+            </div>
+
+        </div>
+
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                判定
+            </div>
+
+            <div class="eacs-info-value">
+
+                {% if calibration_summary.is_pass %}
+
+                <span
+                    style="
+                        display: inline-block;
+                        padding: 4px 10px;
+                        border-radius: 999px;
+                        background-color: #ecfdf3;
+                        color: #15803d;
+                        font-weight: 700;
+                    "
+                >
+                    合格
+                </span>
+
+                {% else %}
+
+                <span
+                    style="
+                        display: inline-block;
+                        padding: 4px 10px;
+                        border-radius: 999px;
+                        background-color: #fef2f2;
+                        color: #b91c1c;
+                        font-weight: 700;
+                    "
+                >
+                    不合格
+                </span>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div
+        style="
+            margin-bottom: 18px;
+            padding: 12px 14px;
+            border: 1px solid #d9e0e7;
+            border-radius: 6px;
+            background-color: #f8fafc;
+            color: #374151;
+        "
+    >
+
+        <strong>
+            迴歸式：
+        </strong>
+
+        Y =
+        {{ "%.5f"|format(
+            calibration_summary.slope
+        ) }}
+        X
+
+        {% if calibration_summary.intercept >= 0 %}
+            +
+        {% else %}
+            -
+        {% endif %}
+
+        {{ "%.5f"|format(
+            calibration_summary.intercept
+            | abs
+        ) }}
+
+        &nbsp;&nbsp;&nbsp;
+
+        <strong>
+            判定標準：
+        </strong>
+
+        R<sup>2</sup> &gt; 0.995
+
+    </div>
+
+
+    {% if calibration_points %}
+
+    <div style="overflow-x: auto;">
+
+        <table
+            style="
+                width: 100%;
+                border: 1px solid #d9e0e7;
+                border-collapse: collapse;
+                table-layout: fixed;
+                font-size: 14px;
+            "
+        >
+
+            <thead>
+
+                <tr
+                    style="
+                        background-color: #f5f7fa;
+                    "
+                >
+
+                    <th
+                        style="
+                            width: 8%;
+                            padding: 10px;
+                            border-right: 1px solid #d9e0e7;
+                            border-bottom: 1px solid #d9e0e7;
+                        "
+                    >
+                        順序
+                    </th>
+
+                    <th
+                        style="
+                            width: 16%;
+                            padding: 10px;
+                            border-right: 1px solid #d9e0e7;
+                            border-bottom: 1px solid #d9e0e7;
+                        "
+                    >
+                        標準品
+                    </th>
+
+                    <th
+                        style="
+                            width: 18%;
+                            padding: 10px;
+                            border-right: 1px solid #d9e0e7;
+                            border-bottom: 1px solid #d9e0e7;
+                        "
+                    >
+                        設定濃度
+                    </th>
+
+                    <th
+                        style="
+                            width: 18%;
+                            padding: 10px;
+                            border-right: 1px solid #d9e0e7;
+                            border-bottom: 1px solid #d9e0e7;
+                        "
+                    >
+                        測定值
+                    </th>
+
+                    <th
+                        style="
+                            width: 22%;
+                            padding: 10px;
+                            border-right: 1px solid #d9e0e7;
+                            border-bottom: 1px solid #d9e0e7;
+                        "
+                    >
+                        回算濃度
+                    </th>
+
+                    <th
+                        style="
+                            width: 18%;
+                            padding: 10px;
+                            border-bottom: 1px solid #d9e0e7;
+                        "
+                    >
+                        回算偏差 (%)
+                    </th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+                {% for point in calibration_points %}
+
+                <tr>
+
+                    <td
+                        style="
+                            padding: 10px;
+                            border-right: 1px solid #edf0f3;
+                            border-bottom: 1px solid #edf0f3;
+                            text-align: center;
+                        "
+                    >
+                        {{ point.display_order }}
+                    </td>
+
+                    <td
+                        style="
+                            padding: 10px;
+                            border-right: 1px solid #edf0f3;
+                            border-bottom: 1px solid #edf0f3;
+                            text-align: center;
+                        "
+                    >
+                        {{ point.standard_id or "-" }}
+                    </td>
+
+                    <td
+                        style="
+                            padding: 10px;
+                            border-right: 1px solid #edf0f3;
+                            border-bottom: 1px solid #edf0f3;
+                            text-align: right;
+                        "
+                    >
+                        {{ "%.6f"|format(
+                            point.concentration
+                        ) }}
+                    </td>
+
+                    <td
+                        style="
+                            padding: 10px;
+                            border-right: 1px solid #edf0f3;
+                            border-bottom: 1px solid #edf0f3;
+                            text-align: right;
+                        "
+                    >
+                        {{ "%.6f"|format(
+                            point.signal
+                        ) }}
+                    </td>
+
+                    <td
+                        style="
+                            padding: 10px;
+                            border-right: 1px solid #edf0f3;
+                            border-bottom: 1px solid #edf0f3;
+                            text-align: right;
+                            color: #2563a6;
+                            font-weight: 700;
+                        "
+                    >
+                        {% if
+                            point.back_calculated_concentration
+                            is not none
+                        %}
+
+                            {{ "%.6f"|format(
+                                point.back_calculated_concentration
+                            ) }}
+
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+
+                    <td
+                        style="
+                            padding: 10px;
+                            border-bottom: 1px solid #edf0f3;
+                            text-align: right;
+                        "
+                    >
+
+                        {% if point.error_percent is not none %}
+
+                            {{ "%.2f"|format(
+                                point.error_percent
+                            ) }}
+
+                        {% else %}
+                            -
+                        {% endif %}
+
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+    {% else %}
+
+    <div
+        style="
+            padding: 20px;
+            text-align: center;
+            color: #6b7280;
+        "
+    >
+        此紀錄目前沒有檢量線標準點資料。
+    </div>
+
+    {% endif %}
+
+
+    {% else %}
+
+    <div
+        style="
+            padding: 20px;
+            text-align: center;
+            color: #6b7280;
+        "
+    >
+        此紀錄目前沒有檢量線資料。
+    </div>
+
+    {% endif %}
+
+</div>
+
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        分析明細
+    </h2>
+
+    {% if samples %}
+
+    <div style="overflow-x: auto;">
+
+        <table
+            style="
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 14px;
+            "
+        >
+
+            <thead>
+
+                <tr
+                    style="
+                        background-color: #f5f7fa;
+                    "
+                >
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        順序
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        樣品編號
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        類型
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        測定值
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        取樣體積
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        定量體積
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        稀釋倍數
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        添加濃度
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        分析值
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        備註
+                    </th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+                {% for sample in samples %}
+
+                <tr>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                        {{ sample.display_order }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                        {{ sample.sample_id }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                        {{ sample.role }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                        {% if sample.signal is not none %}
+    {{ "%.6f"|format(sample.signal) }}
+{% else %}
+    -
+{% endif %}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                        {{ sample.sample_volume if sample.sample_volume is not none else "-" }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                        {{ sample.final_volume if sample.final_volume is not none else "-" }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                        {{ sample.dilution_factor if sample.dilution_factor is not none else "-" }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                        {{ sample.spike_concentration if sample.spike_concentration is not none else "-" }}
+                    </td>
+
+                    <td
+                        style="
+                            padding: 10px;
+                            border-bottom: 1px solid #edf0f3;
+                            color: #2563a6;
+                            font-weight: 700;
+                        "
+                    >
+                        {% if sample.calculated_concentration is not none %}
+                           {{ "%.6f"|format(sample.calculated_concentration) }}
+                           {% else %}
+                             -
+                        {% endif %}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                        {{ sample.remark or "-" }}
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+    {% else %}
+
+    <div
+        style="
+            padding: 20px;
+            text-align: center;
+            color: #6b7280;
+        "
+    >
+        此紀錄目前沒有分析明細。
+    </div>
+
+    {% endif %}
+
+</div>
+
+<style>
+
+    .qaqc-section {
+        margin-top: 26px;
+    }
+
+    .qaqc-section:first-of-type {
+        margin-top: 8px;
+    }
+
+    .qaqc-section-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+
+        margin-bottom: 12px;
+        padding-bottom: 9px;
+
+        border-bottom: 2px solid #d9e0e7;
+
+        color: #1f2937;
+        font-size: 15px;
+        font-weight: 700;
+    }
+
+    .qaqc-section-code {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+
+        min-width: 38px;
+        height: 26px;
+
+        padding: 0 8px;
+
+        border-radius: 6px;
+
+        background-color: #eef4fb;
+        color: #2563a6;
+
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .qaqc-table-wrapper {
+        overflow-x: auto;
+    }
+
+    .qaqc-table {
+    width: 100%;
+
+    border: 1px solid #d9e0e7;
+    border-collapse: collapse;
+
+    table-layout: fixed;
+
+    font-size: 14px;
+}
+
+    .qaqc-table th {
+        padding: 10px 12px;
+
+        border-right: 1px solid #d9e0e7;
+        border-bottom: 1px solid #d9e0e7;
+
+        background-color: #f5f7fa;
+
+        color: #374151;
+
+        text-align: left;
+        vertical-align: middle;
+        white-space: nowrap;
+
+        font-weight: 700;
+    }
+
+    .qaqc-table td {
+    padding: 10px 12px;
+
+    border-right: 1px solid #edf0f3;
+    border-bottom: 1px solid #edf0f3;
+
+    color: #374151;
+
+    text-align: left;
+    vertical-align: middle;
+
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+    .qaqc-table th:last-child,
+    .qaqc-table td:last-child {
+        border-right: none;
+    }
+
+    .qaqc-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .qaqc-col-order {
+    width: 4%;
+    white-space: nowrap;
+}
+
+.qaqc-col-sample {
+    width: 15%;
+}
+
+.qaqc-col-item {
+    width: 14%;
+}
+
+.qaqc-col-result {
+    width: 8%;
+
+    color: #2563a6 !important;
+    font-weight: 700;
+
+    white-space: nowrap;
+}
+
+.qaqc-col-criteria {
+    width: 32%;
+}
+
+.qaqc-col-status {
+    width: 6%;
+    white-space: nowrap;
+}
+
+.qaqc-col-remark {
+    width: 24%;
+}
+
+    .qaqc-status {
+        display: inline-block;
+
+        padding: 4px 9px;
+
+        border-radius: 999px;
+
+        font-size: 13px;
+        font-weight: 700;
+
+        white-space: nowrap;
+    }
+
+    .qaqc-status-pass {
+        background-color: #ecfdf3;
+        color: #15803d;
+    }
+
+    .qaqc-status-warning {
+        background-color: #fef2f2;
+        color: #b91c1c;
+    }
+
+    .qaqc-status-unknown {
+        background-color: #f3f4f6;
+        color: #6b7280;
+    }
+
+    .qaqc-empty-row {
+        padding: 16px !important;
+
+        color: #6b7280 !important;
+
+        text-align: center !important;
+    }
+
+</style>
+
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        QA/QC 判定結果
+    </h2>
+
+
+    {% if qaqc_results %}
+
+
+    <!-- ========================================
+         3A 例行 QA/QC
+         ======================================== -->
+
+    <div class="qaqc-section">
+
+        <div class="qaqc-section-title">
+
+            <span class="qaqc-section-code">
+                3A
+            </span>
+
+            <span>
+                例行 QA/QC
+            </span>
+
+        </div>
+
+
+        <div class="qaqc-table-wrapper">
+
+            <table class="qaqc-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th class="qaqc-col-order">
+                            順序
+                        </th>
+
+                        <th class="qaqc-col-sample">
+                            樣品編號
+                        </th>
+
+                        <th class="qaqc-col-item">
+                            判定項目
+                        </th>
+
+                        <th class="qaqc-col-result">
+                            結果
+                        </th>
+
+                        <th class="qaqc-col-criteria">
+                            管制標準
+                        </th>
+
+                        <th class="qaqc-col-status">
+                            判定
+                        </th>
+
+                        <th class="qaqc-col-remark">
+                            備註
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                    {% set ns_3a = namespace(index=0) %}
+
+                    {% for item in qaqc_results %}
+
+                        {% if item.qaqc_type not in ["PRECISION", "MS", "MSD"] %}
+
+                            {% set ns_3a.index = ns_3a.index + 1 %}
+
+                            <tr>
+
+                                <td class="qaqc-col-order">
+                                    {{ ns_3a.index }}
+                                </td>
+
+                                <td class="qaqc-col-sample">
+                                    {{ item.sample_id or "-" }}
+                                </td>
+
+                                <td class="qaqc-col-item">
+
+                                    {% if item.qaqc_type == "CCV" %}
+                                        CCV {{ item.result_name }}
+
+                                    {% elif item.qaqc_type == "QC" %}
+                                        QC {{ item.result_name }}
+
+                                    {% elif item.qaqc_type == "ICV" %}
+                                        ICV {{ item.result_name }}
+
+                                    {% elif item.qaqc_type == "BK" %}
+                                        BK {{ item.result_name }}
+
+                                    {% elif item.qaqc_type == "ICBK" %}
+                                        ICBK {{ item.result_name }}
+
+                                    {% elif item.qaqc_type == "CCBK" %}
+                                        CCBK {{ item.result_name }}
+
+                                    {% else %}
+                                        {{ item.result_name }}
+                                    {% endif %}
+
+                                </td>
+
+                                <td class="qaqc-col-result">
+                                    {{ item.result_value or "-" }}
+                                </td>
+
+                                <td class="qaqc-col-criteria">
+                                    {{ item.criteria_text or "-" }}
+                                </td>
+
+                                <td class="qaqc-col-status">
+
+                                    {% if item.is_pass is sameas true %}
+
+                                        <span
+                                            class="
+                                                qaqc-status
+                                                qaqc-status-pass
+                                            "
+                                        >
+                                            合格
+                                        </span>
+
+                                    {% elif item.is_pass is sameas false %}
+
+                                        <span
+                                            class="
+                                                qaqc-status
+                                                qaqc-status-warning
+                                            "
+                                        >
+                                            注意
+                                        </span>
+
+                                    {% else %}
+
+                                        <span
+                                            class="
+                                                qaqc-status
+                                                qaqc-status-unknown
+                                            "
+                                        >
+                                            無法判定
+                                        </span>
+
+                                    {% endif %}
+
+                                </td>
+
+                                <td class="qaqc-col-remark">
+                                    {{ item.remark or "-" }}
+                                </td>
+
+                            </tr>
+
+                        {% endif %}
+
+                    {% endfor %}
+
+
+                    {% if ns_3a.index == 0 %}
+
+                    <tr>
+
+                        <td
+                            colspan="7"
+                            class="qaqc-empty-row"
+                        >
+                            此批次沒有 3A 例行 QA/QC 判定結果。
+                        </td>
+
+                    </tr>
+
+                    {% endif %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+
+    <!-- ========================================
+         3B 重複分析精密度
+         ======================================== -->
+
+    <div class="qaqc-section">
+
+        <div class="qaqc-section-title">
+
+            <span class="qaqc-section-code">
+                3B
+            </span>
+
+            <span>
+                重複分析精密度
+            </span>
+
+        </div>
+
+
+        <div class="qaqc-table-wrapper">
+
+            <table class="qaqc-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th class="qaqc-col-order">
+                            順序
+                        </th>
+
+                        <th class="qaqc-col-sample">
+                            樣品編號
+                        </th>
+
+                        <th class="qaqc-col-item">
+                            判定項目
+                        </th>
+
+                        <th class="qaqc-col-result">
+                            結果
+                        </th>
+
+                        <th class="qaqc-col-criteria">
+                            管制標準
+                        </th>
+
+                        <th class="qaqc-col-status">
+                            判定
+                        </th>
+
+                        <th class="qaqc-col-remark">
+                            備註
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                    {% set ns_3b = namespace(index=0) %}
+
+                    {% for item in qaqc_results %}
+
+                        {% if item.qaqc_type == "PRECISION" %}
+
+                            {% set ns_3b.index = ns_3b.index + 1 %}
+
+                            <tr>
+
+                                <td class="qaqc-col-order">
+                                    {{ ns_3b.index }}
+                                </td>
+
+                                <td class="qaqc-col-sample">
+                                    {{ item.sample_id or "-" }}
+                                </td>
+
+                                <td class="qaqc-col-item">
+                                    {{ item.result_name }}
+                                </td>
+
+                                <td class="qaqc-col-result">
+                                    {{ item.result_value or "-" }}
+                                </td>
+
+                                <td class="qaqc-col-criteria">
+                                    {{ item.criteria_text or "-" }}
+                                </td>
+
+                                <td class="qaqc-col-status">
+
+                                    {% if item.is_pass is sameas true %}
+
+                                        <span
+                                            class="
+                                                qaqc-status
+                                                qaqc-status-pass
+                                            "
+                                        >
+                                            合格
+                                        </span>
+
+                                    {% elif item.is_pass is sameas false %}
+
+                                        <span
+                                            class="
+                                                qaqc-status
+                                                qaqc-status-warning
+                                            "
+                                        >
+                                            注意
+                                        </span>
+
+                                    {% else %}
+
+                                        <span
+                                            class="
+                                                qaqc-status
+                                                qaqc-status-unknown
+                                            "
+                                        >
+                                            無法判定
+                                        </span>
+
+                                    {% endif %}
+
+                                </td>
+
+                                <td class="qaqc-col-remark">
+                                    {{ item.remark or "-" }}
+                                </td>
+
+                            </tr>
+
+                        {% endif %}
+
+                    {% endfor %}
+
+
+                    {% if ns_3b.index == 0 %}
+
+                    <tr>
+
+                        <td
+                            colspan="7"
+                            class="qaqc-empty-row"
+                        >
+                            此批次沒有重複分析精密度判定結果。
+                        </td>
+
+                    </tr>
+
+                    {% endif %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+
+    <!-- ========================================
+         3C 添加樣品回收率
+         ======================================== -->
+
+    <div class="qaqc-section">
+
+        <div class="qaqc-section-title">
+
+            <span class="qaqc-section-code">
+                3C
+            </span>
+
+            <span>
+                添加樣品回收率
+            </span>
+
+        </div>
+
+
+        <div class="qaqc-table-wrapper">
+
+            <table class="qaqc-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th class="qaqc-col-order">
+                            順序
+                        </th>
+
+                        <th class="qaqc-col-sample">
+                            樣品編號
+                        </th>
+
+                        <th class="qaqc-col-item">
+                            判定項目
+                        </th>
+
+                        <th class="qaqc-col-result">
+                            結果
+                        </th>
+
+                        <th class="qaqc-col-criteria">
+                            管制標準
+                        </th>
+
+                        <th class="qaqc-col-status">
+                            判定
+                        </th>
+
+                        <th class="qaqc-col-remark">
+                            備註
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                    {% set ns_3c = namespace(index=0) %}
+
+                    {% for item in qaqc_results %}
+
+                        {% if item.qaqc_type in ["MS", "MSD"] %}
+
+                            {% set ns_3c.index = ns_3c.index + 1 %}
+
+                            <tr>
+
+                                <td class="qaqc-col-order">
+                                    {{ ns_3c.index }}
+                                </td>
+
+                                <td class="qaqc-col-sample">
+                                    {{ item.sample_id or "-" }}
+                                </td>
+
+                                <td class="qaqc-col-item">
+                                    {{ item.result_name }}
+                                </td>
+
+                                <td class="qaqc-col-result">
+                                    {{ item.result_value or "-" }}
+                                </td>
+
+                                <td class="qaqc-col-criteria">
+                                    {{ item.criteria_text or "-" }}
+                                </td>
+
+                                <td class="qaqc-col-status">
+
+                                    {% if item.is_pass is sameas true %}
+
+                                        <span
+                                            class="
+                                                qaqc-status
+                                                qaqc-status-pass
+                                            "
+                                        >
+                                            合格
+                                        </span>
+
+                                    {% elif item.is_pass is sameas false %}
+
+                                        <span
+                                            class="
+                                                qaqc-status
+                                                qaqc-status-warning
+                                            "
+                                        >
+                                            注意
+                                        </span>
+
+                                    {% else %}
+
+                                        <span
+                                            class="
+                                                qaqc-status
+                                                qaqc-status-unknown
+                                            "
+                                        >
+                                            無法判定
+                                        </span>
+
+                                    {% endif %}
+
+                                </td>
+
+                                <td class="qaqc-col-remark">
+                                    {{ item.remark or "-" }}
+                                </td>
+
+                            </tr>
+
+                        {% endif %}
+
+                    {% endfor %}
+
+
+                    {% if ns_3c.index == 0 %}
+
+                    <tr>
+
+                        <td
+                            colspan="7"
+                            class="qaqc-empty-row"
+                        >
+                            此批次沒有添加樣品回收率判定結果。
+                        </td>
+
+                    </tr>
+
+                    {% endif %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+
+    {% else %}
+
+    <div
+        style="
+            padding: 20px;
+            text-align: center;
+            color: #6b7280;
+        "
+    >
+        此紀錄目前沒有 QA/QC 判定結果。
+    </div>
+
+    {% endif %}
+
+</div>
+
+<div
+    style="
+        margin-top: 20px;
+    "
+>
+
+    <a
+        href="{{ url_for('analysis_records') }}"
+        class="eacs-button eacs-button-secondary"
+    >
+        返回分析紀錄查詢
+    </a>
+
+</div>
+
+{% endblock %}

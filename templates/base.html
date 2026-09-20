@@ -599,6 +599,14 @@
         color: white;
     }
 
+    .eacs-button:disabled {
+    background-color: #d7dde4;
+    border-color: #d7dde4;
+    color: #8a929d;
+    cursor: not-allowed;
+    opacity: 1;
+}
+
 
     /* ========================================
        Status Badge
@@ -634,6 +642,142 @@
 
         color: var(--eacs-danger);
     }
+
+    /* ========================================
+   Analysis Page
+   ======================================== */
+
+.analysis-title-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.analysis-version {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--eacs-text-secondary);
+    white-space: nowrap;
+}
+
+.analysis-meta-card {
+    margin-bottom: 20px;
+    padding: 16px 18px;
+
+    background-color: #f8fbff;
+
+    border: 1px solid #cfd8e3;
+    border-radius: var(--control-radius);
+
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.analysis-method-summary {
+    margin-bottom: 18px;
+    padding: 11px 14px;
+
+    background-color: var(--eacs-surface-muted);
+
+    border: 1px solid var(--eacs-border-light);
+    border-radius: var(--control-radius);
+
+    font-size: 14px;
+    color: var(--eacs-text-secondary);
+}
+
+.analysis-inline-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 16px;
+
+    flex-wrap: wrap;
+}
+
+.analysis-inline-form {
+    display: flex;
+    align-items: center;
+
+    gap: 12px;
+
+    flex-wrap: wrap;
+
+    margin: 0;
+}
+
+.analysis-message {
+    margin-top: 16px;
+    padding: 10px 14px;
+
+    border-radius: var(--control-radius);
+
+    font-size: 14px;
+}
+
+.analysis-message-success {
+    background-color: var(--eacs-success-bg);
+    border: 1px solid #9ac8a6;
+    color: var(--eacs-success);
+}
+
+.analysis-message-warning {
+    background-color: var(--eacs-warning-bg);
+    border: 1px solid #e6c36e;
+    color: #8a6500;
+}
+
+.analysis-message-danger {
+    background-color: var(--eacs-danger-bg);
+    border: 1px solid #e3a6a6;
+    color: var(--eacs-danger);
+}
+
+.analysis-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 16px;
+
+    margin-bottom: 22px;
+    padding: 12px 16px;
+
+    background-color: var(--eacs-surface);
+
+    border: 1px solid var(--eacs-border);
+    border-radius: 8px;
+
+    flex-wrap: wrap;
+}
+
+.analysis-action-status,
+.analysis-action-buttons {
+    display: flex;
+    align-items: center;
+
+    gap: 10px;
+
+    flex-wrap: wrap;
+}
+
+.analysis-action-status {
+    color: var(--eacs-text-secondary);
+    font-size: 14px;
+}
+
+.eacs-button-accent {
+    background-color: white;
+
+    border-color: var(--eacs-accent);
+
+    color: var(--eacs-accent);
+}
+
+.eacs-button-accent:hover {
+    background-color: var(--eacs-accent-soft);
+}
 
 
     /* ========================================
@@ -776,6 +920,13 @@
     </div>
 
     <a
+        href="{{ url_for('home') }}"
+        class="eacs-logout-link"
+    >
+        首頁
+    </a>
+
+    <a
         href="{{ url_for('logout') }}"
         class="eacs-logout-link"
     >
@@ -795,32 +946,48 @@
         <aside class="sidebar">
     
             <div class="sidebar-section">
-    
-                <div class="sidebar-title">
-                    分析作業
-                </div>
-    
-                <a href="/basic-info" class="sidebar-link
-            {% if active_page == 'analysis_basic' %}active{% endif %}">
-                    分析基本資料
-                </a>
-    
-    
-                {% if current_analysis_name and current_analysis_url %}
-    
-                <div class="sidebar-title" style="margin-top: 18px;">
-                    目前分析
-                </div>
-    
-                <a href="{{ current_analysis_url }}" class="sidebar-link
-                {% if active_page == 'analysis_method' %}active{% endif %}">
-                    {{ current_analysis_name }}
-                </a>
-    
-                {% endif %}
-    
-            </div>
-    
+
+    <div class="sidebar-title">
+        分析作業
+    </div>
+
+    <a
+        href="{{ url_for('basic_info') }}"
+        class="sidebar-link
+        {% if active_page == 'analysis_basic' %}active{% endif %}"
+    >
+        分析基本資料
+    </a>
+
+    <a
+        href="{{ url_for('analysis_records') }}"
+        class="sidebar-link
+        {% if active_page == 'analysis_records' %}active{% endif %}"
+    >
+        分析紀錄查詢
+    </a>
+
+
+    {% if current_analysis_name and current_analysis_url %}
+
+    <div
+        class="sidebar-title"
+        style="margin-top: 18px;"
+    >
+        目前分析
+    </div>
+
+    <a
+        href="{{ current_analysis_url }}"
+        class="sidebar-link
+        {% if active_page == 'analysis_method' %}active{% endif %}"
+    >
+        {{ current_analysis_name }}
+    </a>
+
+    {% endif %}
+
+</div>
     
             <div class="sidebar-section">
     

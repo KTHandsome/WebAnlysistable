@@ -6,65 +6,40 @@ W434 砷分析 - EACS
 
 {% block content %}
 
-<div class="analysis-page-header">
-    <style>
-        .analysis-page-header {
-            position: sticky;
-            top: -26px;
-            z-index: 30;
-    
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 16px;
-    
-            height: 82px;
-    
-            margin: -26px -32px 22px -32px;
-            padding: 26px 32px 12px 32px;
-    
-            background-color: #f4f6f8;
-            border-bottom: 1px solid #d9d9d9;
-        }
-    </style>
+<div class="page-header">
 
-    <div style="
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-    gap: 12px;
-">
+    <div class="analysis-title-row">
 
-        <div style="
-        font-size: 28px;
-        color: #047867;
-        font-weight: bold;
-    ">
+        <h1 class="page-title">
             W434 砷分析
-        </div>
+        </h1>
 
-        <div style="
-        font-size: 13px;
-        color: #666;
-        white-space: nowrap;
-    ">
+        <div class="analysis-version">
             版次 {{ analysis_version }} 版
         </div>
 
     </div>
+
+    <div class="page-subtitle">
+        儀器資料匯入、檢量線、樣品計算與 QA/QC 判定
+    </div>
+
 </div>
 
 {% if report_data %}
 
-<div style="
-    margin: 0 0 18px 0;
-    padding: 12px 14px;
-    border: 1px solid #cfd8e3;
-    background-color: #f8fbff;
-    border-radius: 6px;
-    font-size: 14px;
-">
+<div class="analysis-meta-card">
+
+    <div
+        style="
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--eacs-text);
+            margin-bottom: 10px;
+        "
+    >
+        檢驗紀錄表文件資訊
+    </div>
 
     <div>
         公司：
@@ -88,37 +63,21 @@ W434 砷分析 - EACS
         {{ report_data.ISSUE_DATE }}
     </div>
 
-    <div>
-        REPORT_CODE：
-        {{ report_data.REPORT_CODE }}
-    </div>
-
 </div>
 
 {% endif %}
 
 <!-- PDF 匯入 -->
-<div style="
-    background-color: white;
-    border: 1px solid #d9d9d9;
-    border-radius: 8px;
-    padding: 24px;
-    margin-bottom: 22px;
-">
+<div class="eacs-card">
 
-    <h3 style="margin-top: 0;">
+    <h2 class="eacs-card-title">
         PDF 匯入
-    </h3>
+    </h2>
 
     {% if method_data %}
 
-<div style="
-    margin-bottom: 18px;
-    padding: 12px 14px;
-    background-color: #f5f8fb;
-    border: 1px solid #d6e0e8;
-    border-radius: 5px;
-">
+<div class="analysis-method-summary">
+
 
     <strong>方法設定：</strong>
 
@@ -126,37 +85,20 @@ W434 砷分析 - EACS
 
     ／
 
-    每批最大樣品數
+    每批次樣品數
     {{ method_data.MAX_SAMPLE_PER_BATCH }}
-
-    ／
-
-    輸入模式
-    {{ method_data.DATA_ENTRY_MODE }}
 
 </div>
 
 {% endif %}
 
-<div style="
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
-">
+<div class="analysis-inline-row">
 
     <form
-        method="post"
-        enctype="multipart/form-data"
-        style="
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            flex-wrap: wrap;
-            margin: 0;
-        "
-    >
+    method="post"
+    enctype="multipart/form-data"
+    class="analysis-inline-form"
+>
 
         <input
             type="file"
@@ -167,17 +109,10 @@ W434 砷分析 - EACS
 
         <button
             type="submit"
-            style="
-                padding: 9px 22px;
-                background-color: #2f6fab;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-            "
+            class="eacs-button eacs-button-primary"
         >
             匯入 PDF
-        </button>
+       </button>  
 
     </form>
 
@@ -195,42 +130,25 @@ W434 砷分析 - EACS
     >
 
         <button
-                type="button"
-    class="wavelength-confirm-button"
+    type="button"
+    class="wavelength-confirm-button eacs-button eacs-button-primary"
     data-choice="instrument"
     data-wavelength="{{ '%.2f'|format(instrument_wavelength) }}"
-    style="
-        padding: 9px 18px;
-        background-color: #2f6fab;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-    "
-         >
-           採用儀器波長
+>
+    採用儀器波長
         </button>
 
 
         {% if basic_wavelength %}
 
         <button
-
     type="button"
-    class="wavelength-confirm-button"
+    class="wavelength-confirm-button eacs-button eacs-button-secondary"
     data-choice="basic"
     data-wavelength="{{ basic_wavelength }}"
-    style="
-        padding: 9px 18px;
-        background-color: #6c757d;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-    "
-         >
-            保留基本資料波長
-        </button>
+>
+    保留基本資料波長
+       </button>
 
         {% endif %}
 
@@ -243,15 +161,8 @@ W434 砷分析 - EACS
 
     {% if import_error %}
 
-        <div style="
-            margin-top: 16px;
-            padding: 10px 14px;
-            background-color: #fff1f1;
-            border: 1px solid #e3a6a6;
-            color: #a33;
-            border-radius: 5px;
-        ">
-            {{ import_error }}
+        <div class="analysis-message analysis-message-danger">
+             {{ import_error }}
         </div>
 
     {% endif %}
@@ -259,92 +170,44 @@ W434 砷分析 - EACS
     {% if confirmed_wavelength is not none %}
 
         <div
-            id="wavelength-status"
-            style="
-            margin-top: 16px;
-            padding: 10px 14px;
-            background-color: #eef8ee;
-            border: 1px solid #8cc58c;
-            color: #206020;
-            border-radius: 5px;
-        ">
-            波長確認：
-            {{ "%.2f"|format(confirmed_wavelength) }} nm
-        </div>
+    id="wavelength-status"
+    class="analysis-message analysis-message-success"
+>
+    波長確認：
+    {{ "%.2f"|format(confirmed_wavelength) }} nm
+       </div>
 
     {% endif %}
 
     {% if wavelength_warning %}
 
         <div
-            id="wavelength-status"
-            style="
-            margin-top: 16px;
-            padding: 10px 14px;
-            background-color: #fff8e1;
-            border: 1px solid #e2b93b;
-            color: #8a6500;
-            border-radius: 5px;
-        ">
-            {{ wavelength_warning }}
+    id="wavelength-status"
+    class="analysis-message analysis-message-warning"
+>
+    {{ wavelength_warning }}
         </div>
 
     {% endif %}
 
 </div>
 
-<div
-    class="analysis-action-bar"
-    style="
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 16px;
-        margin-bottom: 22px;
-        padding: 12px 16px;
-        background-color: white;
-        border: 1px solid #d8dee5;
-        border-radius: 8px;
-        flex-wrap: wrap;
-    "
->
+<div class="analysis-action-bar">
 
-    <div style="
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        color: #6b7280;
-        font-size: 14px;
-    ">
+    <div class="analysis-action-status">
 
 {% if sample_qaqc_rows %}
 
     {% if sample_data_saved %}
 
-    <span style="
-        display: inline-block;
-        padding: 5px 10px;
-        background-color: #eef6f4;
-        border: 1px solid #cfe3de;
-        border-radius: 999px;
-        color: #0f766e;
-        font-weight: 600;
-    ">
-        分析資料已儲存
+    <span class="status-badge status-success">
+    分析資料已暫存
     </span>
 
     {% else %}
 
-    <span style="
-        display: inline-block;
-        padding: 5px 10px;
-        background-color: #fff7e6;
-        border: 1px solid #f1d29a;
-        border-radius: 999px;
-        color: #9a6700;
-        font-weight: 600;
-    ">
-        分析資料已載入，尚未儲存
+    <span class="status-badge status-warning">
+    分析資料已載入，尚未儲存
     </span>
 
     {% endif %}
@@ -357,69 +220,55 @@ W434 砷分析 - EACS
 
 {% endif %}
 
+{% if request.args.get("formal_saved") == "1" %}
+
+<div class="analysis-message analysis-message-success">
+    正式分析紀錄已建立或更新完成。
+</div>
+
+{% endif %}
+
     </div>
 
 
-    <div style="
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-    ">
+    <div class="analysis-action-buttons">
 
         {% if sample_qaqc_rows %}
 
         <button
-            type="submit"
-            form="sample-qaqc-form"
-            style="
-                padding: 10px 20px;
-                background-color: #2563a6;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                font-size: 15px;
-                cursor: pointer;
-            "
-        >
-            儲存分析資料
+    type="submit"
+    form="sample-qaqc-form"
+    class="eacs-button eacs-button-primary"
+>
+    暫存分析資料
         </button>
 
-        <a
-            href="{{ url_for('export_w434_pdf') }}"
-            style="
-                display: inline-block;
-                padding: 10px 20px;
-                background-color: white;
-                color: #2563a6;
-                border: 1px solid #2563a6;
-                text-decoration: none;
-                border-radius: 5px;
-                font-size: 15px;
-            "
-        >
-            匯出檢驗紀錄表
-        </a>
+        <form
+    method="post"
+    action="{{ url_for('save_w434_record') }}"
+    style="display: inline;"
+>
+        <button
+        type="submit"
+        class="eacs-button eacs-button-primary"
+    >
+        建立正式分析紀錄
+        </button>
+      </form>
 
         <a
-          href="{{ url_for('export_w434_lims') }}"
-    style="
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        min-height:42px;
-        padding:0 18px;
-        border:1px solid #0f766e;
-        border-radius:7px;
-        background-color:white;
-        color:#0f766e;
-        font-weight:600;
-        text-decoration:none;
-        box-sizing:border-box;
-    "
+    href="{{ url_for('export_w434_pdf') }}"
+    class="eacs-button eacs-button-secondary"
+>
+    匯出檢驗紀錄表
+       </a>
+
+        <a
+    href="{{ url_for('export_w434_lims') }}"
+    class="eacs-button eacs-button-accent"
 >
     匯出 LIMS
-</a>
+       </a>
 
         {% endif %}
 

@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}
+分析紀錄查詢 - EACS Web
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+
+    <h1 class="page-title">
+        分析紀錄查詢
+    </h1>
+
+    <div class="page-subtitle">
+        查詢已建立的正式分析紀錄與目前處理狀態。
+    </div>
+
+</div>
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        儲存正式分析紀錄
+    </h2>
+
+    {% if records %}
+
+    <div
+        style="
+            overflow-x: auto;
+        "
+    >
+
+        <table
+            style="
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 14px;
+            "
+        >
+
+            <thead>
+
+                <tr
+                    style="
+                        background-color: #f5f7fa;
+                    "
+                >
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        ID
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        狀態
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        測項
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        方法
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        儀器
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        分析日期
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        分析人員
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        建立時間
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        操作
+                    </th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+                {% for record in records %}
+
+                <tr>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                        {{ record.id }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+
+                        {% if record.status == "DRAFT" %}
+
+                        <span
+                            style="
+                                display: inline-block;
+                                padding: 4px 8px;
+                                border-radius: 999px;
+                                background-color: #eef4fb;
+                                color: #2563a6;
+                                font-weight: 600;
+                            "
+                        >
+                            草稿
+                        </span>
+
+                        {% else %}
+
+                        {{ record.status }}
+
+                        {% endif %}
+
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                        {{ record.exam_name }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                        {{ record.method_code }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+
+                        {% if record.instrument_model %}
+                            {{ record.instrument_model }}
+                        {% else %}
+                            {{ record.instrument_id }}
+                        {% endif %}
+
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+
+                        {{ record.analysis_start_date }}
+
+                        {% if
+                            record.analysis_end_date
+                            and record.analysis_end_date
+                            != record.analysis_start_date
+                        %}
+                            ～ {{ record.analysis_end_date }}
+                        {% endif %}
+
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                        {{ record.analyst_name }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                        {{ record.created_at | taiwan_datetime }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+
+                        <a
+    href="{{ url_for(
+        'analysis_record_detail',
+        analysis_id=record.analysis_id
+    ) }}"
+    class="eacs-button eacs-button-secondary"
+>
+    查看
+                        </a>
+
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+    {% else %}
+
+    <div
+        style="
+            padding: 20px;
+            text-align: center;
+            color: #6b7280;
+        "
+    >
+        目前沒有正式分析紀錄。
+    </div>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

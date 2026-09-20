@@ -23,12 +23,22 @@
 <div class="eacs-card">
 
     <h2 class="eacs-card-title">
-        基本資料
+    基本資料
     </h2>
 
-    <form method="post">
+<form
+    method="post"
+    id="basic-info-form"
+>
 
-        <div class="eacs-form-grid">
+    <input
+        type="hidden"
+        name="next_action"
+        id="next_action"
+        value=""
+    >
+
+    <div class="eacs-form-grid">
 
 
             <!-- 管制年度 -->
@@ -191,6 +201,38 @@
 
             </div>
 
+            <div
+    style="
+        grid-column: 1 / -1;
+        display: flex;
+        justify-content: flex-start;
+        gap: 10px;
+        margin-top: -2px;
+        margin-bottom: 2px;
+    "
+>
+
+    <button
+        type="submit"
+        form="basic-info-form"
+        id="query-control-button"
+        class="eacs-button eacs-button-primary"
+        disabled
+    >
+        查詢管制資料
+    </button>
+
+    <button
+        type="button"
+        id="query-analysis-record-button"
+        class="eacs-button eacs-button-secondary"
+        onclick="queryAnalysisRecords()"
+    >
+        查詢分析紀錄
+    </button>
+
+</div>
+
 
             <!-- 儀器 -->
             <div class="eacs-form-field">
@@ -203,13 +245,22 @@
                 </label>
 
                 <select
-                    id="instrument_id"
-                    name="instrument_id"
-                    class="eacs-form-control"
+    id="instrument_id"
+    name="instrument_id"
+    class="eacs-form-control"
+    onchange="this.form.submit()"
+    {% if not instrument_options %}
+    disabled
+    {% endif %}
                 >
 
                     <option value="">
-                        請選擇儀器
+
+    {% if instrument_options %}
+        請選擇儀器
+    {% else %}
+        請先查詢管制資料
+    {% endif %}
                     </option>
 
                     {% for instrument in instrument_options %}
@@ -315,24 +366,6 @@
 
             </div>
 
-
-        </div>
-
-
-        <div
-            style="
-                display: flex;
-                justify-content: center;
-                margin-top: 24px;
-            "
-        >
-
-            <button
-                type="submit"
-                class="eacs-button eacs-button-primary"
-            >
-                查詢管制資料
-            </button>
 
         </div>
 
@@ -495,7 +528,7 @@
     </div>
 
 
-    {% if method_data %}
+    {% if method_data and form_data.instrument_id %}
 
     <!-- 手動輸入 -->
     <div
@@ -531,12 +564,13 @@
         "
     >
 
-        <a
-            href="{{ url_for('analysis_w43401') }}"
-            class="eacs-button eacs-button-primary"
-        >
-            匯入 PDF
-        </a>
+        <button
+    type="button"
+    class="eacs-button eacs-button-primary"
+    onclick="submitBasicInfoForImport()"
+>
+    匯入 PDF
+        </button>
 
     </div>
 
@@ -815,10 +849,202 @@
         }
     }
 
+
+    function updateQueryControlButton() {
+
+        const examName = document.getElementById(
+            "exam_name"
+        );
+
+        const methodCode = document.getElementById(
+            "method_code"
+        );
+
+        const queryButton = document.getElementById(
+            "query-control-button"
+        );
+
+        if (
+            !examName
+            || !methodCode
+            || !queryButton
+        ) {
+            return;
+        }
+
+        const canQuery =
+            examName.value.trim() !== ""
+            && methodCode.value.trim() !== "";
+
+        queryButton.disabled = !canQuery;
+    }
+
+
     document.addEventListener(
         "DOMContentLoaded",
-        updateDataEntryMode
+        function () {
+
+            updateDataEntryMode();
+            updateQueryControlButton();
+
+            const examName = document.getElementById(
+                "exam_name"
+            );
+
+            const methodCode = document.getElementById(
+                "method_code"
+            );
+
+            if (examName) {
+
+                examName.addEventListener(
+                    "input",
+                    updateQueryControlButton
+                );
+            }
+
+            if (methodCode) {
+
+                methodCode.addEventListener(
+                    "input",
+                    updateQueryControlButton
+                );
+            }
+        }
     );
+
+function queryAnalysisRecords() {
+
+    const ctrlYear =
+        document.getElementById("ctrl_year");
+
+    const category =
+        document.getElementById("category");
+
+    const examName =
+        document.getElementById("exam_name");
+
+    const methodCode =
+        document.getElementById("method_code");
+
+    const instrumentId =
+        document.getElementById("instrument_id");
+
+    const analysisStartDate =
+        document.getElementById("analysis_start_date");
+
+    const analysisEndDate =
+        document.getElementById("analysis_end_date");
+
+
+    const params =
+        new URLSearchParams();
+
+
+    if (
+        ctrlYear
+        && ctrlYear.value.trim() !== ""
+    ) {
+        params.set(
+            "ctrl_year",
+            ctrlYear.value.trim()
+        );
+    }
+
+
+    if (
+        category
+        && category.value.trim() !== ""
+    ) {
+        params.set(
+            "category",
+            category.value.trim()
+        );
+    }
+
+
+    if (
+        examName
+        && examName.value.trim() !== ""
+    ) {
+        params.set(
+            "exam_name",
+            examName.value.trim()
+        );
+    }
+
+
+    if (
+        methodCode
+        && methodCode.value.trim() !== ""
+    ) {
+        params.set(
+            "method_code",
+            methodCode.value.trim()
+        );
+    }
+
+
+    if (
+        instrumentId
+        && instrumentId.value.trim() !== ""
+    ) {
+        params.set(
+            "instrument_id",
+            instrumentId.value.trim()
+        );
+    }
+
+
+    if (
+        analysisStartDate
+        && analysisStartDate.value.trim() !== ""
+    ) {
+        params.set(
+            "analysis_date_start",
+            analysisStartDate.value.trim()
+        );
+    }
+
+
+    if (
+        analysisEndDate
+        && analysisEndDate.value.trim() !== ""
+    ) {
+        params.set(
+            "analysis_date_end",
+            analysisEndDate.value.trim()
+        );
+    }
+
+
+    window.location.href =
+        "{{ url_for('analysis_records') }}"
+        + "?"
+        + params.toString();
+}
+
+    function submitBasicInfoForImport() {
+
+    const form = document.getElementById(
+        "basic-info-form"
+    );
+
+    const nextAction = document.getElementById(
+        "next_action"
+    );
+
+    if (
+        !form
+        || !nextAction
+    ) {
+        return;
+    }
+
+    nextAction.value = "import_w434";
+
+    form.submit();
+}
 </script>
 
 {% endblock %}

@@ -44,6 +44,43 @@
     <h3 style="margin-top: 0;">
         2. 樣品及 QA/QC 計算
     </h3>
+<style>
+    .move-arrow-button {
+        width: 30px;
+        height: 30px;
+        border: 1px solid #9fc7ad;
+        background-color: #ffffff;
+        color: #2e8b57;
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 1;
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        padding: 0;
+        transition: all 0.15s ease;
+    }
+
+    .move-arrow-button:hover {
+        background-color: #f0fbf4;
+        border-color: #6fb28a;
+        color: #1f7a4d;
+    }
+
+    .move-arrow-button:active {
+        background-color: #e3f5ea;
+        transform: translateY(1px);
+    }
+
+    .move-button-group {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+    }
+</style>
 
 
     {% if sample_qaqc_rows %}
@@ -121,11 +158,21 @@
                 <tr style="background-color: #eef4f9;">
 
                     <th style="
-                        border: 1px solid #ccc;
-                        padding: 9px;
-                        width: 50px;
-                    ">
-                        順序
+    border: 1px solid #ccc;
+    padding: 9px;
+    width: 56px;
+    text-align: center;
+">
+    調整
+                    </th>
+
+                    <th style="
+    border: 1px solid #ccc;
+    padding: 9px;
+    width: 58px;
+    text-align: center;
+">
+    順序
                     </th>
 
                     <th style="
@@ -181,7 +228,7 @@
                         padding: 9px;
                         width: 105px;
                     ">
-                        計算濃度<br>(mg/L)
+                        分析濃度<br>(mg/L)
                     </th>
 
                     <th style="
@@ -211,71 +258,73 @@
 
                 <tr class="sample-qaqc-row">
 
-
-
 <td style="
     border: 1px solid #ccc;
     padding: 4px;
     text-align: center;
 ">
 
-<input
-    type="hidden"
-    name="source_sequence_{{ loop.index0 }}"
-    value="{{ row.sequence_no }}"
->
+    <input
+        type="hidden"
+        name="source_sequence_{{ loop.index0 }}"
+        value="{{ row.sequence_no }}"
+    >
 
-<input
-    type="hidden"
-    class="display-order-input"
-    name="display_order_{{ loop.index0 }}"
-    value="{{ loop.index }}"
->
+    <input
+        type="hidden"
+        class="display-order-input"
+        name="display_order_{{ loop.index0 }}"
+        value="{{ loop.index }}"
+    >
 
-<input
-    type="hidden"
-    name="role_{{ loop.index0 }}"
-    value="{{ row.role }}"
->
+    <input
+        type="hidden"
+        name="role_{{ loop.index0 }}"
+        value="{{ row.role }}"
+    >
 
     <div style="
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 2px;
+        gap: 4px;
     ">
 
-        <button
-            type="button"
-            class="move-row-up row-move-button"
-            title="上移"
+    <div class="move-button-group">
 
-        >
-            ↑
-        </button>
+    <button
+        type="button"
+        class="move-row-up row-move-button move-arrow-button"
+        title="上移"
+    >
+        ↑
+    </button>
 
-        <span
-            class="display-order-text"
-            style="
-                min-width: 22px;
-                text-align: center;
-                line-height: 18px;
-            "
-        >
-            {{ loop.index }}
-        </span>
+    <button
+        type="button"
+        class="move-row-down row-move-button move-arrow-button"
+        title="下移"
+    >
+        ↓
+    </button>
 
-        <button
-            type="button"
-            class="move-row-down row-move-button"
-            title="下移"
-
-        >
-            ↓
-        </button>
+   </div>
 
     </div>
+
+</td>
+
+<td style="
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: center;
+    font-weight: 600;
+    color: #374151;
+">
+
+    <span class="display-order-text">
+        {{ loop.index }}
+    </span>
 
 </td>
 
@@ -427,7 +476,8 @@
                                  border: 1px solid #ccc;
                                  padding: 8px;
                                  text-align: right;
-                                 color: #666;
+                                 color: #2563a6;
+                                 font-weight: 700;
                                  ">
                         {% if row.calculated_concentration is not none %}
                         {{ "%.6f"|format(row.calculated_concentration) }}
