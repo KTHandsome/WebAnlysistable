@@ -847,13 +847,18 @@
     }
 
     .qaqc-status-warning {
-        background-color: #fef2f2;
-        color: #b91c1c;
+    background-color: #fff7ed;
+    color: #c2410c;
     }
 
     .qaqc-status-unknown {
         background-color: #f3f4f6;
         color: #6b7280;
+    }
+
+    .qaqc-status-fail {
+    background-color: #fef2f2;
+    color: #b91c1c;
     }
 
     .qaqc-empty-row {
@@ -993,40 +998,51 @@
 
                                 <td class="qaqc-col-status">
 
-                                    {% if item.is_pass is sameas true %}
+                                    {% if item.status_text == "合格" %}
 
-                                        <span
-                                            class="
-                                                qaqc-status
-                                                qaqc-status-pass
-                                            "
-                                        >
-                                            合格
-                                        </span>
+<span
+    class="
+        qaqc-status
+        qaqc-status-pass
+    "
+>
+    合格
+</span>
 
-                                    {% elif item.is_pass is sameas false %}
+                                    {% elif item.status_text == "警告" %}
 
-                                        <span
-                                            class="
-                                                qaqc-status
-                                                qaqc-status-warning
-                                            "
-                                        >
-                                            注意
-                                        </span>
+<span
+    class="
+        qaqc-status
+        qaqc-status-warning
+    "
+>
+    警告
+</span>
+
+                                    {% elif item.status_text == "超出管制" %}
+
+<span
+    class="
+        qaqc-status
+        qaqc-status-fail
+    "
+>
+    超出管制
+</span>
 
                                     {% else %}
 
-                                        <span
-                                            class="
-                                                qaqc-status
-                                                qaqc-status-unknown
-                                            "
-                                        >
-                                            無法判定
-                                        </span>
+<span
+    class="
+        qaqc-status
+        qaqc-status-unknown
+    "
+>
+    {{ item.status_text or "無法判定" }}
+</span>
 
-                                    {% endif %}
+{% endif %}
 
                                 </td>
 
@@ -1159,38 +1175,49 @@
 
                                 <td class="qaqc-col-status">
 
-                                    {% if item.is_pass is sameas true %}
+                                    {% if item.status_text == "合格" %}
 
-                                        <span
-                                            class="
-                                                qaqc-status
-                                                qaqc-status-pass
-                                            "
-                                        >
-                                            合格
-                                        </span>
+<span
+    class="
+        qaqc-status
+        qaqc-status-pass
+    "
+>
+    合格
+</span>
 
-                                    {% elif item.is_pass is sameas false %}
+                                    {% elif item.status_text == "警告" %}
 
-                                        <span
-                                            class="
-                                                qaqc-status
-                                                qaqc-status-warning
-                                            "
-                                        >
-                                            注意
-                                        </span>
+<span
+    class="
+        qaqc-status
+        qaqc-status-warning
+    "
+>
+    警告
+</span>
 
-                                    {% else %}
+                                    {% elif item.status_text == "超出管制" %}
 
-                                        <span
-                                            class="
-                                                qaqc-status
-                                                qaqc-status-unknown
-                                            "
-                                        >
-                                            無法判定
-                                        </span>
+<span
+    class="
+        qaqc-status
+        qaqc-status-fail
+    "
+>
+    超出管制
+</span>
+
+{% else %}
+
+<span
+    class="
+        qaqc-status
+        qaqc-status-unknown
+    "
+>
+    {{ item.status_text or "無法判定" }}
+</span>
 
                                     {% endif %}
 
@@ -1325,38 +1352,49 @@
 
                                 <td class="qaqc-col-status">
 
-                                    {% if item.is_pass is sameas true %}
+                                    {% if item.status_text == "合格" %}
 
-                                        <span
-                                            class="
-                                                qaqc-status
-                                                qaqc-status-pass
-                                            "
-                                        >
-                                            合格
-                                        </span>
+<span
+    class="
+        qaqc-status
+        qaqc-status-pass
+    "
+>
+    合格
+</span>
 
-                                    {% elif item.is_pass is sameas false %}
+                                    {% elif item.status_text == "警告" %}
 
-                                        <span
-                                            class="
-                                                qaqc-status
-                                                qaqc-status-warning
-                                            "
-                                        >
-                                            注意
-                                        </span>
+<span
+    class="
+        qaqc-status
+        qaqc-status-warning
+    "
+>
+    警告
+</span>
+
+                                    {% elif item.status_text == "超出管制" %}
+
+<span
+    class="
+        qaqc-status
+        qaqc-status-fail
+    "
+>
+    超出管制
+</span>
 
                                     {% else %}
 
-                                        <span
-                                            class="
-                                                qaqc-status
-                                                qaqc-status-unknown
-                                            "
-                                        >
-                                            無法判定
-                                        </span>
+<span
+    class="
+        qaqc-status
+        qaqc-status-unknown
+    "
+>
+    {{ item.status_text or "無法判定" }}
+</span>
 
                                     {% endif %}
 

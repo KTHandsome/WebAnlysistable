@@ -301,6 +301,12 @@ class AnalysisQaqcResult(Base):
         nullable=True
     )
 
+    status_text: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default=""
+    )
+
     remark: Mapped[str] = mapped_column(
         String(500),
         nullable=False,

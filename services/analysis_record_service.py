@@ -1076,6 +1076,7 @@ def save_w434_analysis_record(
                     is_pass=_status_to_pass(
                         status
                     ),
+                    status_text=status,
                     remark=" / ".join(
                         remark_parts
                     )
@@ -1199,6 +1200,7 @@ def save_w434_analysis_record(
                     is_pass=_status_to_pass(
                         status
                     ),
+                    status_text=status,
                     remark=" / ".join(
                         remark_parts
                     )
@@ -1307,6 +1309,7 @@ def save_w434_analysis_record(
                     is_pass=_status_to_pass(
                         status
                     ),
+                    status_text=status,
                     remark=" / ".join(
                         remark_parts
                     )
