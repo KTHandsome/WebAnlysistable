@@ -217,10 +217,19 @@ def save_w434_analysis_record(
             "尚未取得 W434 暫存分析資料。"
         )
 
-    sample_rows = analysis_state.get(
+    source_sample_rows = analysis_state.get(
         "sample_qaqc_rows",
         []
     )
+
+    sample_rows = [
+        row
+        for row in source_sample_rows
+        if not row.get(
+            "is_excluded",
+            False
+        )
+    ]
 
     qaqc_results = analysis_state.get(
     "qaqc_results",
@@ -407,14 +416,18 @@ def save_w434_analysis_record(
         if record is not None:
 
             if (
-                record.status
-                != "DRAFT"
-            ):
+        record.status
+        not in {
+            "DRAFT",
+            "UNDER_REVIEW",
+            "REJECTED"
+        }
+    ):
 
-                raise ValueError(
-                    "此正式分析紀錄已不是草稿狀態，"
-                    "不可直接覆寫。"
-                )
+             raise ValueError(
+            "此分析紀錄已完成審核，"
+            "不可直接覆寫。"
+        )
 
         # ========================================
         # 尚未建立
@@ -424,7 +437,7 @@ def save_w434_analysis_record(
         else:
 
             record = AnalysisRecord(
-                status="DRAFT",
+                status="UNDER_REVIEW",
 
                 ctrl_year=str(
                     form_data.get(
@@ -530,6 +543,7 @@ def save_w434_analysis_record(
         # ========================================
         # 更新主檔
         # ========================================
+        record.status = "UNDER_REVIEW"
 
         record.ctrl_year = str(
             form_data.get(

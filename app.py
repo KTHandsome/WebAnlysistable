@@ -1323,15 +1323,27 @@ def analysis_w43401():
                 ""
             )
             or ""
-        ).strip()    
+        ).strip()
 
-    formal_analysis_id = str(
-        session.get(
-            "w434_formal_analysis_id",
-            ""
-        )
-        or ""
-    ).strip()    
+    formal_analysis_id = (
+        existing_formal_analysis_id
+    )
+
+    if not formal_analysis_id:
+
+        formal_analysis_id = str(
+            session.get(
+                "w434_formal_analysis_id",
+                ""
+            )
+            or ""
+        ).strip()
+
+    if formal_analysis_id:
+
+        session[
+            "w434_formal_analysis_id"
+        ] = formal_analysis_id   
     
     preview_rows = []
     calibration_rows = []
@@ -1681,6 +1693,8 @@ def analysis_w43401():
         row["final_volume"] = 50
         row["dilution_factor"] = 1
         row["remark"] = ""
+        row["is_excluded"] = False
+        row["exclusion_reason"] = ""
         row["calculated_concentration"] = None
 
         if row.get("role") not in simple_roles:
@@ -2257,6 +2271,23 @@ def update_w434_samples():
             .strip()
         )
 
+        is_excluded = (
+            request.form.get(
+                "is_excluded_"
+                + str(index)
+            )
+            == "1"
+        )
+
+        exclusion_reason = (
+            request.form.get(
+                "exclusion_reason_"
+                + str(index),
+                ""
+            )
+            .strip()
+        )
+
         try:
 
             display_order = int(
@@ -2328,6 +2359,10 @@ def update_w434_samples():
             spike_concentration
         )
         row["remark"] = remark
+        row["is_excluded"] = is_excluded
+        row["exclusion_reason"] = (
+            exclusion_reason
+        )
         row["display_order"] = display_order
 
         try:
@@ -2448,6 +2483,21 @@ def update_w434_samples():
         ] = updated_row.get(
             "display_order"
         )
+
+        preview_row[
+            "is_excluded"
+        ] = updated_row.get(
+            "is_excluded",
+            False
+        )
+
+        preview_row[
+            "exclusion_reason"
+        ] = updated_row.get(
+            "exclusion_reason",
+            ""
+        )
+
 
     analysis_state[
         "preview_rows"

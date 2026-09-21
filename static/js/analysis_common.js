@@ -252,7 +252,7 @@ if (
 
     const rows =
         table.querySelectorAll(
-            "tbody .sample-qaqc-row"
+            "tbody .sample-qaqc-row:not(.is-excluded-row)"
         );
 
     rows.forEach(
@@ -306,6 +306,66 @@ if (
     );
 }
 
+function bindSampleDeleteEvents() {
+
+    const table =
+        document.querySelector(
+            ".sample-qaqc-table"
+        );
+
+    if (!table) {
+        return;
+    }
+
+    table.addEventListener(
+        "change",
+        function (event) {
+
+            const target =
+                event.target;
+
+            if (
+                !target.classList.contains(
+                    "sample-delete-checkbox"
+                )
+            ) {
+                return;
+            }
+
+            if (!target.checked) {
+                return;
+            }
+
+            const row =
+                target.closest(
+                    ".sample-qaqc-row"
+                );
+
+            if (!row) {
+                return;
+            }
+
+            const confirmed =
+                window.confirm(
+                    "確定刪除此筆樣品結果？"
+                );
+
+            if (!confirmed) {
+
+                target.checked = false;
+                return;
+            }
+
+            row.classList.add(
+                "is-excluded-row"
+            );
+
+            row.style.display = "none";
+
+            updateSampleDisplayOrder();
+        }
+    );
+}
 
 function bindSampleRowMoveEvents() {
 
@@ -871,6 +931,8 @@ function initializeAnalysisCalculation() {
     bindCalibrationTableEvents();
 
     bindSampleTableEvents();
+
+    bindSampleDeleteEvents();
 
     bindSampleRowMoveEvents();
 

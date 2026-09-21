@@ -5,18 +5,11 @@
     }
 
     .sample-qaqc-table thead th {
-        position: sticky;
-
-        /*
-         * W434 分析標題固定區下方
-         */
-        top: 56px;
-
-        z-index: 20;
-
-        background-color: #eef4f9;
-
-        box-shadow: 0 1px 0 #ccc;
+    position: sticky;
+    top: 102px;
+    z-index: 20;
+    background-color: #eef4f9;
+    box-shadow: 0 1px 0 #ccc;
     }
 
     .sample-qaqc-table tbody td {
@@ -160,20 +153,26 @@
                     <th style="
     border: 1px solid #ccc;
     padding: 9px;
-    width: 56px;
-    text-align: center;
+    width: 62px;
 ">
-    調整
-                    </th>
+    刪除
+</th>
 
-                    <th style="
+<th style="
     border: 1px solid #ccc;
     padding: 9px;
-    width: 58px;
-    text-align: center;
+    width: 82px;
+">
+    調整
+</th>
+
+<th style="
+    border: 1px solid #ccc;
+    padding: 9px;
+    width: 50px;
 ">
     順序
-                    </th>
+</th>
 
                     <th style="
                         border: 1px solid #ccc;
@@ -246,7 +245,6 @@
                     ">
                         備註
                     </th>
-
                 </tr>
 
             </thead>
@@ -256,13 +254,71 @@
 
                 {% for row in sample_qaqc_rows %}
 
-                <tr class="sample-qaqc-row">
+                <tr
+    class="
+        sample-qaqc-row
+        {% if row.is_excluded %}
+        is-excluded-row
+        {% endif %}
+    "
+    {% if row.is_excluded %}
+    style="display: none;"
+    {% endif %}
+>
 
 <td style="
     border: 1px solid #ccc;
     padding: 4px;
     text-align: center;
 ">
+    {% if row.role == "SAMPLE" %}
+
+    {% if row.role == "SAMPLE" %}
+
+<input
+    type="checkbox"
+    class="sample-delete-checkbox"
+    name="is_excluded_{{ loop.index0 }}"
+    value="1"
+    {% if row.is_excluded %}
+    checked
+    {% endif %}
+    title="不採用此筆正式結果"
+    style="
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    "
+>
+
+{% else %}
+
+<span style="
+    color: #aaa;
+    font-size: 12px;
+">
+    -
+</span>
+
+{% endif %}
+
+    {% else %}
+
+    <span style="
+        color: #aaa;
+        font-size: 12px;
+    ">
+        -
+    </span>
+
+    {% endif %}
+</td>
+
+    <td style="
+        border: 1px solid #ccc;
+        padding: 4px;
+        text-align: center;
+       ">
 
     <input
         type="hidden"
@@ -518,7 +574,7 @@
 
                     </td>
 
-                </tr>
+                   </tr>
 
                 {% endfor %}
 

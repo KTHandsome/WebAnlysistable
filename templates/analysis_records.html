@@ -100,26 +100,71 @@
 
                     <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
 
-                        {% if record.status == "DRAFT" %}
+                        {% if record.status == "UNDER_REVIEW" %}
 
-                        <span
-                            style="
-                                display: inline-block;
-                                padding: 4px 8px;
-                                border-radius: 999px;
-                                background-color: #eef4fb;
-                                color: #2563a6;
-                                font-weight: 600;
-                            "
-                        >
-                            草稿
-                        </span>
+<span
+    style="
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background-color: #fff7e6;
+        color: #9a6700;
+        font-weight: 600;
+    "
+>
+    待審核
+</span>
 
-                        {% else %}
+{% elif record.status == "APPROVED" %}
 
-                        {{ record.status }}
+<span
+    style="
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background-color: #eef6f4;
+        color: #0f766e;
+        font-weight: 600;
+    "
+>
+    已審核
+</span>
 
-                        {% endif %}
+{% elif record.status == "REJECTED" %}
+
+<span
+    style="
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background-color: #fef2f2;
+        color: #b91c1c;
+        font-weight: 600;
+    "
+>
+    退回修正
+</span>
+
+{% elif record.status == "DRAFT" %}
+
+<span
+    style="
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background-color: #eef4fb;
+        color: #2563a6;
+        font-weight: 600;
+    "
+>
+    儲存未審核
+</span>
+
+{% else %}
+
+{{ record.status }}
+
+{% endif %}
 
                     </td>
 
