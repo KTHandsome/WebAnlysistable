@@ -13,6 +13,7 @@ from calculations.w43401 import (
     calculate_calibration,
     calculate_sample_concentration
 )
+
 from analysis.analysis_batch_splitter import (
     filter_batches_by_exam_no
 )
@@ -2083,6 +2084,46 @@ def update_w434_samples():
             400
         )
 
+    form_data = session.get(
+        "basic_info_form"
+    )
+
+    if not form_data:
+
+        return (
+            "尚未找到分析基本資料。",
+            400
+        )
+
+    (
+        control_data,
+        method_data,
+        load_error
+    ) = load_control_and_method_data(
+        form_data
+    )
+
+    if load_error:
+
+        return (
+            load_error,
+            400
+        )
+
+    preview_rows = analysis_state.get(
+        "preview_rows",
+        []
+    )
+
+    included_batches = analysis_state.get(
+        "included_batches",
+        []
+    )
+
+    qdl_value = analysis_state.get(
+        "qdl_value"
+    )
+
     sample_qaqc_rows = analysis_state.get(
         "sample_qaqc_rows",
         []
@@ -2323,10 +2364,234 @@ def update_w434_samples():
         )
     )
 
+    updated_row_map = {
+        str(
+            row.get(
+                "sequence_no",
+                ""
+            )
+        ): row
+        for row in updated_rows
+    }
+
+    for preview_row in preview_rows:
+
+        sequence_key = str(
+            preview_row.get(
+                "sequence_no",
+                ""
+            )
+        )
+
+        updated_row = (
+            updated_row_map.get(
+                sequence_key
+            )
+        )
+
+        if updated_row is None:
+            continue
+
+        preview_row[
+            "sample_id"
+        ] = updated_row.get(
+            "sample_id",
+            ""
+        )
+
+        preview_row[
+            "signal"
+        ] = updated_row.get(
+            "signal"
+        )
+
+        preview_row[
+            "sample_volume"
+        ] = updated_row.get(
+            "sample_volume"
+        )
+
+        preview_row[
+            "final_volume"
+        ] = updated_row.get(
+            "final_volume"
+        )
+
+        preview_row[
+            "dilution_factor"
+        ] = updated_row.get(
+            "dilution_factor"
+        )
+
+        preview_row[
+            "spike_concentration"
+        ] = updated_row.get(
+            "spike_concentration",
+            ""
+        )
+
+        preview_row[
+            "calculated_concentration"
+        ] = updated_row.get(
+            "calculated_concentration"
+        )
+
+        preview_row[
+            "remark"
+        ] = updated_row.get(
+            "remark",
+            ""
+        )
+
+        preview_row[
+            "display_order"
+        ] = updated_row.get(
+            "display_order"
+        )
+
+    analysis_state[
+        "preview_rows"
+    ] = preview_rows    
+
     analysis_state[
         "sample_qaqc_rows"
     ] = updated_rows
 
+    latest_row_map = {
+        str(
+            row.get(
+                "sequence_no",
+                ""
+            )
+        ): row
+        for row in preview_rows
+    }
+
+    for batch in included_batches:
+
+        batch_rows = batch.get(
+            "rows",
+            []
+        )
+
+        for batch_row in batch_rows:
+
+            sequence_key = str(
+                batch_row.get(
+                    "sequence_no",
+                    ""
+                )
+            )
+
+            latest_row = (
+                latest_row_map.get(
+                    sequence_key
+                )
+            )
+
+            if latest_row is None:
+                continue
+
+            batch_row.update(
+                latest_row
+            )
+
+        start_check = batch.get(
+            "start_check"
+        )
+
+        if start_check:
+
+            sequence_key = str(
+                start_check.get(
+                    "sequence_no",
+                    ""
+                )
+            )
+
+            latest_row = (
+                latest_row_map.get(
+                    sequence_key
+                )
+            )
+
+            if latest_row is not None:
+                start_check.update(
+                    latest_row
+                )
+
+        end_check = batch.get(
+            "end_check"
+        )
+
+        if end_check:
+
+            sequence_key = str(
+                end_check.get(
+                    "sequence_no",
+                    ""
+                )
+            )
+
+            latest_row = (
+                latest_row_map.get(
+                    sequence_key
+                )
+            )
+
+            if latest_row is not None:
+                end_check.update(
+                    latest_row
+                )
+
+    for debug_batch in included_batches:
+        print(
+            "BATCH",
+            debug_batch.get("batch_no"),
+            "| category =",
+            debug_batch.get("batch_category"),
+            "| rows =",
+            [
+                (
+                    row.get("role"),
+                    row.get("sample_id")
+                )
+                for row in debug_batch.get(
+                    "rows",
+                    []
+                )
+            ]
+        )
+
+    qaqc_results = []
+
+    if (
+        included_batches
+        and control_data
+    ):
+
+        qaqc_results = (
+            build_qaqc_check_results(
+                included_batches,
+                control_data,
+                cc_relative_error_limit=20.0,
+                qdl_value=qdl_value
+            )
+        )
+
+    analysis_state[
+        "preview_rows"
+    ] = preview_rows
+
+    analysis_state[
+        "included_batches"
+    ] = included_batches
+
+    analysis_state[
+        "qaqc_results"
+    ] = qaqc_results
+
+    
     analysis_state[
     "sample_data_saved"
 ] = True
@@ -2383,9 +2648,13 @@ def save_w434_record():
     if not analysis_state:
 
         return (
-            "尚未找到 W434 暫存分析資料。",
+            "尚未找到 W434 分析資料，請先匯入儀器 PDF。",
             400
         )
+
+    form_data = session.get(
+        "basic_info_form"
+    )
 
     current_user = (
         get_current_user()
