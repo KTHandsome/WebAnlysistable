@@ -42,11 +42,60 @@
             </div>
             <div class="eacs-info-value">
 
-                {% if record.status == "DRAFT" %}
-                    草稿
-                {% else %}
-                    {{ record.status }}
-                {% endif %}
+                {% if record.status == "UNDER_REVIEW" %}
+
+    <span
+        style="
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background-color: #fff7e6;
+            color: #9a6700;
+            font-weight: 600;
+        "
+    >
+        待審核
+    </span>
+
+{% elif record.status == "APPROVED" %}
+
+    <span
+        style="
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background-color: #eef6f4;
+            color: #0f766e;
+            font-weight: 600;
+        "
+    >
+        已審核
+    </span>
+
+{% elif record.status == "REJECTED" %}
+
+    <span
+        style="
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background-color: #fef2f2;
+            color: #b91c1c;
+            font-weight: 600;
+        "
+    >
+        退回修正
+    </span>
+
+{% elif record.status == "DRAFT" %}
+
+    儲存未審核
+
+{% else %}
+
+    {{ record.status }}
+
+{% endif %}
 
             </div>
         </div>
@@ -142,6 +191,607 @@
     </div>
 
 </div>
+
+{% if record.status == "UNDER_REVIEW" %}
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        審核作業
+    </h2>
+
+    <div
+        style="
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        "
+    >
+
+        <form
+            method="post"
+            action="{{ url_for(
+                'approve_analysis_record',
+                analysis_id=record.analysis_id
+            ) }}"
+            onsubmit="
+                return confirm(
+                    '確定審核通過此分析紀錄？'
+                );
+            "
+        >
+
+            <div
+                style="
+                    padding: 18px;
+                    border: 1px solid #cfe3de;
+                    border-radius: 8px;
+                    background-color: #f7fbfa;
+                "
+            >
+
+                <div
+                    style="
+                        margin-bottom: 12px;
+                        font-weight: 700;
+                        color: #0f766e;
+                    "
+                >
+                    審核通過
+                </div>
+
+                <div
+                    style="
+                        margin-bottom: 14px;
+                        font-size: 14px;
+                        color: #6b7280;
+                    "
+                >
+                    確認分析結果與 QA/QC 判定無誤後，
+                    將此紀錄標示為已審核。
+                </div>
+
+                <label
+                    style="
+                        display: block;
+                        margin-bottom: 6px;
+                        font-size: 14px;
+                        font-weight: 600;
+                    "
+                >
+                    審核備註
+                </label>
+
+                <textarea
+                    name="review_comment"
+                    rows="3"
+                    style="
+                        width: 100%;
+                        box-sizing: border-box;
+                        padding: 9px 10px;
+                        margin-bottom: 14px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 6px;
+                        resize: vertical;
+                    "
+                ></textarea>
+
+                <button
+                    type="submit"
+                    class="eacs-button"
+                    style="
+                        background-color: #0f766e;
+                        color: white;
+                        border: none;
+                    "
+                >
+                    審核通過
+                </button>
+
+            </div>
+
+        </form>
+
+
+        <form
+            method="post"
+            action="{{ url_for(
+                'reject_analysis_record',
+                analysis_id=record.analysis_id
+            ) }}"
+            onsubmit="
+                return confirm(
+                    '確定退回此分析紀錄要求修正？'
+                );
+            "
+        >
+
+            <div
+                style="
+                    padding: 18px;
+                    border: 1px solid #f0caca;
+                    border-radius: 8px;
+                    background-color: #fffafa;
+                "
+            >
+
+                <div
+                    style="
+                        margin-bottom: 12px;
+                        font-weight: 700;
+                        color: #b91c1c;
+                    "
+                >
+                    退回修正
+                </div>
+
+                <div
+                    style="
+                        margin-bottom: 14px;
+                        font-size: 14px;
+                        color: #6b7280;
+                    "
+                >
+                    退回時必須填寫原因，
+                    分析人員修正後可再次儲存送審。
+                </div>
+
+                <label
+                    style="
+                        display: block;
+                        margin-bottom: 6px;
+                        font-size: 14px;
+                        font-weight: 600;
+                    "
+                >
+                    退回原因
+                </label>
+
+                <textarea
+                    name="review_comment"
+                    rows="3"
+                    required
+                    style="
+                        width: 100%;
+                        box-sizing: border-box;
+                        padding: 9px 10px;
+                        margin-bottom: 14px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 6px;
+                        resize: vertical;
+                    "
+                ></textarea>
+
+                <button
+                    type="submit"
+                    class="eacs-button"
+                    style="
+                        background-color: #b91c1c;
+                        color: white;
+                        border: none;
+                    "
+                >
+                    退回修正
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+{% elif record.status in ["APPROVED", "REJECTED"] %}
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        審核資訊
+    </h2>
+
+    <div class="eacs-info-grid">
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                審核結果
+            </div>
+
+            <div class="eacs-info-value">
+
+                {% if record.status == "APPROVED" %}
+                    已審核
+                {% else %}
+                    退回修正
+                {% endif %}
+
+            </div>
+
+        </div>
+
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                審核人員
+            </div>
+
+            <div class="eacs-info-value">
+                {{ record.reviewer_name or "-" }}
+            </div>
+
+        </div>
+
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                審核時間
+            </div>
+
+            <div class="eacs-info-value">
+
+                {% if record.reviewed_at %}
+                    {{ record.reviewed_at | taiwan_datetime }}
+                {% else %}
+                    -
+                {% endif %}
+
+            </div>
+
+        </div>
+
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                審核備註 / 退回原因
+            </div>
+
+            <div class="eacs-info-value">
+                {{ record.review_comment or "-" }}
+            </div>
+
+        </div>
+
+        </div>
+
+{% if record.status == "APPROVED" %}
+
+<div
+    style="
+        margin-top: 20px;
+        padding-top: 18px;
+        border-top: 1px solid #e5e7eb;
+    "
+>
+
+    <form
+        method="post"
+        action="{{ url_for(
+            'reopen_approved_analysis_record',
+            analysis_id=record.analysis_id
+        ) }}"
+        onsubmit="
+            return confirm(
+                '此紀錄已完成審核，確定要再次退回修正？'
+            );
+        "
+    >
+
+        <div
+            style="
+                margin-bottom: 12px;
+                font-weight: 700;
+                color: #b91c1c;
+            "
+        >
+            再次退回修正
+        </div>
+
+        <div
+            style="
+                margin-bottom: 12px;
+                font-size: 14px;
+                color: #6b7280;
+            "
+        >
+            若最終審查發現資料錯誤，
+            可再次退回分析人員修正。
+            此動作會保留原審核歷程。
+        </div>
+
+        <label
+            style="
+                display: block;
+                margin-bottom: 6px;
+                font-size: 14px;
+                font-weight: 600;
+            "
+        >
+            再次退回原因
+        </label>
+
+        <textarea
+            name="review_comment"
+            rows="3"
+            required
+            style="
+                width: 100%;
+                box-sizing: border-box;
+                padding: 9px 10px;
+                margin-bottom: 14px;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                resize: vertical;
+            "
+        ></textarea>
+
+        <button
+            type="submit"
+            class="eacs-button"
+            style="
+                background-color: #b91c1c;
+                color: white;
+                border: none;
+            "
+        >
+            再次退回修正
+        </button>
+
+    </form>
+
+</div>
+
+{% endif %}
+
+    {% if record.status == "REJECTED" %}
+
+    <div
+        style="
+            margin-top: 20px;
+            padding-top: 18px;
+            border-top: 1px solid #e5e7eb;
+        "
+    >
+
+        <form
+            method="post"
+            action="{{ url_for(
+                'resume_analysis_record',
+                analysis_id=record.analysis_id
+            ) }}"
+        >
+
+            <button
+                type="submit"
+                class="eacs-button"
+                style="
+                    background-color: #2563a6;
+                    color: white;
+                    border: none;
+                "
+            >
+                進入修正
+            </button>
+
+        </form>
+
+        <div
+            style="
+                margin-top: 8px;
+                color: #6b7280;
+                font-size: 13px;
+            "
+        >
+            回到原分析資料進行修正，
+            不需重新匯入儀器原始檔。
+        </div>
+
+    </div>
+
+    {% endif %}
+
+</div>
+
+{% endif %}
+
+{% if review_history %}
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        審核歷程
+    </h2>
+
+    <div style="overflow-x: auto;">
+
+        <table
+            style="
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 14px;
+            "
+        >
+
+            <thead>
+
+                <tr
+                    style="
+                        background-color: #f5f7fa;
+                    "
+                >
+
+                    <th
+                        style="
+                            padding: 10px 12px;
+                            border-bottom: 1px solid #d9e0e7;
+                            text-align: left;
+                            white-space: nowrap;
+                        "
+                    >
+                        時間
+                    </th>
+
+                    <th
+                        style="
+                            padding: 10px 12px;
+                            border-bottom: 1px solid #d9e0e7;
+                            text-align: left;
+                            white-space: nowrap;
+                        "
+                    >
+                        動作
+                    </th>
+
+                    <th
+                        style="
+                            padding: 10px 12px;
+                            border-bottom: 1px solid #d9e0e7;
+                            text-align: left;
+                            white-space: nowrap;
+                        "
+                    >
+                        狀態變更
+                    </th>
+
+                    <th
+                        style="
+                            padding: 10px 12px;
+                            border-bottom: 1px solid #d9e0e7;
+                            text-align: left;
+                            white-space: nowrap;
+                        "
+                    >
+                        執行人
+                    </th>
+
+                    <th
+                        style="
+                            padding: 10px 12px;
+                            border-bottom: 1px solid #d9e0e7;
+                            text-align: left;
+                        "
+                    >
+                        備註 / 原因
+                    </th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+                {% for item in review_history %}
+
+                <tr>
+
+                    <td
+                        style="
+                            padding: 10px 12px;
+                            border-bottom: 1px solid #edf0f3;
+                            white-space: nowrap;
+                        "
+                    >
+                        {{ item.created_at | taiwan_datetime }}
+                    </td>
+
+                    <td
+                        style="
+                            padding: 10px 12px;
+                            border-bottom: 1px solid #edf0f3;
+                            white-space: nowrap;
+                            font-weight: 600;
+                        "
+                    >
+
+                        {% if item.action == "APPROVE" %}
+                            審核通過
+
+                        {% elif item.action == "REJECT" %}
+                            退回修正
+
+                        {% elif item.action == "REOPEN_AFTER_APPROVAL" %}
+                            再次退回修正
+
+                        {% elif item.action == "RESUBMIT" %}
+                            修正後重新送審
+
+                        {% else %}
+                            {{ item.action }}
+                        {% endif %}
+
+                    </td>
+
+                    <td
+                        style="
+                            padding: 10px 12px;
+                            border-bottom: 1px solid #edf0f3;
+                            white-space: nowrap;
+                        "
+                    >
+
+                        {% if item.from_status == "UNDER_REVIEW" %}
+                            待審核
+                        {% elif item.from_status == "APPROVED" %}
+                            已審核
+                        {% elif item.from_status == "REJECTED" %}
+                            退回修正
+                        {% elif item.from_status == "DRAFT" %}
+                            儲存未審核
+                        {% else %}
+                            {{ item.from_status }}
+                        {% endif %}
+
+                        →
+
+                        {% if item.to_status == "UNDER_REVIEW" %}
+                            待審核
+                        {% elif item.to_status == "APPROVED" %}
+                            已審核
+                        {% elif item.to_status == "REJECTED" %}
+                            退回修正
+                        {% elif item.to_status == "DRAFT" %}
+                            儲存未審核
+                        {% else %}
+                            {{ item.to_status }}
+                        {% endif %}
+
+                    </td>
+
+                    <td
+                        style="
+                            padding: 10px 12px;
+                            border-bottom: 1px solid #edf0f3;
+                            white-space: nowrap;
+                        "
+                    >
+                        {{ item.reviewer_name or "-" }}
+                    </td>
+
+                    <td
+                        style="
+                            padding: 10px 12px;
+                            border-bottom: 1px solid #edf0f3;
+                        "
+                    >
+                        {{ item.comment or "-" }}
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+{% endif %}
 
 <div class="eacs-card">
 

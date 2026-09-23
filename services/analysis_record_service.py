@@ -1,5 +1,8 @@
 from datetime import datetime
+
 from typing import Optional
+
+import json
 
 from database import SessionLocal
 
@@ -8,7 +11,9 @@ from models import (
     AnalysisCalibrationSummary,
     AnalysisQaqcResult,
     AnalysisRecord,
-    AnalysisSample
+    AnalysisReviewHistory,
+    AnalysisSample,
+    AnalysisWorkState
 )
 
 # ========================================
@@ -378,6 +383,38 @@ def save_w434_analysis_record(
     )
 
     # ========================================
+    # Analysis Identity
+    #
+    # 一筆分析工作由：
+    # 測項 + 方法 + 儀器 + 分析日期區間
+    # 共同識別
+    # ========================================
+
+    identity_exam_no = str(
+        control_data.get(
+            "EXAMNO",
+            ""
+        )
+        or ""
+    ).strip()
+
+    identity_method_code = str(
+        form_data.get(
+            "method_code",
+            ""
+        )
+        or ""
+    ).strip()
+
+    identity_instrument_id = str(
+        form_data.get(
+            "instrument_id",
+            ""
+        )
+        or ""
+    ).strip()
+
+    # ========================================
     # Database
     # ========================================
 
@@ -394,15 +431,19 @@ def save_w434_analysis_record(
         ).strip()
 
         record = None
+        previous_status = None
 
         # ========================================
-        # 已建立正式 DRAFT
-        # → 更新同一筆，不重複新增
+        # 1. 先檢查目前工作是否已綁定
+        #    formal_analysis_id
+        #
+        # 只有 Analysis Identity 完全相同時，
+        # 才能繼續更新原紀錄。
         # ========================================
 
         if formal_analysis_id:
 
-            record = (
+            current_record = (
                 db.query(
                     AnalysisRecord
                 )
@@ -413,25 +454,102 @@ def save_w434_analysis_record(
                 .first()
             )
 
-        if record is not None:
+            if current_record is not None:
 
-            if (
-        record.status
-        not in {
-            "DRAFT",
-            "UNDER_REVIEW",
-            "REJECTED"
-        }
-    ):
+                same_identity = (
+                    str(
+                        current_record.exam_no
+                        or ""
+                    ).strip()
+                    == identity_exam_no
 
-             raise ValueError(
-            "此分析紀錄已完成審核，"
-            "不可直接覆寫。"
-        )
+                    and str(
+                        current_record.method_code
+                        or ""
+                    ).strip()
+                    == identity_method_code
+
+                    and str(
+                        current_record.instrument_id
+                        or ""
+                    ).strip()
+                    == identity_instrument_id
+
+                    and current_record.analysis_start_date
+                    == analysis_start_date
+
+                    and current_record.analysis_end_date
+                    == analysis_end_date
+                )
+
+                if same_identity:
+
+                    record = current_record
 
         # ========================================
-        # 尚未建立
-        # → 新增 AnalysisRecord
+        # 2. 目前 formal_analysis_id 不存在，
+        #    或基本資料 Identity 已改變
+        #
+        #    → 依 Analysis Identity 尋找
+        #      是否已有正式紀錄。
+        # ========================================
+
+        if record is None:
+
+            record = (
+                db.query(
+                    AnalysisRecord
+                )
+                .filter(
+                    AnalysisRecord.exam_no
+                    == identity_exam_no,
+
+                    AnalysisRecord.method_code
+                    == identity_method_code,
+
+                    AnalysisRecord.instrument_id
+                    == identity_instrument_id,
+
+                    AnalysisRecord.analysis_start_date
+                    == analysis_start_date,
+
+                    AnalysisRecord.analysis_end_date
+                    == analysis_end_date
+                )
+                .order_by(
+                    AnalysisRecord.id.desc()
+                )
+                .first()
+            )
+
+        # ========================================
+        # 3. 找到相同 Analysis Identity
+        #    → 更新既有紀錄
+        # ========================================
+
+        if record is not None:
+
+            previous_status = (
+                record.status
+            )
+
+            if (
+                record.status
+                not in {
+                    "DRAFT",
+                    "UNDER_REVIEW",
+                    "REJECTED"
+                }
+            ):
+
+                raise ValueError(
+                    "此分析紀錄已完成審核，"
+                    "不可直接覆寫。"
+                )
+
+        # ========================================
+        # 4. 完全找不到相同 Analysis Identity
+        #    → 建立新的 AnalysisRecord
         # ========================================
 
         else:
@@ -455,13 +573,7 @@ def save_w434_analysis_record(
                     or ""
                 ).strip(),
 
-                exam_no=str(
-                    control_data.get(
-                        "EXAMNO",
-                        ""
-                    )
-                    or ""
-                ).strip(),
+                exam_no=identity_exam_no,
 
                 exam_name=str(
                     form_data.get(
@@ -471,13 +583,9 @@ def save_w434_analysis_record(
                     or ""
                 ).strip(),
 
-                method_code=str(
-                    form_data.get(
-                        "method_code",
-                        ""
-                    )
-                    or ""
-                ).strip(),
+                method_code=(
+                    identity_method_code
+                ),
 
                 method_name=str(
                     control_data.get(
@@ -487,13 +595,9 @@ def save_w434_analysis_record(
                     or ""
                 ).strip(),
 
-                instrument_id=str(
-                    form_data.get(
-                        "instrument_id",
-                        ""
-                    )
-                    or ""
-                ).strip(),
+                instrument_id=(
+                    identity_instrument_id
+                ),
 
                 instrument_model=str(
                     form_data.get(
@@ -544,6 +648,38 @@ def save_w434_analysis_record(
         # 更新主檔
         # ========================================
         record.status = "UNDER_REVIEW"
+
+        if (
+            previous_status == "REJECTED"
+        ):
+
+            review_history = AnalysisReviewHistory(
+                analysis_id=record.analysis_id,
+
+                action="RESUBMIT",
+
+                from_status="REJECTED",
+
+                to_status="UNDER_REVIEW",
+
+                reviewer_user_id=(
+                    analyst_user_id
+                ),
+
+                reviewer_employee_id=(
+                    analyst_employee_id
+                ),
+
+                reviewer_name=(
+                    analyst_name
+                ),
+
+                comment=""
+            )
+
+            db.add(
+                review_history
+            )
 
         record.ctrl_year = str(
             form_data.get(
@@ -1334,6 +1470,57 @@ def save_w434_analysis_record(
                 )
 
                 qaqc_display_order += 1
+
+            # ========================================
+        # AnalysisWorkState
+        #
+        # 保存完整 W434 工作狀態，
+        # 供退回修正時重新進入原分析資料。
+        # ========================================
+
+        work_state = (
+            db.query(
+                AnalysisWorkState
+            )
+            .filter(
+                AnalysisWorkState.analysis_id
+                == record.analysis_id
+            )
+            .first()
+        )
+
+        if work_state is None:
+
+            work_state = AnalysisWorkState(
+                analysis_id=record.analysis_id,
+                method_code=record.method_code
+            )
+
+            db.add(
+                work_state
+            )
+
+        work_state.method_code = (
+            record.method_code
+        )
+
+        snapshot_state = dict(
+            analysis_state
+        )
+
+        snapshot_state[
+            "formal_analysis_id"
+        ] = record.analysis_id
+
+        work_state.state_json = json.dumps(
+            snapshot_state,
+            ensure_ascii=False
+        )
+
+        work_state.form_data_json = json.dumps(
+            form_data,
+            ensure_ascii=False
+        )
 
         db.commit()
 

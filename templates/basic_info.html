@@ -539,13 +539,13 @@
         "
     >
 
-        <button
-            type="button"
-            class="eacs-button eacs-button-primary"
-            onclick="alert('手動輸入功能下一階段建置')"
-        >
-            進入手動輸入
-        </button>
+<button
+    type="button"
+    class="eacs-button eacs-button-primary"
+    onclick="submitBasicInfoForManual()"
+>
+    進入手動輸入
+</button>
 
     </div>
 
@@ -1022,6 +1022,28 @@ function queryAnalysisRecords() {
         "{{ url_for('analysis_records') }}"
         + "?"
         + params.toString();
+}
+
+function submitBasicInfoForManual() {
+
+    const form = document.getElementById(
+        "basic-info-form"
+    );
+
+    const nextAction = document.getElementById(
+        "next_action"
+    );
+
+    if (
+        !form
+        || !nextAction
+    ) {
+        return;
+    }
+
+    nextAction.value = "manual_entry";
+
+    form.submit();
 }
 
     function submitBasicInfoForImport() {

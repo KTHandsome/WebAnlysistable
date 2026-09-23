@@ -7,8 +7,11 @@ from flask import (
     session,
     send_file
 )
-from datetime import timedelta
+
+from datetime import datetime, timedelta
+
 from parsers.pe900_parser import parse_pe900_pdf
+
 from calculations.w43401 import (
     calculate_calibration,
     calculate_sample_concentration
@@ -56,12 +59,15 @@ from models import (
     AnalysisCalibrationSummary,
     AnalysisQaqcResult,
     AnalysisRecord,
-    AnalysisSample
+    AnalysisReviewHistory,
+    AnalysisSample,
+    AnalysisWorkState
 )
 
 import os
 import csv
 import io
+import json
 import tempfile
 
 app = Flask(__name__)
@@ -934,6 +940,21 @@ def analysis_record_detail(
             .all()
         )
 
+        review_history = (
+            db.query(
+                AnalysisReviewHistory
+            )
+            .filter(
+                AnalysisReviewHistory.analysis_id
+                == analysis_id
+            )
+            .order_by(
+                AnalysisReviewHistory.created_at,
+                AnalysisReviewHistory.id
+            )
+            .all()
+        )
+
         return render_template(
             "analysis_record_detail.html",
             record=record,
@@ -941,12 +962,589 @@ def analysis_record_detail(
             calibration_points=calibration_points,
             samples=samples,
             qaqc_results=qaqc_results,
+            review_history=review_history,
             active_page="analysis_records"
         )
+    finally:
+
+        db.close()
+
+
+@app.route(
+    "/analysis-records/<analysis_id>/approve",
+    methods=["POST"]
+)
+@login_required
+def approve_analysis_record(
+    analysis_id
+):
+
+    db = SessionLocal()
+
+    try:
+
+        record = (
+            db.query(
+                AnalysisRecord
+            )
+            .filter(
+                AnalysisRecord.analysis_id
+                == analysis_id
+            )
+            .first()
+        )
+
+        if record is None:
+
+            return (
+                "查無此分析紀錄。",
+                404
+            )
+
+        if (
+            record.status
+            != "UNDER_REVIEW"
+        ):
+
+            return (
+                "只有待審核紀錄可以執行審核通過。",
+                400
+            )
+
+        current_user = (
+            get_current_user()
+            or {}
+        )
+
+        previous_status = (
+            record.status
+        )
+
+        record.status = (
+            "APPROVED"
+        )
+
+        record.reviewer_user_id = str(
+            current_user.get(
+                "user_id",
+                ""
+            )
+            or ""
+        ).strip()
+
+        record.reviewer_employee_id = str(
+            current_user.get(
+                "employee_id",
+                ""
+            )
+            or ""
+        ).strip()
+
+        record.reviewer_name = str(
+            current_user.get(
+                "employee_name",
+                ""
+            )
+            or ""
+        ).strip()
+
+        record.reviewed_at = (
+    datetime.utcnow()
+)
+
+        record.review_comment = (
+            request.form.get(
+                "review_comment",
+                ""
+            ).strip()
+        )
+
+        review_history = AnalysisReviewHistory(
+            analysis_id=record.analysis_id,
+
+            action="APPROVE",
+
+            from_status=previous_status,
+
+            to_status="APPROVED",
+
+            reviewer_user_id=(
+                record.reviewer_user_id
+            ),
+
+            reviewer_employee_id=(
+                record.reviewer_employee_id
+            ),
+
+            reviewer_name=(
+                record.reviewer_name
+            ),
+
+            comment=(
+                record.review_comment
+            )
+        )
+
+        db.add(
+            review_history
+        )
+
+        db.commit()
+
+        return redirect(
+            url_for(
+                "analysis_record_detail",
+                analysis_id=analysis_id
+            )
+        )
+
+    except Exception:
+
+        db.rollback()
+        raise
 
     finally:
 
         db.close()
+
+
+@app.route(
+    "/analysis-records/<analysis_id>/reject",
+    methods=["POST"]
+)
+@login_required
+def reject_analysis_record(
+    analysis_id
+):
+
+    review_comment = (
+        request.form.get(
+            "review_comment",
+            ""
+        ).strip()
+    )
+
+    if not review_comment:
+
+        return (
+            "退回修正時必須填寫退回原因。",
+            400
+        )
+
+    db = SessionLocal()
+
+    try:
+
+        record = (
+            db.query(
+                AnalysisRecord
+            )
+            .filter(
+                AnalysisRecord.analysis_id
+                == analysis_id
+            )
+            .first()
+        )
+
+        if record is None:
+
+            return (
+                "查無此分析紀錄。",
+                404
+            )
+
+        if (
+            record.status
+            != "UNDER_REVIEW"
+        ):
+
+            return (
+                "只有待審核紀錄可以退回修正。",
+                400
+            )
+
+        current_user = (
+            get_current_user()
+            or {}
+        )
+
+        previous_status = (
+            record.status
+        )
+
+        record.status = (
+            "REJECTED"
+        )
+
+        record.reviewer_user_id = str(
+            current_user.get(
+                "user_id",
+                ""
+            )
+            or ""
+        ).strip()
+
+        record.reviewer_employee_id = str(
+            current_user.get(
+                "employee_id",
+                ""
+            )
+            or ""
+        ).strip()
+
+        record.reviewer_name = str(
+            current_user.get(
+                "employee_name",
+                ""
+            )
+            or ""
+        ).strip()
+
+        record.reviewed_at = (
+    datetime.utcnow()
+)
+
+        record.review_comment = (
+            review_comment
+        )
+
+        review_history = AnalysisReviewHistory(
+            analysis_id=record.analysis_id,
+
+            action="REJECT",
+
+            from_status=previous_status,
+
+            to_status="REJECTED",
+
+            reviewer_user_id=(
+                record.reviewer_user_id
+            ),
+
+            reviewer_employee_id=(
+                record.reviewer_employee_id
+            ),
+
+            reviewer_name=(
+                record.reviewer_name
+            ),
+
+            comment=(
+                record.review_comment
+            )
+        )
+
+        db.add(
+            review_history
+        )       
+
+        db.commit()
+
+        return redirect(
+            url_for(
+                "analysis_record_detail",
+                analysis_id=analysis_id
+            )
+        )
+
+    except Exception:
+
+        db.rollback()
+        raise
+
+    finally:
+
+        db.close()
+
+@app.route(
+    "/analysis-records/<analysis_id>/reopen",
+    methods=["POST"]
+)
+@login_required
+def reopen_approved_analysis_record(
+    analysis_id
+):
+
+    review_comment = (
+        request.form.get(
+            "review_comment",
+            ""
+        ).strip()
+    )
+
+    if not review_comment:
+
+        return (
+            "再次退回修正時必須填寫原因。",
+            400
+        )
+
+    db = SessionLocal()
+
+    try:
+
+        record = (
+            db.query(
+                AnalysisRecord
+            )
+            .filter(
+                AnalysisRecord.analysis_id
+                == analysis_id
+            )
+            .first()
+        )
+
+        if record is None:
+
+            return (
+                "查無此分析紀錄。",
+                404
+            )
+
+        if (
+            record.status
+            != "APPROVED"
+        ):
+
+            return (
+                "只有已審核紀錄"
+                "可以再次退回修正。",
+                400
+            )
+
+        current_user = (
+            get_current_user()
+            or {}
+        )
+
+        previous_status = (
+            record.status
+        )
+
+        record.status = (
+            "REJECTED"
+        )
+
+        record.reviewer_user_id = str(
+            current_user.get(
+                "user_id",
+                ""
+            )
+            or ""
+        ).strip()
+
+        record.reviewer_employee_id = str(
+            current_user.get(
+                "employee_id",
+                ""
+            )
+            or ""
+        ).strip()
+
+        record.reviewer_name = str(
+            current_user.get(
+                "employee_name",
+                ""
+            )
+            or ""
+        ).strip()
+
+        record.reviewed_at = (
+            datetime.utcnow()
+        )
+
+        record.review_comment = (
+            review_comment
+        )
+
+        review_history = AnalysisReviewHistory(
+            analysis_id=record.analysis_id,
+
+            action="REOPEN_AFTER_APPROVAL",
+
+            from_status=previous_status,
+
+            to_status="REJECTED",
+
+            reviewer_user_id=(
+                record.reviewer_user_id
+            ),
+
+            reviewer_employee_id=(
+                record.reviewer_employee_id
+            ),
+
+            reviewer_name=(
+                record.reviewer_name
+            ),
+
+            comment=(
+                record.review_comment
+            )
+        )
+
+        db.add(
+            review_history
+        )
+
+        db.commit()
+
+        return redirect(
+            url_for(
+                "analysis_record_detail",
+                analysis_id=analysis_id
+            )
+        )
+
+    except Exception:
+
+        db.rollback()
+        raise
+
+    finally:
+
+        db.close()       
+
+@app.route(
+    "/analysis-records/<analysis_id>/resume",
+    methods=["POST"]
+)
+@login_required
+def resume_analysis_record(
+    analysis_id
+):
+
+    db = SessionLocal()
+
+    try:
+
+        record = (
+            db.query(
+                AnalysisRecord
+            )
+            .filter(
+                AnalysisRecord.analysis_id
+                == analysis_id
+            )
+            .first()
+        )
+
+        if record is None:
+
+            return (
+                "查無此分析紀錄。",
+                404
+            )
+
+        if (
+            record.status
+            != "REJECTED"
+        ):
+
+            return (
+                "只有退回修正的分析紀錄"
+                "可以重新進入修正。",
+                400
+            )
+
+        if (
+            record.method_code
+            != "W434"
+        ):
+
+            return (
+                "目前只支援 W434 "
+                "退回紀錄重新進入修正。",
+                400
+            )
+
+        work_state = (
+            db.query(
+                AnalysisWorkState
+            )
+            .filter(
+                AnalysisWorkState.analysis_id
+                == analysis_id
+            )
+            .first()
+        )
+
+        if work_state is None:
+
+            return (
+                "此分析紀錄沒有可恢復的"
+                "原分析工作資料。",
+                400
+            )
+
+        try:
+
+            analysis_state = json.loads(
+                work_state.state_json
+                or "{}"
+            )
+
+            form_data = json.loads(
+                work_state.form_data_json
+                or "{}"
+            )
+
+        except json.JSONDecodeError:
+
+            return (
+                "原分析工作資料格式異常，"
+                "無法恢復。",
+                500
+            )
+
+        if not analysis_state:
+
+            return (
+                "原分析工作資料內容為空白，"
+                "無法恢復。",
+                400
+            )
+
+        if not form_data:
+
+            return (
+                "原分析基本資料內容為空白，"
+                "無法恢復。",
+                400
+            )
+
+    finally:
+
+        db.close()
+
+    # ========================================
+    # 確保恢復後仍然指向原正式紀錄
+    # 避免重新儲存時產生另一筆 AnalysisRecord
+    # ========================================
+
+    analysis_state[
+        "formal_analysis_id"
+    ] = analysis_id
+
+    save_analysis_state(
+        "W434_CURRENT",
+        analysis_state
+    )
+
+    session[
+        "basic_info_form"
+    ] = form_data
+
+    session[
+        "w434_formal_analysis_id"
+    ] = analysis_id
+
+    return redirect(
+        url_for(
+            "analysis_w43401",
+            saved="1"
+        )
+    )
 
 @app.route("/basic-info", methods=["GET", "POST"])
 @login_required
@@ -1113,6 +1711,19 @@ def basic_info():
                 error_message = (
                     "請選擇儀器後繼續。"
                 )
+        if (
+            next_action == "manual_entry"
+            and method_data
+            and form_data.get(
+                "instrument_id"
+            )
+        ):
+
+            return redirect(
+                url_for(
+                    "manual_analysis_entry"
+                )
+            )
 
         if (
             next_action == "import_w434"
@@ -1167,6 +1778,88 @@ def basic_info():
         form_data=form_data,
         instrument_options=instrument_options,
         active_page="analysis_basic"
+    )
+
+@app.route(
+    "/analysis/manual",
+    methods=["GET"]
+)
+@login_required
+def manual_analysis_entry():
+
+    form_data = session.get(
+        "basic_info_form"
+    )
+
+    if not form_data:
+
+        return redirect(
+            url_for(
+                "basic_info"
+            )
+        )
+
+    (
+        control_data,
+        method_data,
+        load_error
+    ) = load_control_and_method_data(
+        form_data
+    )
+
+    if load_error:
+
+        return redirect(
+            url_for(
+                "basic_info"
+            )
+        )
+
+    entry_mode = str(
+        method_data.get(
+            "DATA_ENTRY_MODE",
+            ""
+        )
+        or ""
+    ).strip().upper()
+
+    if entry_mode not in {
+        "MANUAL",
+        "BOTH"
+    }:
+
+        return (
+            "此分析方法未開放手動輸入。",
+            400
+        )
+
+    try:
+
+        calibration_count = int(
+            method_data.get(
+                "CALIBRATION_COUNT",
+                "0"
+            )
+        )
+
+    except ValueError:
+
+        calibration_count = 0
+
+    if calibration_count <= 0:
+
+        return (
+            "方法設定的檢量線點數無效。",
+            400
+        )
+
+    return render_template(
+        "analysis/manual_entry.html",
+        active_page="analysis_method",
+        form_data=form_data,
+        control_data=control_data,
+        method_data=method_data,
+        calibration_count=calibration_count
     )
 
 def classify_w434_rows(preview_rows, method_data):
@@ -1411,7 +2104,9 @@ def analysis_w43401():
                 current_analysis_name="W434 砷分析",
                 current_analysis_url="/analysis/w43401",
                 analysis_version="1.00",
-
+                error_message=request.args.get(
+                      "error_message"
+                ),
                 preview_rows=saved_state.get(
                     "preview_rows",
                     []
@@ -2725,17 +3420,25 @@ def save_w434_record():
 
     except ValueError as ex:
 
-        return (
-            str(ex),
-            400
+        return redirect(
+            url_for(
+                "analysis_w43401",
+                saved="1",
+                error_message=str(ex)
+            )
         )
 
     except Exception as ex:
 
-        return (
-            "建立正式分析紀錄失敗："
-            + str(ex),
-            500
+        return redirect(
+            url_for(
+                "analysis_w43401",
+                saved="1",
+                error_message=(
+                    "建立正式分析紀錄失敗："
+                    + str(ex)
+                )
+            )
         )
 
     analysis_state[

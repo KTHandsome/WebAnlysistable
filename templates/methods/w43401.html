@@ -67,6 +67,25 @@ W434 砷分析 - EACS
 
 {% endif %}
 
+{% if error_message %}
+
+<div
+    style="
+        margin-bottom: 16px;
+        padding: 12px 14px;
+        border: 1px solid #fecaca;
+        border-radius: 6px;
+        background-color: #fef2f2;
+        color: #b91c1c;
+        font-weight: 600;
+    "
+>
+    {{ error_message }}
+</div>
+
+{% endif %}
+
+
 <!-- PDF 匯入 -->
 <div class="eacs-card">
 

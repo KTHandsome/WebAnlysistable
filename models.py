@@ -10,8 +10,10 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     func
 )
+
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
@@ -129,6 +131,35 @@ class AnalysisRecord(Base):
 
     analyst_name: Mapped[str] = mapped_column(
         String(100),
+        nullable=False,
+        default=""
+    )
+
+    reviewer_user_id: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default=""
+    )
+
+    reviewer_employee_id: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default=""
+    )
+
+    reviewer_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default=""
+    )
+
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime,
+        nullable=True
+    )
+
+    review_comment: Mapped[str] = mapped_column(
+        String(500),
         nullable=False,
         default=""
     )
@@ -440,3 +471,118 @@ class AnalysisCalibrationPoint(Base):
         server_default=func.now(),
         onupdate=func.now()
     )    
+
+class AnalysisWorkState(Base):
+    __tablename__ = "analysis_work_state"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    analysis_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey(
+            "analysis_record.analysis_id"
+        ),
+        nullable=False,
+        unique=True,
+        index=True
+    )
+
+    method_code: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default=""
+    )
+
+    state_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="{}"
+    )
+
+    form_data_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="{}"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now()
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+class AnalysisReviewHistory(Base):
+    __tablename__ = "analysis_review_history"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    analysis_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey(
+            "analysis_record.analysis_id"
+        ),
+        nullable=False,
+        index=True
+    )
+
+    action: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False
+    )
+
+    from_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=""
+    )
+
+    to_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=""
+    )
+
+    reviewer_user_id: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default=""
+    )
+
+    reviewer_employee_id: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default=""
+    )
+
+    reviewer_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default=""
+    )
+
+    comment: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+        default=""
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now()
+    )

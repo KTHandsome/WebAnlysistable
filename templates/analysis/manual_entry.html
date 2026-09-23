@@ -1,0 +1,445 @@
+{% extends "base.html" %}
+
+{% block title %}
+手動分析資料輸入 - EACS Web
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+
+    <h1 class="page-title">
+        手動分析資料輸入
+    </h1>
+
+    <div class="page-subtitle">
+        建立分析原始序列資料。
+        資料完成後將由系統依分析方法設定進行分類與計算。
+    </div>
+
+</div>
+
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        分析基本資料
+    </h2>
+
+    <div class="eacs-info-grid">
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                測項
+            </div>
+            <div class="eacs-info-value">
+                {{ form_data.exam_name }}
+            </div>
+        </div>
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                測項代碼
+            </div>
+            <div class="eacs-info-value">
+                {{ control_data.EXAMNO }}
+            </div>
+        </div>
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                分析方法
+            </div>
+            <div class="eacs-info-value">
+                {{ form_data.method_code }}
+            </div>
+        </div>
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                儀器
+            </div>
+            <div class="eacs-info-value">
+                {{ form_data.instrument_id }}
+                {% if form_data.instrument_model %}
+                    / {{ form_data.instrument_model }}
+                {% endif %}
+            </div>
+        </div>
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                分析日期
+            </div>
+            <div class="eacs-info-value">
+                {{ form_data.analysis_start_date }}
+                ～
+                {{ form_data.analysis_end_date }}
+            </div>
+        </div>
+
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                檢量線點數
+            </div>
+            <div class="eacs-info-value">
+                {{ calibration_count }}
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+
+<div class="eacs-card">
+
+    <div style="
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+    ">
+
+        <div>
+
+            <h2
+                class="eacs-card-title"
+                style="margin-bottom: 4px;"
+            >
+                原始分析序列
+            </h2>
+
+            <div style="
+                color: var(--eacs-text-muted);
+                font-size: 14px;
+            ">
+                順序由系統自動編號；
+                新增或刪除資料列後會自動重新排序。
+            </div>
+
+        </div>
+
+
+        <button
+            type="button"
+            class="eacs-button eacs-button-secondary"
+            onclick="addManualRow()"
+        >
+            ＋ 新增列
+        </button>
+
+    </div>
+
+
+    <div style="
+        overflow-x: auto;
+    ">
+
+        <table style="
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 680px;
+        ">
+
+            <thead>
+
+                <tr style="
+                    background: var(--eacs-table-header-bg);
+                ">
+
+                    <th style="
+                        width: 90px;
+                        padding: 12px;
+                        text-align: center;
+                        border-bottom: 1px solid var(--eacs-border);
+                    ">
+                        順序
+                    </th>
+
+                    <th style="
+                        padding: 12px;
+                        text-align: left;
+                        border-bottom: 1px solid var(--eacs-border);
+                    ">
+                        樣品編號
+                    </th>
+
+                    <th style="
+                        width: 240px;
+                        padding: 12px;
+                        text-align: left;
+                        border-bottom: 1px solid var(--eacs-border);
+                    ">
+                        訊號值
+                    </th>
+
+                    <th style="
+                        width: 110px;
+                        padding: 12px;
+                        text-align: center;
+                        border-bottom: 1px solid var(--eacs-border);
+                    ">
+                        操作
+                    </th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody id="manual-entry-body">
+
+                {% for index in range(calibration_count) %}
+
+                <tr class="manual-entry-row">
+
+                    <td
+                        class="manual-sequence"
+                        style="
+                            padding: 10px;
+                            text-align: center;
+                            border-bottom: 1px solid var(--eacs-border-light);
+                            font-weight: 700;
+                        "
+                    >
+                        {{ index + 1 }}
+                    </td>
+
+
+                    <td style="
+                        padding: 10px;
+                        border-bottom: 1px solid var(--eacs-border-light);
+                    ">
+
+                        <input
+                            type="text"
+                            class="eacs-form-control manual-sample-id"
+                            placeholder="請輸入樣品編號"
+                        >
+
+                    </td>
+
+
+                    <td style="
+                        padding: 10px;
+                        border-bottom: 1px solid var(--eacs-border-light);
+                    ">
+
+                        <input
+                            type="number"
+                            step="any"
+                            class="eacs-form-control manual-signal"
+                            placeholder="請輸入訊號值"
+                        >
+
+                    </td>
+
+
+                    <td style="
+                        padding: 10px;
+                        text-align: center;
+                        border-bottom: 1px solid var(--eacs-border-light);
+                    ">
+
+                        <button
+                            type="button"
+                            class="eacs-button eacs-button-secondary"
+                            onclick="removeManualRow(this)"
+                        >
+                            刪除
+                        </button>
+
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+    <div style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 24px;
+    ">
+
+        <a
+            href="{{ url_for('basic_info') }}"
+            class="eacs-button eacs-button-secondary"
+            style="text-decoration: none;"
+        >
+            返回基本資料
+        </a>
+
+
+        <button
+            type="button"
+            class="eacs-button eacs-button-primary"
+            disabled
+            title="下一階段接入分析計算流程"
+        >
+            建立分析資料
+        </button>
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block script %}
+
+<script>
+
+    function renumberManualRows() {
+
+        const rows = document.querySelectorAll(
+            "#manual-entry-body .manual-entry-row"
+        );
+
+        rows.forEach(
+            function (row, index) {
+
+                const sequenceCell =
+                    row.querySelector(
+                        ".manual-sequence"
+                    );
+
+                if (sequenceCell) {
+                    sequenceCell.textContent =
+                        String(index + 1);
+                }
+
+            }
+        );
+    }
+
+
+    function addManualRow() {
+
+        const body = document.getElementById(
+            "manual-entry-body"
+        );
+
+        if (!body) {
+            return;
+        }
+
+
+        const row = document.createElement(
+            "tr"
+        );
+
+        row.className = "manual-entry-row";
+
+
+        row.innerHTML = `
+            <td
+                class="manual-sequence"
+                style="
+                    padding: 10px;
+                    text-align: center;
+                    border-bottom: 1px solid var(--eacs-border-light);
+                    font-weight: 700;
+                "
+            >
+            </td>
+
+            <td style="
+                padding: 10px;
+                border-bottom: 1px solid var(--eacs-border-light);
+            ">
+                <input
+                    type="text"
+                    class="eacs-form-control manual-sample-id"
+                    placeholder="請輸入樣品編號"
+                >
+            </td>
+
+            <td style="
+                padding: 10px;
+                border-bottom: 1px solid var(--eacs-border-light);
+            ">
+                <input
+                    type="number"
+                    step="any"
+                    class="eacs-form-control manual-signal"
+                    placeholder="請輸入訊號值"
+                >
+            </td>
+
+            <td style="
+                padding: 10px;
+                text-align: center;
+                border-bottom: 1px solid var(--eacs-border-light);
+            ">
+                <button
+                    type="button"
+                    class="eacs-button eacs-button-secondary"
+                    onclick="removeManualRow(this)"
+                >
+                    刪除
+                </button>
+            </td>
+        `;
+
+
+        body.appendChild(
+            row
+        );
+
+        renumberManualRows();
+
+
+        const sampleInput =
+            row.querySelector(
+                ".manual-sample-id"
+            );
+
+        if (sampleInput) {
+            sampleInput.focus();
+        }
+    }
+
+
+    function removeManualRow(button) {
+
+        const row = button.closest(
+            ".manual-entry-row"
+        );
+
+        if (!row) {
+            return;
+        }
+
+        row.remove();
+
+        renumberManualRows();
+    }
+
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        function () {
+            renumberManualRows();
+        }
+    );
+
+</script>
+
+{% endblock %}
