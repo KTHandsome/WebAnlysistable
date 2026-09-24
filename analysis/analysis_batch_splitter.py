@@ -109,6 +109,7 @@ def split_analysis_batches(rows):
 
     icv_index = None
     icbk_index = None
+    first_ccbk_index = None
 
     for index, row in enumerate(rows):
 
@@ -118,32 +119,58 @@ def split_analysis_batches(rows):
         ):
             icbk_index = index
 
+        if (
+            first_ccbk_index is None
+            and is_ccbk_row(row)
+        ):
+            first_ccbk_index = index
+
         if is_icv_row(row):
 
             icv_index = index
             break
 
-    # 找不到 ICV 時，不強行切批
-    if icv_index is None:
+    # ========================================
+    # 第一批起點判定
+    #
+    # 1. 有 ICV：
+    #    維持原本邏輯，
+    #    若前面有 ICBK，從 ICBK 開始。
+    #
+    # 2. 沒有 ICV：
+    #    Manual 可能從既有批次邊界開始，
+    #    此時允許由第一個 CCBK 開始切批。
+    #
+    # 3. ICV / CCBK 都沒有：
+    #    不強行切批。
+    # ========================================
 
-        return [], rows.copy()
+    if icv_index is not None:
 
-    # 第一批若有 ICBK，
-    # ICBK 屬於第一批，不屬於全域前置資料
-    if (
-        icbk_index is not None
-        and icbk_index < icv_index
-    ):
+        if (
+            icbk_index is not None
+            and icbk_index < icv_index
+        ):
+
+            first_batch_start_index = (
+                icbk_index
+            )
+
+        else:
+
+            first_batch_start_index = (
+                icv_index
+            )
+
+    elif first_ccbk_index is not None:
 
         first_batch_start_index = (
-            icbk_index
+            first_ccbk_index
         )
 
     else:
 
-        first_batch_start_index = (
-            icv_index
-        )
+        return [], rows.copy()
 
     # 此處只留下真正位於第一批之前的資料，
     # 例如 STANDARD
@@ -329,6 +356,8 @@ def filter_batches_by_exam_no(
                 "batch_category"
             )
         )
+
+        
 
         # 無正式樣品或混合類別：
         # 先保留，不自動刪除

@@ -47,7 +47,7 @@ try:
         wavelength=193.70,
 
         analyst_user_id="DEV",
-        analyst_employee_id="A11503-03",
+        analyst_employee_id="S097-06",
         analyst_name="測試人員",
 
         source_type="IMPORT",

@@ -96,6 +96,32 @@
 
 </div>
 
+{% if error_message %}
+
+<div style="
+    background-color: var(--eacs-danger-bg);
+    border: 1px solid #e1a5a5;
+    color: var(--eacs-danger);
+    padding: 12px 14px;
+    margin-bottom: 20px;
+    border-radius: 6px;
+">
+    {{ error_message }}
+</div>
+
+{% endif %}
+
+<form
+    method="post"
+    id="manual-entry-form"
+>
+
+    <input
+        type="hidden"
+        name="row_count"
+        id="row_count"
+        value="0"
+    >
 
 <div class="eacs-card">
 
@@ -196,7 +222,7 @@
 
             <tbody id="manual-entry-body">
 
-                {% for index in range(calibration_count) %}
+                {% for row in manual_rows %}
 
                 <tr class="manual-entry-row">
 
@@ -209,7 +235,7 @@
                             font-weight: 700;
                         "
                     >
-                        {{ index + 1 }}
+                        {{ loop.index }}
                     </td>
 
 
@@ -219,10 +245,11 @@
                     ">
 
                         <input
-                            type="text"
-                            class="eacs-form-control manual-sample-id"
-                            placeholder="請輸入樣品編號"
-                        >
+    type="text"
+    class="eacs-form-control manual-sample-id"
+    placeholder="請輸入樣品編號"
+    value="{{ row.sample_id }}"
+>
 
                     </td>
 
@@ -233,11 +260,12 @@
                     ">
 
                         <input
-                            type="number"
-                            step="any"
-                            class="eacs-form-control manual-signal"
-                            placeholder="請輸入訊號值"
-                        >
+    type="number"
+    step="any"
+    class="eacs-form-control manual-signal"
+    placeholder="請輸入測定值"
+    value="{{ row.signal }}"
+>
 
                     </td>
 
@@ -287,17 +315,18 @@
 
 
         <button
-            type="button"
-            class="eacs-button eacs-button-primary"
-            disabled
-            title="下一階段接入分析計算流程"
-        >
-            建立分析資料
-        </button>
+    type="submit"
+    form="manual-entry-form"
+    class="eacs-button eacs-button-primary"
+>
+    建立分析資料
+</button>
 
     </div>
 
 </div>
+
+</form>
 
 {% endblock %}
 
@@ -325,8 +354,43 @@
                         String(index + 1);
                 }
 
+                const sampleInput =
+                      row.querySelector(
+                      ".manual-sample-id"
+                );
+
+               const signalInput =
+                     row.querySelector(
+                     ".manual-signal"
+                );
+
+               if (sampleInput) {
+
+                   sampleInput.name =
+                   "sample_id_"
+                   + String(index);
+                }
+
+            if (signalInput) {
+
+                   signalInput.name =
+                   "signal_"
+                   + String(index);
+            }
+
             }
         );
+
+        const rowCount =
+            document.getElementById(
+            "row_count"
+        );
+
+        if (rowCount) {
+
+           rowCount.value =
+           String(rows.length);
+        }
     }
 
 
@@ -433,12 +497,70 @@
     }
 
 
-    document.addEventListener(
-        "DOMContentLoaded",
-        function () {
-            renumberManualRows();
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
+
+        renumberManualRows();
+
+        const form =
+            document.getElementById(
+                "manual-entry-form"
+            );
+
+        if (!form) {
+            return;
         }
-    );
+
+        form.addEventListener(
+            "keydown",
+            function (event) {
+
+                if (
+                    event.key !== "Enter"
+                    || event.target.tagName !== "INPUT"
+                ) {
+                    return;
+                }
+
+                // Enter 僅作為移動到下一輸入欄，
+                // 不允許直接送出表單。
+                event.preventDefault();
+
+                const inputs = Array.from(
+                    form.querySelectorAll(
+                        ".manual-sample-id, .manual-signal"
+                    )
+                );
+
+                const currentIndex =
+                    inputs.indexOf(
+                        event.target
+                    );
+
+                if (
+                    currentIndex >= 0
+                    && currentIndex < inputs.length - 1
+                ) {
+
+                    inputs[
+                        currentIndex + 1
+                    ].focus();
+
+                    inputs[
+                        currentIndex + 1
+                    ].select();
+
+                    return;
+                }
+
+                // 已經在最後一格時，
+                // Enter 自動增加下一筆資料列。
+                addManualRow();
+            }
+        );
+    }
+);
 
 </script>
 

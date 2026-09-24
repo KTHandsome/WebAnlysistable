@@ -84,7 +84,7 @@ output_path = (
 excel_buffer = build_lims_excel(
     template_path=template_path,
     export_data=export_data,
-    analyst_id="A11503-03",
+    analyst_id="S097-06",
     analyst_name="測試人員",
     analysis_method="NIEA W434.54B"
 )

@@ -155,7 +155,7 @@ def dev_login():
 
     set_current_user(
         user_id="DEV",
-        employee_id="A11503-03",
+        employee_id="S097-06",
         employee_name="測試人員",
         group_id="04",
         group_name="分析部",
@@ -1782,7 +1782,7 @@ def basic_info():
 
 @app.route(
     "/analysis/manual",
-    methods=["GET"]
+    methods=["GET", "POST"]
 )
 @login_required
 def manual_analysis_entry():
@@ -1853,13 +1853,591 @@ def manual_analysis_entry():
             400
         )
 
+    manual_rows = []
+    error_message = None
+
+    # ========================================
+    # 手動資料送出
+    # ========================================
+
+    if request.method == "POST":
+
+        try:
+
+            row_count = int(
+                request.form.get(
+                    "row_count",
+                    "0"
+                )
+            )
+
+        except ValueError:
+
+            row_count = 0
+
+        if row_count < calibration_count:
+
+            error_message = (
+                "資料列數不可少於檢量線點數 "
+                + str(calibration_count)
+                + " 筆。"
+            )
+
+        preview_rows = []
+
+        if error_message is None:
+
+            for index in range(
+                row_count
+            ):
+
+                sample_id = (
+                    request.form.get(
+                        "sample_id_"
+                        + str(index),
+                        ""
+                    )
+                    .strip()
+                )
+
+                signal_text = (
+                    request.form.get(
+                        "signal_"
+                        + str(index),
+                        ""
+                    )
+                    .strip()
+                )
+
+                manual_rows.append(
+                    {
+                        "sample_id":
+                            sample_id,
+
+                        "signal":
+                            signal_text
+                    }
+                )
+
+                if not sample_id:
+
+                    error_message = (
+                        "第 "
+                        + str(index + 1)
+                        + " 筆資料尚未輸入樣品編號。"
+                    )
+
+                    break
+
+                if not signal_text:
+
+                    error_message = (
+                        "第 "
+                        + str(index + 1)
+                        + " 筆資料尚未輸入訊號值。"
+                    )
+
+                    break
+
+                try:
+
+                    signal = float(
+                        signal_text
+                    )
+
+                except ValueError:
+
+                    error_message = (
+                        "第 "
+                        + str(index + 1)
+                        + " 筆訊號值格式不正確。"
+                    )
+
+                    break
+
+                preview_rows.append(
+                    {
+                        "sequence_no":
+                            index + 1,
+
+                        "sample_id":
+                            sample_id,
+
+                        "signal":
+                            signal,
+
+                        "analyte":
+                            str(
+                                method_data.get(
+                                    "ANALYTE_DISPLAY",
+                                    ""
+                                )
+                                or ""
+                            ).strip(),
+
+                        "wavelength":
+                            None
+                    }
+                )
+
+        # ========================================
+        # 第一階段先支援 W434
+        #
+        # UI / 原始資料結構仍維持通用，
+        # 後續其他方法再接各自 calculator。
+        # ========================================
+
+        if (
+            error_message is None
+            and preview_rows
+        ):
+
+            method_code = str(
+                form_data.get(
+                    "method_code",
+                    ""
+                )
+                or ""
+            ).strip().upper()
+
+            if method_code != "W434":
+
+                error_message = (
+                    "目前手動分析資料建立"
+                    "先支援 W434；"
+                    "其他方法的計算模組尚未接入。"
+                )
+
+        if (
+            error_message is None
+            and preview_rows
+        ):
+
+            preview_rows = (
+                classify_w434_rows(
+                    preview_rows,
+                    method_data
+                )
+            )
+             
+            # ========================================
+            # Manual 與 PDF Import 共用相同 Batch 邏輯
+            # ========================================
+
+            included_batches = []
+            excluded_rows = []
+
+            if control_data:
+
+                selected_exam_no = (
+                  control_data.get(
+                  "EXAMNO",
+                  ""
+                )
+                 .strip()
+              )
+
+            (
+                preview_rows,
+                excluded_rows,
+                included_batches
+              ) = filter_batches_by_exam_no(
+                preview_rows,
+                selected_exam_no
+              )
+
+            (    
+               calibration_rows,
+               sample_qaqc_rows
+               ) = split_analysis_rows(
+            preview_rows
+            )   
+
+            try:
+
+                calibration_result = (
+                    calculate_calibration(
+                        preview_rows
+                    )
+                )
+
+            except ValueError as ex:
+
+                error_message = (
+                    "檢量線計算失敗："
+                    + str(ex)
+                )
+
+        # ========================================
+        # 檢量線成功
+        # → 建立與匯入模式相同的 W434_CURRENT
+        # ========================================
+
+        if (
+            error_message is None
+            and preview_rows
+            and calibration_result
+        ):
+
+            existing_state = (
+                load_analysis_state(
+                    "W434_CURRENT"
+                )
+                or {}
+            )
+
+            formal_analysis_id = str(
+                existing_state.get(
+                    "formal_analysis_id",
+                    ""
+                )
+                or session.get(
+                    "w434_formal_analysis_id",
+                    ""
+                )
+                or ""
+            ).strip()
+
+            # ------------------------------------
+            # 手動模式沒有儀器檔波長
+            # 直接使用 Basic Info 的人工波長
+            # ------------------------------------
+
+            basic_wavelength_text = str(
+                form_data.get(
+                    "wavelength",
+                    ""
+                )
+                or ""
+            ).strip()
+
+            confirmed_wavelength = None
+            wavelength_warning = None
+
+            if basic_wavelength_text:
+
+                try:
+
+                    confirmed_wavelength = float(
+                        basic_wavelength_text
+                    )
+
+                except ValueError:
+
+                    wavelength_warning = (
+                        "基本資料的波長格式不正確："
+                        + basic_wavelength_text
+                    )
+
+            else:
+
+                wavelength_warning = (
+                    "基本資料尚未填寫有效波長。"
+                )
+
+            # ------------------------------------
+            # QDL
+            # ------------------------------------
+
+            qdl_value = None
+
+            qdl_source = str(
+                method_data.get(
+                    "QDL_SOURCE",
+                    ""
+                )
+                or ""
+            ).strip().upper()
+
+            qdl_multiplier_text = str(
+                method_data.get(
+                    "QDL_MULTIPLIER",
+                    ""
+                )
+                or ""
+            ).strip()
+
+            if (
+                qdl_source
+                == "FIRST_NONZERO_CALIBRATION_X"
+            ):
+
+                first_nonzero_x = None
+
+                for row in calibration_rows:
+
+                    x_value = row.get(
+                        "calibration_x"
+                    )
+
+                    if (
+                        x_value is not None
+                        and x_value > 0
+                    ):
+
+                        first_nonzero_x = (
+                            x_value
+                        )
+
+                        break
+
+                if first_nonzero_x is not None:
+
+                    try:
+
+                        qdl_multiplier = float(
+                            qdl_multiplier_text
+                        )
+
+                        qdl_value = (
+                            first_nonzero_x
+                            * qdl_multiplier
+                        )
+
+                    except ValueError:
+
+                        qdl_value = None
+
+            # ------------------------------------
+            # 樣品 / QAQC 預設欄位
+            # ------------------------------------
+
+            spike_field_by_role = {
+              "ICV": "ICV_SPIKE_CONC",
+              "QC": "QC_SPIKE_CONC",
+              "CCV": "CCV_SPIKE_CONC",
+              "MS": "MS_SPIKE_CONC",
+              "MSD": "MS_SPIKE_CONC"
+            }
+
+            for row in sample_qaqc_rows:
+
+                row[
+                    "sample_volume"
+                ] = 25
+
+                row[
+                    "final_volume"
+                ] = 50
+
+                row[
+                    "dilution_factor"
+                ] = 1
+
+                role = str(
+                    row.get(
+                        "role",
+                        ""
+                    )
+                    or ""
+                ).strip().upper()
+
+                field_name = (
+                    spike_field_by_role.get(
+                        role
+                    )
+                )
+
+                if field_name:
+
+                    row[
+                        "spike_concentration"
+                    ] = (
+                        method_data.get(
+                            field_name,
+                            ""
+                        )
+                        .strip()
+                    )
+
+                else:
+
+                    row[
+                        "spike_concentration"
+                    ] = ""  
+
+                row[
+                    "remark"
+                ] = ""
+
+                row[
+                    "is_excluded"
+                ] = False
+
+                row[
+                    "exclusion_reason"
+                ] = ""
+
+                row[
+                    "calculated_concentration"
+                ] = None
+
+                try:
+
+                    result = (
+                        calculate_sample_concentration(
+                            signal=row["signal"],
+                            slope=calibration_result[
+                                "slope"
+                            ],
+                            intercept=calibration_result[
+                                "intercept"
+                            ],
+                            sample_volume=row[
+                                "sample_volume"
+                            ],
+                            final_volume=row[
+                                "final_volume"
+                            ],
+                            dilution_factor=row[
+                                "dilution_factor"
+                            ]
+                        )
+                    )
+
+                    row[
+                        "calculated_concentration"
+                    ] = result[
+                        "calculated_concentration"
+                    ]
+
+                except ValueError:
+
+                    row[
+                        "calculated_concentration"
+                    ] = None
+
+            # ========================================
+            # Manual QA/QC 檢核
+            # ========================================
+
+            qaqc_results = []
+
+            if (
+                included_batches
+                and control_data
+            ):
+
+                qaqc_results = (
+                    build_qaqc_check_results(
+                        included_batches,
+                        control_data,
+                        cc_relative_error_limit=20.0,
+                        qdl_value=qdl_value
+                    )
+                ) 
+
+            print(
+                "[MANUAL QAQC]",
+                "included_batches=",
+                len(included_batches),
+                "| qaqc_results=",
+                len(qaqc_results)
+            )
+
+            for batch in included_batches:
+                print(
+                    "[MANUAL BATCH]",
+                    "batch_no=",
+                    batch.get("batch_no"),
+                    "| category=",
+                    batch.get("batch_category"),
+                    "| rows=",
+                    [
+                        (
+                            row.get("role"),
+                            row.get("sample_id"),
+                            row.get("calculated_concentration"),
+                            row.get("spike_concentration")
+                        )
+                        for row in batch.get(
+                            "rows",
+                            []
+                        )
+                    ]
+                )
+
+            save_analysis_state(
+                "W434_CURRENT",
+                {
+                    "preview_rows":
+                        preview_rows,
+
+                    "calibration_rows":
+                        calibration_rows,
+
+                    "calibration_result":
+                        calibration_result,
+
+                    "sample_qaqc_rows":
+                        sample_qaqc_rows,
+
+                    "sample_data_saved":
+                        False,
+
+                    "included_batches":
+                        included_batches,
+
+                    "qaqc_results":
+                        qaqc_results,
+
+                    "qdl_value":
+                        qdl_value,
+
+                    "instrument_analyte":
+                        "",
+
+                    "instrument_wavelength":
+                        None,
+
+                    "confirmed_wavelength":
+                        confirmed_wavelength,
+
+                    "wavelength_warning":
+                        wavelength_warning,
+
+                    # 手動輸入沒有來源檔案
+                    # 正式儲存時因此會辨識為 MANUAL
+                    "uploaded_filename":
+                        None,
+
+                    "formal_analysis_id":
+                        formal_analysis_id
+                }
+            )
+
+            return redirect(
+                url_for(
+                    "analysis_w43401",
+                    saved="1"
+                )
+            )
+
+    # ========================================
+    # GET 或驗證失敗
+    # ========================================
+
+    if not manual_rows:
+
+        manual_rows = [
+            {
+                "sample_id": "",
+                "signal": ""
+            }
+            for _ in range(
+                calibration_count
+            )
+        ]
+
     return render_template(
         "analysis/manual_entry.html",
         active_page="analysis_method",
         form_data=form_data,
         control_data=control_data,
         method_data=method_data,
-        calibration_count=calibration_count
+        calibration_count=calibration_count,
+        manual_rows=manual_rows,
+        error_message=error_message
     )
 
 def classify_w434_rows(preview_rows, method_data):
@@ -2340,7 +2918,37 @@ def analysis_w43401():
 
     for row in sample_qaqc_rows:
 
-        row["spike_concentration"] = ""
+        role = str(
+            row.get(
+            "role",
+            ""
+            )
+           or ""
+        ).strip().upper()
+
+        field_name = (
+           spike_field_by_role.get(
+           role
+           )
+        )
+
+        if field_name:
+
+          row[
+               "spike_concentration"
+          ] = (
+            method_data.get(
+            field_name,
+            ""
+            )
+          .strip()
+        )
+
+        else:
+
+            row[
+               "spike_concentration"
+            ] = ""
 
         role = (
             row.get(
@@ -2412,6 +3020,26 @@ def analysis_w43401():
 
         except ValueError:
             row["calculated_concentration"] = None
+     
+    # ========================================
+    # Manual QA/QC 檢核
+    # ========================================
+
+    qaqc_results = []
+
+    if (
+          included_batches
+              and control_data
+    ):
+
+        qaqc_results = (
+           build_qaqc_check_results(
+            included_batches,
+            control_data,
+            cc_relative_error_limit=20.0,
+            qdl_value=qdl_value
+            )
+        )
 
     if (
         included_batches
@@ -2776,9 +3404,402 @@ def confirm_w434_wavelength():
     return "", 204
 
 @app.route(
+    "/analysis/w43401/update-calibration",
+    methods=["POST"]
+)
+@login_required
+def update_w434_calibration():
+
+    analysis_state = load_analysis_state(
+        "W434_CURRENT"
+    )
+
+    if not analysis_state:
+
+        return (
+            "尚未找到 W434 分析資料。",
+            400
+        )
+
+    preview_rows = analysis_state.get(
+        "preview_rows",
+        []
+    )
+
+    calibration_rows = analysis_state.get(
+        "calibration_rows",
+        []
+    )
+
+    sample_qaqc_rows = analysis_state.get(
+        "sample_qaqc_rows",
+        []
+    )
+
+    included_batches = analysis_state.get(
+        "included_batches",
+        []
+    )
+
+    qdl_value = analysis_state.get(
+        "qdl_value"
+    )
+
+    if not calibration_rows:
+
+        return (
+            "尚未找到檢量線資料。",
+            400
+        )
+
+    try:
+
+        calibration_count = int(
+            request.form.get(
+                "calibration_count",
+                "0"
+            )
+        )
+
+    except ValueError:
+
+        return (
+            "檢量線筆數格式錯誤。",
+            400
+        )
+
+    if calibration_count <= 0:
+
+        return (
+            "檢量線筆數不可為 0。",
+            400
+        )
+
+    calibration_map = {
+        str(
+            row.get(
+                "sequence_no",
+                ""
+            )
+        ): row
+        for row in calibration_rows
+    }
+
+    updated_calibration_rows = []
+
+    for index in range(
+        calibration_count
+    ):
+
+        sequence_key = (
+            request.form.get(
+                "calibration_sequence_"
+                + str(index),
+                ""
+            )
+            .strip()
+        )
+
+        signal_text = (
+            request.form.get(
+                "calibration_signal_"
+                + str(index),
+                ""
+            )
+            .strip()
+        )
+
+        if (
+            sequence_key
+            not in calibration_map
+        ):
+
+            return (
+                "第 "
+                + str(index + 1)
+                + " 筆檢量線找不到原始 Sequence。",
+                400
+            )
+
+        try:
+
+            signal = float(
+                signal_text
+            )
+
+        except ValueError:
+
+            return (
+                "第 "
+                + str(index + 1)
+                + " 筆檢量線測定值格式錯誤。",
+                400
+            )
+
+        row = calibration_map[
+            sequence_key
+        ]
+
+        row[
+            "signal"
+        ] = signal
+
+        updated_calibration_rows.append(
+            row
+        )
+
+    # ========================================
+    # 同步回 preview_rows
+    # ========================================
+
+    updated_map = {
+        str(
+            row.get(
+                "sequence_no",
+                ""
+            )
+        ): row
+        for row in updated_calibration_rows
+    }
+
+    for preview_row in preview_rows:
+
+        sequence_key = str(
+            preview_row.get(
+                "sequence_no",
+                ""
+            )
+        )
+
+        updated_row = (
+            updated_map.get(
+                sequence_key
+            )
+        )
+
+        if updated_row is None:
+            continue
+
+        preview_row[
+            "signal"
+        ] = updated_row.get(
+            "signal"
+        )
+
+    # ========================================
+    # 重新計算檢量線
+    # ========================================
+
+    try:
+
+        calibration_result = (
+            calculate_calibration(
+                preview_rows
+            )
+        )
+
+    except ValueError as ex:
+
+        return redirect(
+            url_for(
+                "analysis_w43401",
+                saved="1",
+                error_message=(
+                    "檢量線重新計算失敗："
+                    + str(ex)
+                )
+            )
+        )
+
+    # ========================================
+    # 重新計算樣品濃度
+    # ========================================
+
+    for row in sample_qaqc_rows:
+
+        try:
+
+            signal = float(
+                row.get(
+                    "signal"
+                )
+            )
+
+            sample_volume = float(
+                row.get(
+                    "sample_volume",
+                    25
+                )
+            )
+
+            final_volume = float(
+                row.get(
+                    "final_volume",
+                    50
+                )
+            )
+
+            dilution_factor = float(
+                row.get(
+                    "dilution_factor",
+                    1
+                )
+            )
+
+            result = (
+                calculate_sample_concentration(
+                    signal=signal,
+                    slope=calibration_result[
+                        "slope"
+                    ],
+                    intercept=calibration_result[
+                        "intercept"
+                    ],
+                    sample_volume=sample_volume,
+                    final_volume=final_volume,
+                    dilution_factor=dilution_factor
+                )
+            )
+
+            row[
+                "calculated_concentration"
+            ] = result[
+                "calculated_concentration"
+            ]
+
+        except (
+            TypeError,
+            ValueError
+        ):
+
+            row[
+                "calculated_concentration"
+            ] = None
+
+    # ========================================
+    # 同步最新資料回 Batch
+    # ========================================
+
+    latest_row_map = {
+        str(
+            row.get(
+                "sequence_no",
+                ""
+            )
+        ): row
+        for row in preview_rows
+    }
+
+    for batch in included_batches:
+
+        for batch_row in batch.get(
+            "rows",
+            []
+        ):
+
+            sequence_key = str(
+                batch_row.get(
+                    "sequence_no",
+                    ""
+                )
+            )
+
+            latest_row = (
+                latest_row_map.get(
+                    sequence_key
+                )
+            )
+
+            if latest_row is not None:
+
+                batch_row.update(
+                    latest_row
+                )
+
+    # ========================================
+    # 重新計算 QA/QC
+    # ========================================
+
+    form_data = session.get(
+        "basic_info_form"
+    )
+
+    qaqc_results = []
+
+    if form_data:
+
+        (
+            control_data,
+            method_data,
+            load_error
+        ) = load_control_and_method_data(
+            form_data
+        )
+
+        if (
+            not load_error
+            and included_batches
+            and control_data
+        ):
+
+            qaqc_results = (
+                build_qaqc_check_results(
+                    included_batches,
+                    control_data,
+                    cc_relative_error_limit=20.0,
+                    qdl_value=qdl_value
+                )
+            )
+
+    # ========================================
+    # 儲存 Working State
+    # ========================================
+
+    analysis_state[
+        "preview_rows"
+    ] = preview_rows
+
+    analysis_state[
+        "calibration_rows"
+    ] = updated_calibration_rows
+
+    analysis_state[
+        "calibration_result"
+    ] = calibration_result
+
+    analysis_state[
+        "sample_qaqc_rows"
+    ] = sample_qaqc_rows
+
+    analysis_state[
+        "included_batches"
+    ] = included_batches
+
+    analysis_state[
+        "qaqc_results"
+    ] = qaqc_results
+
+    analysis_state[
+        "sample_data_saved"
+    ] = True
+
+    save_analysis_state(
+        "W434_CURRENT",
+        analysis_state
+    )
+
+    return redirect(
+        url_for(
+            "analysis_w43401",
+            saved="1"
+        )
+    )
+
+@app.route(
     "/analysis/w43401/update-samples",
     methods=["POST"]
 )
+
 @login_required
 def update_w434_samples():
 

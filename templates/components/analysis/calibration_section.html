@@ -97,6 +97,17 @@
 
     </div>
 
+<form
+    id="calibration-form"
+    method="post"
+    action="{{ url_for('update_w434_calibration') }}"
+>
+
+<input
+    type="hidden"
+    name="calibration_count"
+    value="{{ calibration_result.points|length }}"
+>
 
     <div style="overflow-x: auto;">
     
@@ -152,6 +163,12 @@
                 {% for point in calibration_result.points %}
     
                 <tr class="calibration-row" data-calibration-x="{{ point.x }}">
+
+                    <input
+    type="hidden"
+    name="calibration_sequence_{{ loop.index0 }}"
+    value="{{ calibration_rows[loop.index0].sequence_no }}"
+>
     
                     <td style="
                 border: 1px solid #ccc;
@@ -222,6 +239,21 @@
         </table>
     
     </div>
+
+    <div style="
+        margin-top: 14px;
+        display: flex;
+        justify-content: flex-end;
+    ">
+        <button
+            type="submit"
+            class="eacs-button eacs-button-primary"
+        >
+            更新檢量線
+        </button>
+    </div>
+
+</form>
 
     {% else %}
 
