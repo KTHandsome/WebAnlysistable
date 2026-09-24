@@ -24,6 +24,31 @@
         position: relative;
         z-index: 1;
     }
+
+    .sample-qaqc-table {
+    font-size: 15px;
+}
+
+.sample-qaqc-table thead th {
+    font-size: 15px;
+}
+
+.sample-qaqc-table tbody td {
+    font-size: 15px;
+}
+
+.sample-qaqc-table tbody input {
+    font-size: 15px;
+}
+
+.sample-qaqc-table .calculated-concentration-cell {
+    font-size: 15px;
+}
+
+.sample-qaqc-table .interpretation-cell {
+    font-size: 15px;
+}
+
 </style>
 
 <div style="
@@ -193,7 +218,7 @@
                     <th style="
                         border: 1px solid #ccc;
                         padding: 9px;
-                        width: 85px;
+                        width: 105px;
                     ">
                         添加濃度<br>(mg/L)
                     </th>
@@ -582,6 +607,18 @@
 
         </table>
 
+        <div style="
+            margin-top: 18px;
+            display: flex;
+            justify-content: flex-end;
+        ">
+            <button
+                type="submit"
+                class="eacs-button eacs-button-primary"
+            >
+                更新樣品及 QA/QC
+            </button>
+        </div>
 
 </form>
 
