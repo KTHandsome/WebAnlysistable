@@ -25,6 +25,11 @@ from analysis.qaqc_calculator import (
     build_qaqc_check_results
 )
 
+from analysis.analysis_workflow import (
+    recalculate_sample_rows,
+    sync_sample_rows_to_batches
+)
+
 from analysis.analysis_state import (
     save_analysis_state,
     load_analysis_state,
@@ -46,6 +51,9 @@ from services.analysis_record_service import (
 )
 
 from auth_session import (
+    can_delete_analysis,
+    can_review_analysis,
+    can_view_analysis_delete_history,
     clear_current_user,
     get_current_user,
     login_required,
@@ -57,6 +65,7 @@ from database import SessionLocal
 from models import (
     AnalysisCalibrationPoint,
     AnalysisCalibrationSummary,
+    AnalysisDeleteHistory,
     AnalysisQaqcResult,
     AnalysisRecord,
     AnalysisReviewHistory,
@@ -161,7 +170,12 @@ def dev_login():
         group_name="分析部",
         dept_no="C",
         dept_name="分析課",
-        job_title="檢驗員"
+        job_title="檢驗員",
+        permissions=[
+            "REVIEW_ANALYSIS",
+            "DELETE_ANALYSIS",
+            "VIEW_ANALYSIS_DELETE_HISTORY"
+        ]        
     )
 
     return redirect(
@@ -252,8 +266,27 @@ def load_control_and_method_data(form_data):
             ):
                 continue
 
-            if row.get("EXAMNAME", "").strip() != exam_name:
-                continue
+            row_exam_name = (
+               row.get(
+                 "EXAMNAME",
+                 ""
+                )
+              .strip()
+            )
+
+            row_exam_alias = (
+              row.get(
+               "EXALIAS",
+               ""
+               )
+             .strip()
+            )
+
+            if (
+              exam_name != row_exam_name
+                and exam_name != row_exam_alias
+            ):
+             continue  
 
             if (
                 row.get("EM_NUM", "").strip().upper()
@@ -844,9 +877,51 @@ def analysis_records():
         }
 
         return render_template(
-            "analysis_records.html",
+              "analysis_records.html",
+              records=records,
+              search_data=search_data,
+              can_delete_analysis=can_delete_analysis(),
+              can_view_delete_history=(
+               can_view_analysis_delete_history()
+             ),
+              active_page="analysis_records"
+         )
+
+    finally:
+
+        db.close()
+
+@app.route(
+    "/analysis-delete-history"
+)
+@login_required
+def analysis_delete_history():
+
+    if not can_view_analysis_delete_history():
+
+        return (
+            "您沒有查看分析刪除紀錄的權限。",
+            403
+        )
+
+    db = SessionLocal()
+
+    try:
+
+        records = (
+            db.query(
+                AnalysisDeleteHistory
+            )
+            .order_by(
+                AnalysisDeleteHistory.deleted_at.desc(),
+                AnalysisDeleteHistory.id.desc()
+            )
+            .all()
+        )
+
+        return render_template(
+            "analysis_delete_history.html",
             records=records,
-            search_data=search_data,
             active_page="analysis_records"
         )
 
@@ -971,6 +1046,205 @@ def analysis_record_detail(
 
 
 @app.route(
+    "/analysis-records/<analysis_id>/delete",
+    methods=["POST"]
+)
+@login_required
+def delete_analysis_record(
+    analysis_id
+):
+
+    if not can_delete_analysis():
+
+        return (
+            "您沒有分析紀錄刪除權限。",
+            403
+        )
+
+    delete_reason = (
+        request.form.get(
+            "delete_reason",
+            ""
+        ).strip()
+    )
+
+    if not delete_reason:
+
+        return (
+            "刪除分析紀錄時必須填寫刪除原因。",
+            400
+        )
+
+    db = SessionLocal()
+
+    try:
+
+        record = (
+            db.query(
+                AnalysisRecord
+            )
+            .filter(
+                AnalysisRecord.analysis_id
+                == analysis_id
+            )
+            .first()
+        )
+
+        if record is None:
+
+            return (
+                "查無此分析紀錄。",
+                404
+            )
+
+        current_user = (
+            get_current_user()
+            or {}
+        )
+
+        delete_history = AnalysisDeleteHistory(
+            analysis_id=record.analysis_id,
+            record_id=record.id,
+            exam_name=record.exam_name,
+            method_code=record.method_code,
+            analyst_name=record.analyst_name,
+            record_status=record.status,
+            deleted_by_user_id=str(
+                current_user.get(
+                    "user_id",
+                    ""
+                )
+                or ""
+            ).strip(),
+            deleted_by_employee_id=str(
+                current_user.get(
+                    "employee_id",
+                    ""
+                )
+                or ""
+            ).strip(),
+            deleted_by_name=str(
+                current_user.get(
+                    "employee_name",
+                    ""
+                )
+                or ""
+            ).strip(),
+            delete_reason=delete_reason
+        )
+
+        db.add(
+            delete_history
+        )
+
+        # ========================================
+        # 必須先刪除子表
+        # ========================================
+
+        (
+            db.query(
+                AnalysisReviewHistory
+            )
+            .filter(
+                AnalysisReviewHistory.analysis_id
+                == analysis_id
+            )
+            .delete(
+                synchronize_session=False
+            )
+        )
+
+        (
+            db.query(
+                AnalysisWorkState
+            )
+            .filter(
+                AnalysisWorkState.analysis_id
+                == analysis_id
+            )
+            .delete(
+                synchronize_session=False
+            )
+        )
+
+        (
+            db.query(
+                AnalysisQaqcResult
+            )
+            .filter(
+                AnalysisQaqcResult.analysis_id
+                == analysis_id
+            )
+            .delete(
+                synchronize_session=False
+            )
+        )
+
+        (
+            db.query(
+                AnalysisSample
+            )
+            .filter(
+                AnalysisSample.analysis_id
+                == analysis_id
+            )
+            .delete(
+                synchronize_session=False
+            )
+        )
+
+        (
+            db.query(
+                AnalysisCalibrationPoint
+            )
+            .filter(
+                AnalysisCalibrationPoint.analysis_id
+                == analysis_id
+            )
+            .delete(
+                synchronize_session=False
+            )
+        )
+
+        (
+            db.query(
+                AnalysisCalibrationSummary
+            )
+            .filter(
+                AnalysisCalibrationSummary.analysis_id
+                == analysis_id
+            )
+            .delete(
+                synchronize_session=False
+            )
+        )
+
+        # ========================================
+        # 最後刪除主表
+        # ========================================
+
+        db.delete(
+            record
+        )
+
+        db.commit()
+
+        return redirect(
+            url_for(
+                "analysis_records"
+            )
+        )
+
+    except Exception:
+
+        db.rollback()
+        raise
+
+    finally:
+
+        db.close()
+
+@app.route(
     "/analysis-records/<analysis_id>/approve",
     methods=["POST"]
 )
@@ -978,6 +1252,12 @@ def analysis_record_detail(
 def approve_analysis_record(
     analysis_id
 ):
+    if not can_review_analysis():
+
+        return (
+            "您沒有分析紀錄審核權限。",
+            403
+        )
 
     db = SessionLocal()
 
@@ -1116,6 +1396,13 @@ def approve_analysis_record(
 def reject_analysis_record(
     analysis_id
 ):
+
+    if not can_review_analysis():
+
+        return (
+            "您沒有分析紀錄審核權限。",
+            403
+        )
 
     review_comment = (
         request.form.get(
@@ -1566,7 +1853,7 @@ def basic_info():
     "analysis_end_date": "",
     "form_date": "",
     "wavelength": ""
-}
+    }
 
     form_data = session.get(
         "basic_info_form",
@@ -2000,13 +2287,17 @@ def manual_analysis_entry():
                 or ""
             ).strip().upper()
 
-            if method_code != "W434":
+            supported_manual_methods = {
+                 "W434",
+                 "W341"
+               }
 
-                error_message = (
-                    "目前手動分析資料建立"
-                    "先支援 W434；"
-                    "其他方法的計算模組尚未接入。"
-                )
+            if method_code not in supported_manual_methods:
+
+                  error_message = (
+                     "目前此分析方法尚未支援"
+                     "手動分析資料建立。"
+            )
 
         if (
             error_message is None
@@ -2014,7 +2305,7 @@ def manual_analysis_entry():
         ):
 
             preview_rows = (
-                classify_w434_rows(
+                classify_analysis_rows(
                     preview_rows,
                     method_data
                 )
@@ -2079,11 +2370,23 @@ def manual_analysis_entry():
             and calibration_result
         ):
 
+            analysis_state_key = (
+               get_analysis_state_key(
+                method_code
+              )
+            )
+
             existing_state = (
-                load_analysis_state(
-                    "W434_CURRENT"
-                )
-                or {}
+              load_analysis_state(
+                analysis_state_key
+              )
+              or {}
+            )
+
+            analysis_session_key = (
+               get_analysis_session_key(
+                  method_code
+              )
             )
 
             formal_analysis_id = str(
@@ -2092,7 +2395,7 @@ def manual_analysis_entry():
                     ""
                 )
                 or session.get(
-                    "w434_formal_analysis_id",
+                    analysis_session_key,
                     ""
                 )
                 or ""
@@ -2268,45 +2571,23 @@ def manual_analysis_entry():
                     "exclusion_reason"
                 ] = ""
 
-                row[
-                    "calculated_concentration"
-                ] = None
+            sample_qaqc_rows = (
+                recalculate_sample_rows(
+                    rows=sample_qaqc_rows,
+                    calibration_result=calibration_result,
+                    calculate_concentration=
+                        calculate_sample_concentration
+                )
+            )
 
-                try:
+            included_batches = (
+                 sync_sample_rows_to_batches(
+                 sample_rows=sample_qaqc_rows,
+                 included_batches=included_batches
+                )
+            )
 
-                    result = (
-                        calculate_sample_concentration(
-                            signal=row["signal"],
-                            slope=calibration_result[
-                                "slope"
-                            ],
-                            intercept=calibration_result[
-                                "intercept"
-                            ],
-                            sample_volume=row[
-                                "sample_volume"
-                            ],
-                            final_volume=row[
-                                "final_volume"
-                            ],
-                            dilution_factor=row[
-                                "dilution_factor"
-                            ]
-                        )
-                    )
-
-                    row[
-                        "calculated_concentration"
-                    ] = result[
-                        "calculated_concentration"
-                    ]
-
-                except ValueError:
-
-                    row[
-                        "calculated_concentration"
-                    ] = None
-
+          
             # ========================================
             # Manual QA/QC 檢核
             # ========================================
@@ -2327,38 +2608,9 @@ def manual_analysis_entry():
                     )
                 ) 
 
-            print(
-                "[MANUAL QAQC]",
-                "included_batches=",
-                len(included_batches),
-                "| qaqc_results=",
-                len(qaqc_results)
-            )
-
-            for batch in included_batches:
-                print(
-                    "[MANUAL BATCH]",
-                    "batch_no=",
-                    batch.get("batch_no"),
-                    "| category=",
-                    batch.get("batch_category"),
-                    "| rows=",
-                    [
-                        (
-                            row.get("role"),
-                            row.get("sample_id"),
-                            row.get("calculated_concentration"),
-                            row.get("spike_concentration")
-                        )
-                        for row in batch.get(
-                            "rows",
-                            []
-                        )
-                    ]
-                )
-
+         
             save_analysis_state(
-                "W434_CURRENT",
+                analysis_state_key,
                 {
                     "preview_rows":
                         preview_rows,
@@ -2440,7 +2692,7 @@ def manual_analysis_entry():
         error_message=error_message
     )
 
-def classify_w434_rows(preview_rows, method_data):
+def classify_analysis_rows(preview_rows, method_data):
 
     calibration_count = int(
         method_data.get("CALIBRATION_COUNT", "0")
@@ -2562,6 +2814,38 @@ def classify_w434_rows(preview_rows, method_data):
 
     return classified_rows
 
+def get_analysis_state_key(method_code):
+
+    method_code = str(
+        method_code or ""
+    ).strip().upper()
+
+    if not method_code:
+        raise ValueError(
+            "缺少分析方法代碼，無法建立分析狀態識別碼。"
+        )
+
+    return (
+        method_code
+        + "_CURRENT"
+    )
+
+def get_analysis_session_key(method_code):
+
+    method_code = str(
+        method_code or ""
+    ).strip().lower()
+
+    if not method_code:
+        raise ValueError(
+            "缺少分析方法代碼，無法建立分析 Session 識別碼。"
+        )
+
+    return (
+        method_code
+        + "_formal_analysis_id"
+    )
+
 def split_analysis_rows(rows):
 
     calibration_rows = []
@@ -2580,8 +2864,56 @@ def split_analysis_rows(rows):
 @login_required
 def analysis_w43401():
 
+    form_data = session.get(
+        "basic_info_form"
+    ) or {}
+
+    current_method_code = str(
+        form_data.get(
+            "method_code"
+            ""
+        )
+        or ""
+    ).strip().upper()
+
+    if not current_method_code:
+        current_method_code = "W434"
+
+    current_exam_name = str(
+    form_data.get(
+        "exam_name",
+        ""
+        )
+        or ""
+    ).strip()
+
+    if current_exam_name:
+        current_analysis_name = (
+        current_method_code
+        + " "
+        + current_exam_name
+        + "分析"
+    )
+    else:
+        current_analysis_name = (
+        current_method_code
+        + " 分析"
+    )
+
+    analysis_state_key = (
+        get_analysis_state_key(
+            current_method_code
+        )
+    )
+
+    analysis_session_key = (
+        get_analysis_session_key(
+            current_method_code
+        )
+    )
+
     existing_state = load_analysis_state(
-        "W434_CURRENT"
+        analysis_state_key
     )
 
     existing_formal_analysis_id = ""
@@ -2604,7 +2936,7 @@ def analysis_w43401():
 
         formal_analysis_id = str(
             session.get(
-                "w434_formal_analysis_id",
+                analysis_session_key,
                 ""
             )
             or ""
@@ -2613,8 +2945,8 @@ def analysis_w43401():
     if formal_analysis_id:
 
         session[
-            "w434_formal_analysis_id"
-        ] = formal_analysis_id   
+            analysis_session_key
+        ] = formal_analysis_id
     
     preview_rows = []
     calibration_rows = []
@@ -2632,9 +2964,6 @@ def analysis_w43401():
     load_error = None
     confirmed_wavelength = None
     wavelength_warning = None
-    form_data = session.get(
-    "basic_info_form"
-    )
 
     if form_data:
 
@@ -2671,7 +3000,7 @@ def analysis_w43401():
     ):
 
         saved_state = load_analysis_state(
-            "W434_CURRENT"
+            analysis_state_key
         )
 
         if saved_state:
@@ -2679,7 +3008,7 @@ def analysis_w43401():
             return render_template(
                 "methods/w43401.html",
                 active_page="analysis_method",
-                current_analysis_name="W434 砷分析",
+                current_analysis_name=current_analysis_name,
                 current_analysis_url="/analysis/w43401",
                 analysis_version="1.00",
                 error_message=request.args.get(
@@ -2784,7 +3113,7 @@ def analysis_w43401():
 
                 if preview_rows and method_data:
 
-                  preview_rows = classify_w434_rows(
+                  preview_rows = classify_analysis_rows(
                   preview_rows,
                   method_data
                     )
@@ -3000,27 +3329,27 @@ def analysis_w43401():
         row["exclusion_reason"] = ""
         row["calculated_concentration"] = None
 
-        if row.get("role") not in simple_roles:
-            continue
+    recalculation_rows = [
+        row
+        for row in sample_qaqc_rows
+        if row.get("role") in simple_roles
+    ]
 
-        try:
+    recalculate_sample_rows(
+    rows=recalculation_rows,
+    calibration_result=calibration_result,
+    calculate_concentration=
+        calculate_sample_concentration
+    )
 
-            result = calculate_sample_concentration(
-                signal=row["signal"],
-                slope=calibration_result["slope"],
-                intercept=calibration_result["intercept"],
-                sample_volume=row["sample_volume"],
-                final_volume=row["final_volume"],
-                dilution_factor=row["dilution_factor"]
-            )
+    included_batches = (
+    sync_sample_rows_to_batches(
+        sample_rows=sample_qaqc_rows,
+        included_batches=included_batches
+       )
+    )
 
-            row["calculated_concentration"] = (
-                result["calculated_concentration"]
-            )
-
-        except ValueError:
-            row["calculated_concentration"] = None
-     
+    
     # ========================================
     # Manual QA/QC 檢核
     # ========================================
@@ -3193,7 +3522,7 @@ def analysis_w43401():
     ):
 
         save_analysis_state(
-            "W434_CURRENT",
+            analysis_state_key,
             {
                 "preview_rows":
                     preview_rows,
@@ -3243,7 +3572,7 @@ def analysis_w43401():
     return render_template(
         "methods/w43401.html",
         active_page="analysis_method",
-        current_analysis_name="W434 砷分析",
+        current_analysis_name=current_analysis_name,
         current_analysis_url="/analysis/w43401",
         analysis_version="1.00",
         preview_rows=preview_rows,
@@ -3410,14 +3739,37 @@ def confirm_w434_wavelength():
 @login_required
 def update_w434_calibration():
 
+    form_data = session.get(
+        "basic_info_form"
+    ) or {}
+
+    current_method_code = str(
+        form_data.get(
+            "method_code",
+            ""
+        )
+        or ""
+    ).strip().upper()
+
+    if not current_method_code:
+        current_method_code = "W434"
+
+    analysis_state_key = (
+        get_analysis_state_key(
+            current_method_code
+        )
+    )
+
     analysis_state = load_analysis_state(
-        "W434_CURRENT"
+        analysis_state_key
     )
 
     if not analysis_state:
 
         return (
-            "尚未找到 W434 分析資料。",
+            "尚未找到 "
+            + current_method_code
+            + " 分析資料。",
             400
         )
 
@@ -3615,66 +3967,14 @@ def update_w434_calibration():
     # 重新計算樣品濃度
     # ========================================
 
-    for row in sample_qaqc_rows:
-
-        try:
-
-            signal = float(
-                row.get(
-                    "signal"
-                )
-            )
-
-            sample_volume = float(
-                row.get(
-                    "sample_volume",
-                    25
-                )
-            )
-
-            final_volume = float(
-                row.get(
-                    "final_volume",
-                    50
-                )
-            )
-
-            dilution_factor = float(
-                row.get(
-                    "dilution_factor",
-                    1
-                )
-            )
-
-            result = (
-                calculate_sample_concentration(
-                    signal=signal,
-                    slope=calibration_result[
-                        "slope"
-                    ],
-                    intercept=calibration_result[
-                        "intercept"
-                    ],
-                    sample_volume=sample_volume,
-                    final_volume=final_volume,
-                    dilution_factor=dilution_factor
-                )
-            )
-
-            row[
-                "calculated_concentration"
-            ] = result[
-                "calculated_concentration"
-            ]
-
-        except (
-            TypeError,
-            ValueError
-        ):
-
-            row[
-                "calculated_concentration"
-            ] = None
+    sample_qaqc_rows = (
+        recalculate_sample_rows(
+            rows=sample_qaqc_rows,
+            calibration_result=calibration_result,
+            calculate_concentration=
+                calculate_sample_concentration
+        )
+    )
 
     # ========================================
     # 同步最新資料回 Batch
@@ -3687,7 +3987,7 @@ def update_w434_calibration():
                 ""
             )
         ): row
-        for row in preview_rows
+        for row in sample_qaqc_rows
     }
 
     for batch in included_batches:
@@ -3784,7 +4084,7 @@ def update_w434_calibration():
     ] = True
 
     save_analysis_state(
-        "W434_CURRENT",
+        analysis_state_key,
         analysis_state
     )
 
@@ -3803,20 +4103,39 @@ def update_w434_calibration():
 @login_required
 def update_w434_samples():
 
+    form_data = session.get(
+        "basic_info_form"
+    ) or {}
+
+    current_method_code = str(
+        form_data.get(
+            "method_code",
+            ""
+        )
+        or ""
+    ).strip().upper()
+
+    if not current_method_code:
+        current_method_code = "W434"
+
+    analysis_state_key = (
+        get_analysis_state_key(
+            current_method_code
+        )
+    )
+
     analysis_state = load_analysis_state(
-        "W434_CURRENT"
+        analysis_state_key
     )
 
     if not analysis_state:
 
         return (
-            "尚未找到 W434 分析資料，請先匯入儀器 PDF。",
+            "尚未找到 "
+            + current_method_code
+            + " 分析資料。",
             400
         )
-
-    form_data = session.get(
-        "basic_info_form"
-    )
 
     if not form_data:
 
@@ -4081,32 +4400,18 @@ def update_w434_samples():
         )
         row["display_order"] = display_order
 
-        try:
-
-            result = calculate_sample_concentration(
-                signal=signal,
-                slope=calibration_result["slope"],
-                intercept=calibration_result["intercept"],
-                sample_volume=sample_volume,
-                final_volume=final_volume,
-                dilution_factor=dilution_factor
-            )
-
-            row["calculated_concentration"] = (
-                result[
-                    "calculated_concentration"
-                ]
-            )
-
-        except ValueError:
-
-            row[
-                "calculated_concentration"
-            ] = None
-
         updated_rows.append(
             row
         )
+
+    updated_rows = (
+        recalculate_sample_rows(
+            rows=updated_rows,
+            calibration_result=calibration_result,
+            calculate_concentration=
+                calculate_sample_concentration
+        )
+    )        
 
     updated_rows.sort(
         key=lambda row: row.get(
@@ -4224,13 +4529,13 @@ def update_w434_samples():
     ] = updated_rows
 
     latest_row_map = {
-        str(
-            row.get(
-                "sequence_no",
-                ""
-            )
-        ): row
-        for row in preview_rows
+    str(
+        row.get(
+            "sequence_no",
+            ""
+        )
+    ): row
+    for row in updated_rows
     }
 
     for batch in included_batches:
@@ -4310,24 +4615,6 @@ def update_w434_samples():
                     latest_row
                 )
 
-    for debug_batch in included_batches:
-        print(
-            "BATCH",
-            debug_batch.get("batch_no"),
-            "| category =",
-            debug_batch.get("batch_category"),
-            "| rows =",
-            [
-                (
-                    row.get("role"),
-                    row.get("sample_id")
-                )
-                for row in debug_batch.get(
-                    "rows",
-                    []
-                )
-            ]
-        )
 
     qaqc_results = []
 
@@ -4363,7 +4650,7 @@ def update_w434_samples():
 ] = True
 
     save_analysis_state(
-        "W434_CURRENT",
+        analysis_state_key,
         analysis_state
     )
 
@@ -5233,36 +5520,23 @@ def method_settings_import():
                                     + " 列：DATA_ENTRY_MODE 只能是 MANUAL、IMPORT 或 BOTH。"
                                 )
 
-                            # IMPORT_TYPE / SIGNAL_FIELD
-                            # 只有 IMPORT 或 BOTH 才必須設定匯入格式
                             if data_entry_mode in {"IMPORT", "BOTH"}:
 
-                                allowed_import_types = {
-                                    "PE900_PDF"
-                                }
+                                if not import_type:
 
-                                if import_type not in allowed_import_types:
+                                     validation_errors.append(
+                                         "第 "
+                                          + str(row_index)
+                                          + " 列：IMPORT_TYPE 不可空白。"
+                                     )
 
-                                    validation_errors.append(
-                                        "第 "
-                                        + str(row_index)
-                                        + " 列：IMPORT_TYPE 不支援："
-                                        + import_type
-                                    )
-
-                                allowed_signal_fields = {
-                                    "BLNKCORR_SIGNAL_MEAN"
-                                }
-
-                                if signal_field not in allowed_signal_fields:
+                                if not signal_field:
 
                                     validation_errors.append(
-                                        "第 "
-                                        + str(row_index)
-                                        + " 列：SIGNAL_FIELD 不支援："
-                                        + signal_field
+                                    "第 "
+                                    + str(row_index)
+                                    + " 列：SIGNAL_FIELD 不可空白。"
                                     )
-
 
                             # ACTIVE
                             if active not in {

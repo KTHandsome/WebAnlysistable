@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}
-W434 砷分析 - EACS
+{{ current_analysis_name }} - EACS
 {% endblock %}
 
 {% block content %}
@@ -11,7 +11,7 @@ W434 砷分析 - EACS
     <div class="analysis-title-row">
 
         <h1 class="page-title">
-            W434 砷分析
+            {{ current_analysis_name }}
         </h1>
 
         <div class="analysis-version">

@@ -6,15 +6,43 @@
 
 {% block content %}
 
-<div class="page-header">
+<div
+    class="page-header"
+    style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 20px;
+    "
+>
 
-    <h1 class="page-title">
-        分析紀錄查詢
-    </h1>
+    <div>
 
-    <div class="page-subtitle">
-        查詢已建立的正式分析紀錄與目前處理狀態。
+        <h1 class="page-title">
+            分析紀錄查詢
+        </h1>
+
+        <div class="page-subtitle">
+            查詢已建立的正式分析紀錄與目前處理狀態。
+        </div>
+
     </div>
+
+    {% if can_view_delete_history %}
+
+    <a
+        href="{{ url_for(
+            'analysis_delete_history'
+        ) }}"
+        class="eacs-button eacs-button-secondary"
+        style="
+            white-space: nowrap;
+        "
+    >
+        刪除紀錄
+    </a>
+
+    {% endif %}
 
 </div>
 
@@ -208,19 +236,80 @@
                         {{ record.created_at | taiwan_datetime }}
                     </td>
 
-                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
+                    <td
+                       style="
+                         padding: 10px;
+                         border-bottom: 1px solid #edf0f3;
+                         white-space: nowrap;
+                        "
+                    >
 
-                        <a
-    href="{{ url_for(
-        'analysis_record_detail',
+                       <a
+                         href="{{ url_for(
+                            'analysis_record_detail',
+                             analysis_id=record.analysis_id
+                            ) }}"
+                        class="eacs-button eacs-button-secondary"
+                     >
+                        查看
+                      </a>
+
+                    {% if can_delete_analysis %}
+
+                    <form
+    method="post"
+    action="{{ url_for(
+        'delete_analysis_record',
         analysis_id=record.analysis_id
     ) }}"
-    class="eacs-button eacs-button-secondary"
->
-    查看
-                        </a>
+    style="
+        display: inline-block;
+        margin-left: 6px;
+    "
+    onsubmit="
+        const reason = prompt(
+            '請輸入刪除原因：'
+        );
 
-                    </td>
+        if (
+            reason === null
+            || reason.trim() === ''
+        ) {
+            return false;
+        }
+
+        this.querySelector(
+            'input[name=delete_reason]'
+        ).value = reason.trim();
+
+        return confirm(
+            '確定要刪除此分析紀錄？此操作無法復原。'
+        );
+    "
+>
+
+    <input
+        type="hidden"
+        name="delete_reason"
+        value=""
+    >
+
+    <button
+        type="submit"
+        class="eacs-button"
+        style="
+            background-color: #c62828;
+            color: white;
+        "
+    >
+        刪除
+    </button>
+
+</form>
+
+                    {% endif %}
+
+                   </td>
 
                 </tr>
 

@@ -940,9 +940,6 @@ function initializeAnalysisCalculation() {
 
     updateSampleDisplayOrder();
 
-    if (calibrationLoaded) {
-        recalculateAllSampleRows();
-    }
 }
 
 

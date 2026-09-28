@@ -108,7 +108,7 @@ def build_w434_pdf(
     # -----------------------------
     left_margin = 40
     right_margin = 40
-    top_y = page_height - 42
+    top_y = page_height - 30
 
     company_name = (
         report_data.get(
@@ -314,7 +314,7 @@ def build_w434_pdf(
 
     pdf_canvas.drawCentredString(
         page_width / 2,
-        top_y - 32,
+        top_y - 26,
         form_title
     )
 
@@ -328,7 +328,7 @@ def build_w434_pdf(
 
     pdf_canvas.drawCentredString(
         page_width / 2,
-        top_y - 52,
+        top_y - 43,
         "檢驗項目："
         + analyte_display
     )
@@ -352,7 +352,7 @@ def build_w434_pdf(
 
     pdf_canvas.drawCentredString(
     page_width / 2,
-    top_y - 70,
+    top_y - 58,
     "使用波長："
     + wavelength_text
 )
@@ -367,28 +367,28 @@ def build_w434_pdf(
 
     pdf_canvas.drawString(
     left_margin,
-    top_y - 90,
+    top_y - 76,
     "儀器型號："
     + instrument_model
 )
 
     pdf_canvas.drawRightString(
     right_x,
-    top_y - 90,
+    top_y - 76,
     "填表日期："
     + form_date
 )
 
     pdf_canvas.drawString(
     left_margin,
-    top_y - 107,
+    top_y - 91,
     "檢驗方法："
     + exam_method
 )
 
     pdf_canvas.drawRightString(
     right_x,
-    top_y - 107,
+    top_y - 91,
     "分析日期："
     + analysis_start_date
     + " ～ "
@@ -400,21 +400,21 @@ def build_w434_pdf(
     # -----------------------------
     pdf_canvas.line(
         left_margin,
-        top_y - 116,
+        top_y - 99,
         page_width - right_margin,
-        top_y - 116
+        top_y - 99
     )
 
     # -----------------------------
     # 檢量線結果
     # -----------------------------
     calibration_title_y = (
-        top_y - 136
+        top_y - 113
     )
 
     pdf_canvas.setFont(
         "MicrosoftJhengHei",
-        11
+        10
     )
 
     pdf_canvas.drawString(
@@ -650,12 +650,12 @@ def build_w434_pdf(
     # 二、樣品及品管分析結果
     # -----------------------------
     sample_title_y = (
-        current_y - 28
+        current_y - 18
     )
 
     pdf_canvas.setFont(
         "MicrosoftJhengHei",
-        11
+        10
     )
 
     pdf_canvas.drawString(
@@ -708,7 +708,7 @@ def build_w434_pdf(
     7.5
 )    
     condition_y = (
-    sample_title_y - 14
+    sample_title_y - 12
 )   
     pdf_canvas.drawString(
     left_margin,
@@ -721,7 +721,7 @@ def build_w434_pdf(
     + " mL"
 )
     formula_y = (
-    sample_title_y - 26
+    sample_title_y - 22
 )
     pdf_canvas.drawString(
     left_margin,
@@ -731,7 +731,7 @@ def build_w434_pdf(
     "稀釋倍數(D)"
 )
     sample_table_top_y = (
-    sample_title_y - 34
+    sample_title_y - 29
 )
     sample_row_height = 17
 
@@ -1095,7 +1095,7 @@ def build_w434_pdf(
     # 三、QA/QC 判定
     # -----------------------------
     qaqc_title_y = (
-        current_y - 24
+        current_y - 16
     )
 
     pdf_canvas.setFont(
@@ -1110,7 +1110,7 @@ def build_w434_pdf(
     )
 
     qaqc_table_top_y = (
-        qaqc_title_y - 8
+        qaqc_title_y - 6
     )
 
     qaqc_row_height = 14

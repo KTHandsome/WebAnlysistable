@@ -550,11 +550,11 @@
     </div>
 
 
-    {% if
-        method_data
-        and method_data.METHOD_CODE|upper == "W434"
-        and method_data.IMPORT_TYPE|upper == "PE900_PDF"
-    %}
+{% if
+    method_data
+    and method_data.METHOD_CODE|upper in ["W434", "W341"]
+    and method_data.IMPORT_TYPE|upper == "PE900_PDF"
+%}
 
     <div
         id="import-entry-actions"

@@ -586,3 +586,76 @@ class AnalysisReviewHistory(Base):
         nullable=False,
         server_default=func.now()
     )
+
+class AnalysisDeleteHistory(Base):
+    __tablename__ = "analysis_delete_history"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    analysis_id: Mapped[str] = mapped_column(
+        String(36),
+        nullable=False,
+        index=True
+    )
+
+    record_id: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False
+    )
+
+    exam_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default=""
+    )
+
+    method_code: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default=""
+    )
+
+    analyst_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default=""
+    )
+
+    record_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=""
+    )
+
+    deleted_by_user_id: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default=""
+    )
+
+    deleted_by_employee_id: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default=""
+    )
+
+    deleted_by_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default=""
+    )
+
+    delete_reason: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False
+    )
+
+    deleted_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now()
+    )

@@ -41,7 +41,8 @@ def set_current_user(
     group_name="",
     dept_no="",
     dept_name="",
-    job_title=""
+    job_title="",
+    permissions=None
 ):
 
     session[
@@ -85,7 +86,11 @@ def set_current_user(
         "job_title":
             str(
                 job_title or ""
-            ).strip()
+            ).strip(),
+        "permissions": (
+                permissions
+              or []
+            )    
     }
 
 
@@ -123,3 +128,90 @@ def login_required(
         )
 
     return wrapped_view
+
+# ========================================
+# Phyon 權限代碼
+# ========================================
+
+PERMISSION_REVIEW_ANALYSIS = (
+    "REVIEW_ANALYSIS"
+)
+
+PERMISSION_DELETE_ANALYSIS = (
+    "DELETE_ANALYSIS"
+)
+
+PERMISSION_VIEW_ANALYSIS_DELETE_HISTORY = (
+    "VIEW_ANALYSIS_DELETE_HISTORY"
+)
+
+
+# ========================================
+# 使用者權限判定
+# ========================================
+
+def has_permission(
+    permission_code
+):
+
+    current_user = (
+        get_current_user()
+        or {}
+    )
+
+    permissions = (
+        current_user.get(
+            "permissions",
+            []
+        )
+        or []
+    )
+
+    normalized_permissions = {
+        str(
+            permission
+        )
+        .strip()
+        .upper()
+        for permission in permissions
+        if str(
+            permission
+        ).strip()
+    }
+
+    normalized_code = (
+        str(
+            permission_code
+            or ""
+        )
+        .strip()
+        .upper()
+    )
+
+    if not normalized_code:
+        return False
+
+    return (
+        normalized_code
+        in normalized_permissions
+    )
+
+
+def can_review_analysis():
+
+    return has_permission(
+        PERMISSION_REVIEW_ANALYSIS
+    )
+
+
+def can_delete_analysis():
+
+    return has_permission(
+        PERMISSION_DELETE_ANALYSIS
+    )
+
+def can_view_analysis_delete_history():
+
+    return has_permission(
+        PERMISSION_VIEW_ANALYSIS_DELETE_HISTORY
+    )
