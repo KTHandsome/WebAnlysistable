@@ -160,6 +160,33 @@
         color: var(--eacs-text-secondary);
     }
 
+    .eacs-environment-badge {
+    padding: 4px 9px;
+
+    border-radius: 999px;
+
+    font-size: 12px;
+    font-weight: 700;
+
+    white-space: nowrap;
+}
+
+.eacs-environment-release {
+    background-color: #ecfdf3;
+
+    color: #15803d;
+
+    border: 1px solid #bbf7d0;
+}
+
+.eacs-environment-dev {
+    background-color: #fff7ed;
+
+    color: #c2410c;
+
+    border: 1px solid #fed7aa;
+}
+
     .eacs-user-panel {
     margin-left: auto;
 
@@ -907,6 +934,19 @@
 
 <div class="eacs-user-panel">
 
+    <div
+    class="
+        eacs-environment-badge
+        {% if environment_type == 'firebird' %}
+        eacs-environment-release
+        {% else %}
+        eacs-environment-dev
+        {% endif %}
+    "
+>
+    [{{ environment_label }}]
+    </div>
+    
     <div class="eacs-user-info">
 
         <div class="eacs-user-name">

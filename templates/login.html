@@ -11,7 +11,7 @@
     >
 
     <title>
-        Phyon 登入
+        琨鼎EACS登入
     </title>
 
     <style>
@@ -181,7 +181,7 @@
         <div class="login-card">
 
             <h1 class="system-title">
-                Phyon
+                 琨鼎EACS
             </h1>
 
             <div class="system-subtitle">
@@ -247,7 +247,7 @@
                 </button>
 
             </form>
-
+{% if show_dev_login %}
             <div class="dev-box">
 
                 <div class="dev-title">
@@ -255,8 +255,7 @@
                 </div>
 
                 <div class="dev-text">
-                    目前在非公司環境時，可使用測試身分建立登入 Session。
-                    回公司後會改由 LIMS SYS_USER / EMPLOY 驗證。
+                    目前在非LIMS環境時，可使用測試身分建立登入 Session。                    
                 </div>
 
                 <form
@@ -274,6 +273,8 @@
                 </form>
 
             </div>
+
+            {% endif %}
 
         </div>
 

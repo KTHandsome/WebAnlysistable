@@ -8,6 +8,10 @@ from flask import (
     send_file
 )
 
+from services.lims_auth_service import (
+    validate_lims_user
+)
+
 from datetime import datetime, timedelta
 
 from parsers.pe900_parser import parse_pe900_pdf
@@ -60,7 +64,10 @@ from auth_session import (
     set_current_user
 )
 
-from database import SessionLocal
+from database import (
+    SessionLocal,
+    DATABASE_TYPE
+)
 
 from models import (
     AnalysisCalibrationPoint,
@@ -108,7 +115,16 @@ def inject_current_user():
 
     return {
         "current_user":
-            get_current_user()
+            get_current_user(),
+
+        "environment_label": (
+            "發布環境"
+            if DATABASE_TYPE == "firebird"
+            else "開發環境"
+        ),
+
+        "environment_type":
+            DATABASE_TYPE
     }
 
 @app.route(
@@ -116,6 +132,141 @@ def inject_current_user():
     methods=["GET", "POST"]
 )
 def login():
+
+    error_message = None
+
+    if request.method == "POST":
+
+        user_id = request.form.get(
+            "user_id",
+            ""
+        ).strip()
+
+        password = request.form.get(
+            "password",
+            ""
+        )
+
+        if not user_id:
+
+            error_message = (
+                "請輸入帳號。"
+            )
+
+        elif not password:
+
+            error_message = (
+                "請輸入密碼。"
+            )
+
+        else:
+
+            try:
+
+                user = validate_lims_user(
+                    user_id,
+                    password
+                )
+
+                if user is None:
+
+                    error_message = (
+                        "帳號或密碼錯誤。"
+                    )
+
+                else:
+
+                    group_id = str(
+                      user.get(
+                         "group_id",
+                         ""
+                      )
+                      or ""
+                    ).strip().upper()
+
+                    permissions = []
+
+                    if group_id in {
+                       "07",
+                       "ADMIN"
+                    }:
+
+                        permissions = [
+                        "REVIEW_ANALYSIS",
+                        "DELETE_ANALYSIS",
+                        "VIEW_ANALYSIS_DELETE_HISTORY"
+                    ]
+                        
+                    group_id = str(
+                           user.get(
+                           "group_id",
+                               ""
+                          )
+                      or ""
+                    ).strip().upper()
+
+                    permissions = []
+
+                    if group_id in {
+                         "07",
+                          "ADMIN"
+                        }:
+                      permissions = [
+                        "REVIEW_ANALYSIS",
+                        "DELETE_ANALYSIS",
+                        "VIEW_ANALYSIS_DELETE_HISTORY"
+                    ]     
+                    
+                    set_current_user(
+                        user_id=user.get(
+                            "user_id",
+                            ""
+                        ),
+                        employee_id=user.get(
+                            "employee_id",
+                            ""
+                        ),
+                        employee_name=user.get(
+                            "employee_name",
+                            ""
+                        ),                        
+                        group_id=group_id,
+                        dept_no=user.get(
+                            "dept_no",
+                            ""
+                        ),
+                        dept_name=user.get(
+                            "dept_name",
+                            ""
+                        ),
+                        permissions=permissions
+                    )
+
+                    return redirect(
+                        url_for(
+                            "home"
+                        )
+                    )
+
+            except Exception as ex:
+
+                print(
+                    "LIMS login error:",
+                    ex
+                )
+
+                error_message = (
+                    "無法連線至 LIMS，"
+                    "請稍後再試。"
+                )
+
+    return render_template(
+    "login.html",
+    error_message=error_message,
+    show_dev_login=(
+        DATABASE_TYPE == "sqlite"
+    )
+)
 
     error_message = None
 
@@ -161,6 +312,12 @@ def login():
     methods=["POST"]
 )
 def dev_login():
+
+    if DATABASE_TYPE != "sqlite":
+        return (
+            "正式環境不允許使用測試登入。",
+            403
+        )
 
     set_current_user(
         user_id="DEV",
