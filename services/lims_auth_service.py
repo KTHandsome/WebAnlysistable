@@ -1,31 +1,11 @@
-from firebird.driver import (
-    connect,
-    driver_config
+import pyodbc
+
+LIMS_CONNECTION_STRING = (
+    "DSN=LIMSDB-FQ;"
+    "Uid=SYSDBA;"
+    "Pwd=masterkey;"
+    "Charset=UTF8;"
 )
-
-
-# ========================================
-# Firebird Client
-# ========================================
-
-driver_config.fb_client_library.value = (
-    r"C:\Program Files\Firebird\Firebird_5_0\fbclient.dll"
-)
-
-
-# ========================================
-# LIMS Database
-# ========================================
-
-LIMS_DATABASE = (
-    "192.168.0.200:LIMSDB-FQ"
-)
-
-LIMS_USER = "SYSDBA"
-
-LIMS_PASSWORD = "masterkey"
-
-LIMS_CHARSET = "UTF8"
 
 
 # ========================================
@@ -123,11 +103,8 @@ def validate_lims_user(
 
     try:
 
-        conn = connect(
-            database=LIMS_DATABASE,
-            user=LIMS_USER,
-            password=LIMS_PASSWORD,
-            charset=LIMS_CHARSET
+        conn = pyodbc.connect(
+             LIMS_CONNECTION_STRING
         )
 
         cursor = conn.cursor()
