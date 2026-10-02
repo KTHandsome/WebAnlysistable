@@ -188,31 +188,54 @@ def calculate_sample_concentration(
     if dilution_factor <= 0:
         raise ValueError("樣品稀釋倍數 D 必須大於 0。")
 
-    back_calculated_concentration = (
-        float(signal) - float(intercept)
-    ) / float(slope)
+    measured_concentration = (
+    float(signal) - float(intercept)
+     ) / float(slope)
 
     volume_factor = (
-        float(final_volume)
-        / float(sample_volume)
-    )
+    float(final_volume)
+    / float(sample_volume)
+     )
+
+    sample_concentration = (
+    measured_concentration
+    * volume_factor
+    * float(dilution_factor)
+     )
+
+# ========================================
+# 相容舊程式
+#
+# calculated_concentration 原本代表
+# 樣品換算後濃度。
+#
+# 現階段先保留此名稱，
+# 待 UI / QAQC / PDF / Excel
+# 全部完成欄位轉換後再評估移除。
+# ========================================
 
     calculated_concentration = (
-        back_calculated_concentration
-        * volume_factor
-        * float(dilution_factor)
-    )
+    sample_concentration
+     )
 
     return {
-        "back_calculated_concentration":
-            back_calculated_concentration,
+    "measured_concentration":
+        measured_concentration,
 
-        "volume_factor":
-            volume_factor,
+    "sample_concentration":
+        sample_concentration,
 
-        "dilution_factor":
-            float(dilution_factor),
+    # 舊欄位名稱暫時保留
+    "back_calculated_concentration":
+        measured_concentration,
 
-        "calculated_concentration":
-            calculated_concentration
-    }
+    "volume_factor":
+        volume_factor,
+
+    "dilution_factor":
+        float(dilution_factor),
+
+    # 舊欄位名稱暫時保留
+    "calculated_concentration":
+        calculated_concentration
+}

@@ -103,19 +103,75 @@ def recalculate_sample_rows(
             )
 
             row[
-                "calculated_concentration"
-            ] = result[
-                "calculated_concentration"
-            ]
+                 "measured_concentration"
+                ] = result.get(
+    "measured_concentration",
+    result.get(
+        "back_calculated_concentration"
+    )
+)
+
+            row[
+                 "sample_concentration"
+                ] = result.get(
+                 "sample_concentration",
+                 result.get(
+                 "calculated_concentration"
+                 )
+                )
+
+            # 舊欄位暫時保留
+            # 相容既有 PDF / LIMS / DB / JS
+            row[
+                 "calculated_concentration"
+                ] = result.get(
+                 "calculated_concentration"
+                )
+
+            role = str(
+                  row.get(
+                   "role",
+                    ""
+                   )
+                 or ""
+                ).strip().upper()
+
+            if role in {
+                "ICV",
+                "CCV"
+             }:
+              row[
+                    "qaqc_concentration"
+                    ] = row.get(
+                    "measured_concentration"
+                    )
+            else:
+              row[
+                    "qaqc_concentration"
+                    ] = row.get(
+                      "sample_concentration"
+                    )
 
         except (
-            TypeError,
-            ValueError
-        ):
+               TypeError,
+               ValueError
+              ):
+
+            row[
+                 "measured_concentration"
+                ] = None
+
+            row[
+                 "sample_concentration"
+                ] = None
 
             row[
                 "calculated_concentration"
-            ] = None
+               ] = None
+
+            row[
+                "qaqc_concentration"
+               ] = None
 
     return rows
 

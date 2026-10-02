@@ -1,0 +1,141 @@
+{% if analysis_loaded is defined %}
+
+    {% set analysis_loaded_flag = analysis_loaded %}
+
+{% else %}
+
+    {% set analysis_loaded_flag =
+        (sample_qaqc_rows|default([])|length > 0)
+    %}
+
+{% endif %}
+
+<div class="analysis-action-bar">
+
+    <div class="analysis-action-status">
+
+        {% if analysis_loaded_flag %}
+
+            {% if sample_data_saved %}
+
+            <span class="status-badge status-success">
+                分析資料已暫存
+            </span>
+
+            {% else %}
+
+            <span class="status-badge status-warning">
+                分析資料已載入，尚未儲存
+            </span>
+
+            {% endif %}
+
+        {% else %}
+
+        <span>
+            尚未載入分析資料
+        </span>
+
+        {% endif %}
+
+
+        {% if
+            formal_saved_message is defined
+            and formal_saved_message
+        %}
+
+        <div class="analysis-message analysis-message-success">
+            {{ formal_saved_message }}
+        </div>
+
+        {% endif %}
+
+    </div>
+
+
+    <div class="analysis-action-buttons">
+
+        {% if analysis_loaded_flag %}
+
+            {% if
+                show_temp_save is not defined
+                or show_temp_save
+            %}
+
+            <button
+                type="submit"
+                form="{{ temp_save_form_id
+                    if temp_save_form_id is defined
+                    else 'sample-qaqc-form'
+                }}"
+                class="eacs-button eacs-button-primary"
+            >
+                暫存分析資料
+            </button>
+
+            {% endif %}
+
+
+            {% if
+                show_formal_save is defined
+                and show_formal_save
+                and formal_save_url is defined
+                and formal_save_url
+            %}
+
+            <form
+                method="post"
+                action="{{ formal_save_url }}"
+                style="display: inline;"
+            >
+
+                <button
+                    type="submit"
+                    class="eacs-button eacs-button-primary"
+                >
+                    儲存分析紀錄
+                </button>
+
+            </form>
+
+            {% endif %}
+
+
+            {% if
+                show_pdf_export is defined
+                and show_pdf_export
+                and pdf_export_url is defined
+                and pdf_export_url
+            %}
+
+            <a
+                href="{{ pdf_export_url }}"
+                class="eacs-button eacs-button-secondary"
+            >
+                匯出檢驗紀錄表
+            </a>
+
+            {% endif %}
+
+
+            {% if
+                show_lims_export is defined
+                and show_lims_export
+                and lims_export_url is defined
+                and lims_export_url
+            %}
+
+            <a
+                href="{{ lims_export_url }}"
+                class="eacs-button eacs-button-accent"
+            >
+                匯出 LIMS
+            </a>
+
+            {% endif %}
+
+        {% endif %}
+
+    </div>
+
+</div>

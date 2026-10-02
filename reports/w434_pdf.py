@@ -899,6 +899,59 @@ def build_w434_pdf(
 
     for batch_result in qaqc_results:
 
+        batch_no = str(
+            batch_result.get(
+                "batch_no",
+                ""
+            )
+            or ""
+        ).strip()
+
+        batch_category = str(
+            batch_result.get(
+                "batch_category",
+                ""
+            )
+            or ""
+        ).strip()
+
+        batch_remark = str(
+            batch_result.get(
+                "batch_remark",
+                ""
+            )
+            or ""
+        ).strip()
+
+        batch_title_parts = []
+
+        if batch_no:
+            batch_title_parts.append(
+                "Batch " + batch_no
+            )
+
+        if batch_category:
+            batch_title_parts.append(
+                "類別：" + batch_category
+            )
+
+        if batch_remark:
+            batch_title_parts.append(
+                "批次備註：" + batch_remark
+            )
+
+        qaqc_summary_rows.append(
+            {
+                "row_type":
+                    "BATCH_HEADER",
+
+                "item":
+                    "｜".join(
+                        batch_title_parts
+                    )
+            }
+        )        
+
         # 3A：ICV / QC / CCV
         for check in batch_result.get(
             "rows",
@@ -1169,6 +1222,53 @@ def build_w434_pdf(
     for row in qaqc_summary_rows:
 
         current_y -= qaqc_row_height
+
+        if (
+            row.get(
+                "row_type"
+            )
+            == "BATCH_HEADER"
+        ):
+
+            total_width = sum(
+                qaqc_column_widths
+            )
+
+            pdf_canvas.setFillColorRGB(
+                0.94,
+                0.96,
+                0.98
+            )
+
+            pdf_canvas.rect(
+                left_margin,
+                current_y,
+                total_width,
+                qaqc_row_height,
+                fill=1
+            )
+
+            pdf_canvas.setFillColorRGB(
+                0,
+                0,
+                0
+            )
+
+            pdf_canvas.setFont(
+                "MicrosoftJhengHei",
+                7.5
+            )
+
+            pdf_canvas.drawString(
+                left_margin + 5,
+                current_y + 4,
+                row.get(
+                    "item",
+                    ""
+                )
+            )
+
+            continue
 
         row_values = [
             row.get(

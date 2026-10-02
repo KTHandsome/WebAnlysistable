@@ -552,8 +552,17 @@
 
 {% if
     method_data
-    and method_data.METHOD_CODE|upper in ["W434", "W341"]
-    and method_data.IMPORT_TYPE|upper == "PE900_PDF"
+    and (
+        (
+            method_data.METHOD_CODE|upper in ["W434", "W341"]
+            and method_data.IMPORT_TYPE|upper == "PE900_PDF"
+        )
+        or
+        (
+            method_data.METHOD_CODE|upper == "W330"
+            and method_data.IMPORT_TYPE|upper == "RA7000A_PDF"
+        )
+    )
 %}
 
     <div
@@ -1046,7 +1055,7 @@ function submitBasicInfoForManual() {
     form.submit();
 }
 
-    function submitBasicInfoForImport() {
+function submitBasicInfoForImport() {
 
     const form = document.getElementById(
         "basic-info-form"
@@ -1056,14 +1065,29 @@ function submitBasicInfoForManual() {
         "next_action"
     );
 
+    const methodCode = document.getElementById(
+        "method_code"
+    );
+
     if (
         !form
         || !nextAction
+        || !methodCode
     ) {
         return;
     }
 
-    nextAction.value = "import_w434";
+    const method =
+        methodCode.value.trim().toUpperCase();
+
+    if (method === "W330") {
+
+        nextAction.value = "import_w330";
+
+    } else {
+
+        nextAction.value = "import_w434";
+    }
 
     form.submit();
 }

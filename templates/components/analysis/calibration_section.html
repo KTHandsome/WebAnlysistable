@@ -1,3 +1,21 @@
+{% set calibration_unit_text =
+    calibration_unit
+    if calibration_unit is defined
+    else "mg/L"
+%}
+
+{% set calibration_signal_text =
+    calibration_signal_label
+    if calibration_signal_label is defined
+    else "測定值"
+%}
+
+{% set show_calibration_error_column =
+    show_calibration_error
+    if show_calibration_error is defined
+    else true
+%}
+
 <div style="
     background-color: white;
     border: 1px solid #d9d9d9;
@@ -6,7 +24,9 @@
     margin-top: 22px;
 ">
 
-    <h3 style="margin-top: 0;">
+    <h3 style="margin-top: 0;
+    color: #03646d;
+    ">
         1. 檢量線
     </h3>
 
@@ -131,30 +151,34 @@
                 border: 1px solid #ccc;
                 padding: 9px;
             ">
-                        設定濃度 (mg/L)
+                        設定濃度 ({{ calibration_unit_text }})
                     </th>
     
                     <th style="
                 border: 1px solid #ccc;
                 padding: 9px;
             ">
-                        測定值
+                        測定值 {{ calibration_signal_text }}
                     </th>
     
                     <th style="
                 border: 1px solid #ccc;
                 padding: 9px;
             ">
-                        回歸濃度 (mg/L)
+                        回歸濃度 ({{ calibration_unit_text }})
                     </th>
-    
+
+                {% if show_calibration_error_column %}
+
                     <th style="
                 border: 1px solid #ccc;
                 padding: 9px;
             ">
                         回歸偏差 (%)
                     </th>
-    
+
+                {% endif %}
+
                 </tr>
             </thead>
     
@@ -202,6 +226,7 @@
                         text-align: right;
                         border: 1px solid #bbb;
                         border-radius: 4px;
+                        font-size: 16px;
                     ">
     
                     </td>
@@ -215,7 +240,7 @@
                         {{ "%.7f"|format(point.back_calculated_x) }}
                     </td>
     
-    
+                {% if show_calibration_error_column %}
                     <td class="calibration-error-cell" style="
                     border: 1px solid #ccc;
                     padding: 8px;
@@ -229,6 +254,8 @@
                         {% endif %}
     
                     </td>
+
+                {% endif %}    
     
                 </tr>
     

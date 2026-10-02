@@ -1,3 +1,92 @@
+{% set sample_volume_default_value =
+    sample_volume_default
+    if sample_volume_default is defined
+    else 25
+%}
+
+{% set final_volume_default_value =
+    final_volume_default
+    if final_volume_default is defined
+    else 50
+%}
+
+{% set sample_concentration_unit_text =
+    sample_concentration_unit
+    if sample_concentration_unit is defined
+    else "mg/L"
+%}
+
+{% set sample_signal_label_text =
+    sample_signal_label
+    if sample_signal_label is defined
+    else "測定值"
+%}
+
+{% set interpretation_concentration_factor_value =
+    interpretation_concentration_factor
+    if interpretation_concentration_factor is defined
+    else 1
+%}
+
+{% set sample_update_url_value =
+    sample_update_url
+    if sample_update_url is defined
+    else url_for("update_w434_samples")
+%}
+
+{% set show_sample_update_button_value =
+    show_sample_update_button
+    if show_sample_update_button is defined
+    else true
+%}
+
+
+{% set analysis_mdl_value =
+    analysis_mdl
+    if analysis_mdl is defined
+    else (
+        control_data.DETECT_LIMITED
+        if control_data is defined and control_data
+        else ""
+    )
+%}
+
+{% set blank_mdl_multiplier_value =
+    blank_mdl_multiplier
+    if blank_mdl_multiplier is defined
+    else (
+        method_data.BLANK_MDL_MULTIPLIER
+        if method_data is defined and method_data
+        else ""
+    )
+%}
+
+{% set qdl_source_value =
+    qdl_source
+    if qdl_source is defined
+    else (
+        method_data.QDL_SOURCE
+        if method_data is defined and method_data
+        else ""
+    )
+%}
+
+{% set qdl_multiplier_value =
+    qdl_multiplier
+    if qdl_multiplier is defined
+    else (
+        method_data.QDL_MULTIPLIER
+        if method_data is defined and method_data
+        else ""
+    )
+%}
+
+{% set analysis_qdl_value =
+    qdl_value
+    if qdl_value is defined and qdl_value is not none
+    else ""
+%}
+
 <style>
     .sample-qaqc-table thead {
         position: relative;
@@ -59,7 +148,9 @@
     margin-top: 22px;
 ">
 
-    <h3 style="margin-top: 0;">
+    <h3 style="margin-top: 0;
+        color: #03646d;
+    ">
         2. 樣品及 QA/QC 計算
     </h3>
 <style>
@@ -106,7 +197,7 @@
 <form
     id="sample-qaqc-form"
     method="post"
-    action="{{ url_for('update_w434_samples') }}"
+    action="{{ sample_update_url_value }}"
 >
 
 <input
@@ -118,31 +209,31 @@
 <input
     type="hidden"
     id="analysis-mdl"
-    value="{{ control_data.DETECT_LIMITED }}"
+    value="{{ analysis_mdl_value }}"
 >
 
 <input
     type="hidden"
     id="blank-mdl-multiplier"
-    value="{{ method_data.BLANK_MDL_MULTIPLIER }}"
+    value="{{ blank_mdl_multiplier_value }}"
 >
 
 <input
     type="hidden"
     id="qdl-source"
-    value="{{ method_data.QDL_SOURCE }}"
+    value="{{ qdl_source_value }}"
 >
 
 <input
     type="hidden"
     id="qdl-multiplier"
-    value="{{ method_data.QDL_MULTIPLIER }}"
+    value="{{ qdl_multiplier_value }}"
 >
 
 <input
     type="hidden"
     id="analysis-qdl"
-    value="{{ qdl_value if qdl_value is not none else '' }}"
+    value="{{ analysis_qdl_value }}"
 >
 
     {% if calibration_result %}
@@ -157,6 +248,12 @@
     type="hidden"
     id="calibration-intercept"
     value="{{ calibration_result.intercept }}"
+>
+
+<input
+    type="hidden"
+    id="interpretation-concentration-factor"
+    value="{{ interpretation_concentration_factor_value }}"
 >
 
 {% endif %}
@@ -220,7 +317,7 @@
                         padding: 9px;
                         width: 105px;
                     ">
-                        添加濃度<br>(mg/L)
+                        添加濃度<br>({{ sample_concentration_unit_text }})
                     </th>
 
                     <th style="
@@ -236,7 +333,7 @@
                         padding: 9px;
                         width: 105px;
                     ">
-                        測定值
+                        {{ sample_signal_label_text }}
                     </th>
 
                     <th style="
@@ -248,11 +345,21 @@
                     </th>
 
                     <th style="
-                        border: 1px solid #ccc;
-                        padding: 9px;
-                        width: 105px;
-                    ">
-                        分析濃度<br>(mg/L)
+                         border: 1px solid #ccc;
+                         padding: 9px;
+                         width: 105px;
+                          ">
+                        測定濃度<br>
+                         ({{ sample_concentration_unit_text }})
+                    </th>
+
+                    <th style="
+                         border: 1px solid #ccc;
+                         padding: 9px;
+                         width: 105px;
+                         ">
+                         樣品濃度<br>
+                         ({{ sample_concentration_unit_text }})
                     </th>
 
                     <th style="
@@ -263,13 +370,6 @@
                         判讀結果
                     </th>
 
-                    <th style="
-                        border: 1px solid #ccc;
-                        padding: 9px;
-                        width: 220px;
-                    ">
-                        備註
-                    </th>
                 </tr>
 
             </thead>
@@ -439,7 +539,11 @@
                         <input
                             type="number"
                             name="sample_volume_{{ loop.index0 }}"
-                            value="{{ row.sample_volume if row.sample_volume is defined else 25 }}"
+                            value="{{
+    row.sample_volume
+    if row.sample_volume is defined
+    else sample_volume_default_value
+}}"
                             readonly
                             style="
                                 width: 100%;
@@ -486,7 +590,11 @@
                         <input
                             type="number"
                             name="final_volume_{{ loop.index0 }}"
-                            value="{{ row.final_volume if row.final_volume is defined else 50 }}"
+                            value="{{
+    row.final_volume
+    if row.final_volume is defined
+    else final_volume_default_value
+}}"
                             readonly
                             style="
                                 width: 100%;
@@ -550,6 +658,24 @@
 
                     </td>
 
+                    <td
+                         class="measured-concentration-cell"
+                         style="
+                         border: 1px solid #ccc;
+                         padding: 8px;
+                         text-align: right;
+                         color: #374151;
+                         font-weight: 600;
+                         "
+                        >
+                     {% if row.measured_concentration is defined
+                     and row.measured_concentration is not none %}
+                     {{ "%.6f"|format(row.measured_concentration) }}
+                     {% else %}
+                      -
+                     {% endif %}
+                    </td>
+
 
                     <td 
                             class="calculated-concentration-cell"
@@ -579,25 +705,11 @@
                     </td>
 
 
-                    <td style="
-                        border: 1px solid #ccc;
-                        padding: 8px;
-                    ">
-
-                        <input
-                            type="text"
-                            name="remark_{{ loop.index0 }}"
-                            value="{{ row.remark if row.remark is defined else '' }}"
-                            style="
-                                width: 100%;
-                                box-sizing: border-box;
-                                padding: 7px 8px;
-                                border: 1px solid #bbb;
-                                border-radius: 4px;
-                            "
-                        >
-
-                    </td>
+                    <input
+                           type="hidden"
+                           name="remark_{{ loop.index0 }}"
+                           value="{{ row.remark if row.remark is defined else '' }}"
+                    >
 
                    </tr>
 
@@ -612,12 +724,24 @@
             display: flex;
             justify-content: flex-end;
         ">
-            <button
-                type="submit"
-                class="eacs-button eacs-button-primary"
-            >
-                更新樣品及 QA/QC
-            </button>
+            {% if show_sample_update_button_value %}
+
+<div style="
+    margin-top: 18px;
+    display: flex;
+    justify-content: flex-end;
+">
+
+    <button
+        type="submit"
+        class="eacs-button eacs-button-primary"
+    >
+        更新樣品及 QA/QC
+    </button>
+
+</div>
+
+{% endif %}
         </div>
 
 </form>

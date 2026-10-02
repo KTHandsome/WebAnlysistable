@@ -1069,6 +1069,36 @@ def save_w434_analysis_record(
                     )
                 ),
 
+                measured_concentration=(
+                    _to_optional_float(
+                        row.get(
+                            "measured_concentration"
+                        )
+                    )
+                ),
+
+                sample_concentration=(
+                    _to_optional_float(
+                        row.get(
+                            "sample_concentration",
+                            row.get(
+                                "calculated_concentration"
+                            )
+                        )
+                    )
+                ),
+
+                qaqc_concentration=(
+                    _to_optional_float(
+                        row.get(
+                            "qaqc_concentration",
+                            row.get(
+                                "calculated_concentration"
+                            )
+                        )
+                    )
+                ),
+
                 remark=str(
                     row.get(
                         "remark",
@@ -1108,6 +1138,71 @@ def save_w434_analysis_record(
                 )
                 or ""
             ).strip()
+
+            batch_remark = str(
+                batch.get(
+                    "batch_remark",
+                    ""
+                )
+                or ""
+            ).strip()
+
+            # ====================================
+            # 批次備註 Snapshot
+            # ====================================
+
+            if batch_remark:
+
+                remark_parts = []
+
+                if batch_no:
+                    remark_parts.append(
+                        "批次 "
+                        + batch_no
+                    )
+
+                if batch_category:
+                    remark_parts.append(
+                        "類別："
+                        + batch_category
+                    )
+
+                batch_remark_item = (
+                    AnalysisQaqcResult(
+                        analysis_id=
+                            record.analysis_id,
+
+                        display_order=
+                            qaqc_display_order,
+
+                        qaqc_type=
+                            "BATCH_REMARK",
+
+                        sample_id="",
+
+                        result_name=
+                            "批次備註",
+
+                        result_value=
+                            batch_remark,
+
+                        criteria_text="",
+
+                        is_pass=None,
+
+                        status_text="",
+
+                        remark=" / ".join(
+                            remark_parts
+                        )
+                    )
+                )
+
+                db.add(
+                    batch_remark_item
+                )
+
+                qaqc_display_order += 1           
 
             # ====================================
             # 3A：ICV / QC / CCV

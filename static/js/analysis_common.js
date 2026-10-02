@@ -11,7 +11,8 @@
     let interpretationState = {
     mdl: null,
     qdl: null,
-    blankMdlMultiplier: null
+    blankMdlMultiplier: null,
+    concentrationFactor: 1
 };
 
 function loadInterpretationStateFromPage() {
@@ -26,6 +27,27 @@ function loadInterpretationStateFromPage() {
         document.getElementById(
             "blank-mdl-multiplier"
         );
+
+    const concentrationFactorElement =
+    document.getElementById(
+        "interpretation-concentration-factor"
+    );
+
+    const concentrationFactor =
+    concentrationFactorElement
+        ? parseFloat(
+            concentrationFactorElement.value
+        )
+        : 1;
+
+    if (
+       Number.isFinite(concentrationFactor)
+       && concentrationFactor > 0
+       ) {
+    interpretationState.concentrationFactor =
+        concentrationFactor;
+    }
+
 
     if (
         !mdlElement
@@ -109,6 +131,8 @@ function loadInterpretationStateFromPage() {
             return;
         }
 
+        loadInterpretationStateFromPage();
+
         const signalInput =
             row.querySelector(
                 ".sample-signal-input"
@@ -119,18 +143,30 @@ function loadInterpretationStateFromPage() {
                 ".dilution-factor-input"
             );
 
+        const sampleVolumeInput =
+             row.querySelector(
+                  'input[name^="sample_volume_"]'
+             );
+
+              const finalVolumeInput =
+              row.querySelector(
+                'input[name^="final_volume_"]'
+             );    
+
         const resultCell =
             row.querySelector(
                 ".calculated-concentration-cell"
             );
 
         if (
-            !signalInput
-            || !dilutionInput
-            || !resultCell
+               !signalInput
+               || !dilutionInput
+               || !sampleVolumeInput
+               || !finalVolumeInput
+                || !resultCell
         ) {
-            return;
-        }
+                return;
+           }
 
         const signal =
             parseFloat(signalInput.value);
@@ -138,17 +174,24 @@ function loadInterpretationStateFromPage() {
         const dilutionFactor =
             parseFloat(dilutionInput.value);
 
-        if (
-            !Number.isFinite(signal)
-            || !Number.isFinite(dilutionFactor)
-            || dilutionFactor <= 0
-        ) {
-            resultCell.textContent = "-";
-            return;
-        }
+        const sampleVolume =
+             parseFloat(sampleVolumeInput.value);
 
-        const sampleVolume = 25.0;
-        const finalVolume = 50.0;
+        const finalVolume =
+             parseFloat(finalVolumeInput.value);
+
+        if (
+                !Number.isFinite(signal)
+                || !Number.isFinite(dilutionFactor)
+                || !Number.isFinite(sampleVolume)
+                || !Number.isFinite(finalVolume)
+                || dilutionFactor <= 0
+                || sampleVolume <= 0
+                || finalVolume <= 0
+           ) {
+             resultCell.textContent = "-";
+             return;
+         }
 
         const backCalculatedConcentration =
             (
@@ -166,30 +209,31 @@ function loadInterpretationStateFromPage() {
             calculatedConcentration.toFixed(6);
 
             const interpretationCell =
-    row.querySelector(
-        ".interpretation-cell"
-    );
+              row.querySelector(
+                    ".interpretation-cell"
+               );
 
-const roleInput =
-    row.querySelector(
-        'input[name^="role_"]'
-    );
+        const roleInput =
+              row.querySelector(
+                   'input[name^="role_"]'
+                );
 
-if (
-    interpretationCell
-    && roleInput
-    && window.AnalysisInterpretation
-) {
+            if (
+                  interpretationCell
+                  && roleInput
+                   && window.AnalysisInterpretation
+            ) {
 
-    const role =
-        roleInput.value;
+        const role =
+                  roleInput.value;
 
-    const interpretation =
-        window.AnalysisInterpretation.evaluateResult(
+        const interpretation =
+             window.AnalysisInterpretation.evaluateResult(
             {
                 role: role,
                 concentration:
-                    calculatedConcentration,
+                    calculatedConcentration
+                    * interpretationState.concentrationFactor,
                 mdl:
                     interpretationState.mdl,
                 qdl:
@@ -212,8 +256,12 @@ if (
 
     interpretationCell.textContent =
         interpretation;
+  }
 }
-    }
+
+
+
+     
 
 
     function recalculateAllSampleRows() {
@@ -940,13 +988,24 @@ function initializeAnalysisCalculation() {
 
     updateSampleDisplayOrder();
 
+     if (calibrationLoaded) {
+      recalculateAllSampleRows();
 }
 
+}
+
+
+    if (document.readyState === "loading") {
 
     document.addEventListener(
         "DOMContentLoaded",
         initializeAnalysisCalculation
     );
+
+} else {
+
+    initializeAnalysisCalculation();
+}
 
 
     window.AnalysisCalculation = {

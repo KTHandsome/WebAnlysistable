@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block title %}
+W330 汞分析 - EACS Web
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+
+    <h1 class="page-title">
+        W330 汞分析
+    </h1>
+
+    <div class="page-subtitle">
+        RA-7000A 原子吸收光譜儀分析資料
+    </div>
+
+</div>
+
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        分析基本資料
+    </h2>
+
+    <div class="eacs-info-grid">
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                測項
+            </div>
+            <div class="eacs-info-value">
+                {{ form_data.exam_name }}
+            </div>
+        </div>
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                方法
+            </div>
+            <div class="eacs-info-value">
+                {{ form_data.method_code }}
+            </div>
+        </div>
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                儀器
+            </div>
+            <div class="eacs-info-value">
+                {{ form_data.instrument_model }}
+            </div>
+        </div>
+
+        <div class="eacs-info-item">
+            <div class="eacs-info-label">
+                波長
+            </div>
+            <div class="eacs-info-value">
+                {% if form_data.wavelength %}
+                {{ form_data.wavelength }} nm
+                {% else %}
+                      -
+                 {% endif %}
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        RA-7000A 儀器資料
+    </h2>
+
+
+    {% if import_error %}
+
+    <div style="
+        margin-bottom: 18px;
+        padding: 12px 14px;
+        border-radius: 6px;
+        background-color: var(--eacs-danger-bg);
+        color: var(--eacs-danger);
+    ">
+        {{ import_error }}
+    </div>
+
+    {% endif %}
+
+
+    <form
+        method="post"
+        enctype="multipart/form-data"
+    >
+
+        <div style="
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        ">
+
+            <input
+                type="file"
+                name="ra7000_pdf"
+                accept=".pdf,application/pdf"
+                class="eacs-form-control"
+                style="max-width: 520px;"
+            >
+
+            <button
+                type="submit"
+                class="eacs-button eacs-button-primary"
+            >
+                匯入 PDF
+            </button>
+
+        </div>
+
+    </form>
+
+
+    {% if uploaded_filename %}
+
+    <div style="
+        margin-top: 14px;
+        color: var(--eacs-text-muted);
+    ">
+        已匯入：
+        {{ uploaded_filename }}
+    </div>
+
+    {% endif %}
+
+</div>
+
+{% set analysis_loaded = ra7000_data is not none %}
+
+{% set show_temp_save = false %}
+{% set show_formal_save = false %}
+{% set show_pdf_export = false %}
+{% set show_lims_export = false %}
+
+{% set formal_saved_message = "" %}
+
+{% include "components/analysis/analysis_action_bar.html" %}
+
+{% if ra7000_data %}
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        儀器資訊
+    </h2>
+
+    <div class="eacs-info-grid">
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                分析日期時間
+            </div>
+
+            <div class="eacs-info-value">
+                {{ ra7000_data.analysis_datetime }}
+            </div>
+
+        </div>
+
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                UNIT
+            </div>
+
+            <div class="eacs-info-value">
+                {{ ra7000_data.unit }}
+            </div>
+
+        </div>
+
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                STD 筆數
+            </div>
+
+            <div class="eacs-info-value">
+                {{ ra7000_data.standards|length }}
+            </div>
+
+        </div>
+
+
+        <div class="eacs-info-item">
+
+            <div class="eacs-info-label">
+                SMP 筆數
+            </div>
+
+            <div class="eacs-info-value">
+                {{ ra7000_data.samples|length }}
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+{% include "components/analysis/calibration_section.html" %}
+
+{% set sample_volume_default = 50 %}
+{% set final_volume_default = 100 %}
+{% set sample_concentration_unit = "ug/L" %}
+{% set sample_signal_label = "AREA" %}
+{% set interpretation_concentration_factor = 0.001 %}
+{% set sample_update_url = "" %}
+{% set show_sample_update_button = false %}
+
+{% include "components/analysis/sample_qaqc_section.html" %}
+
+{% include "components/analysis/qaqc_check_section.html" %}
+
+{% endif %}
+
+<script
+    src="{{ url_for('static', filename='js/analysis_interpretation.js') }}"
+></script>
+
+<script
+    src="{{ url_for('static', filename='js/analysis_common.js') }}"
+></script>
+
+{% endblock %}

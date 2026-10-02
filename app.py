@@ -16,13 +16,18 @@ from datetime import datetime, timedelta
 
 from parsers.pe900_parser import parse_pe900_pdf
 
+from parsers.ra7000_parser import (
+    parse_ra7000_pdf
+)
+
 from calculations.w43401 import (
     calculate_calibration,
     calculate_sample_concentration
 )
 
 from analysis.analysis_batch_splitter import (
-    filter_batches_by_exam_no
+    filter_batches_by_exam_no,
+    split_analysis_batches
 )
 
 from analysis.qaqc_calculator import (
@@ -2183,6 +2188,20 @@ def basic_info():
                 )
             )
 
+        if (
+            next_action == "import_w330"
+            and method_data
+            and form_data.get(
+                "instrument_id"
+            )
+        ):
+
+            return redirect(
+                url_for(
+                    "analysis_w330"
+                )
+            )
+
     else:
 
         instrument_options = (
@@ -3003,6 +3022,334 @@ def get_analysis_session_key(method_code):
         + "_formal_analysis_id"
     )
 
+def validate_qaqc_export_ready(
+    qaqc_results
+):
+
+    if not qaqc_results:
+
+        return (
+            False,
+            "尚未完成 QA/QC 判定，"
+            "不可匯出。"
+        )
+
+    invalid_items = []
+
+    for batch in qaqc_results:
+
+        batch_no = str(
+            batch.get(
+                "batch_no",
+                ""
+            )
+            or ""
+        ).strip()
+
+        batch_label = (
+            "Batch "
+            + batch_no
+            if batch_no
+            else "未識別批次"
+        )
+
+        # 3A：ICV / QC / CCV
+        for row in batch.get(
+            "rows",
+            []
+        ):
+
+            status = str(
+                row.get(
+                    "status",
+                    ""
+                )
+                or ""
+            ).strip()
+
+            if status != "合格":
+
+                role = str(
+                    row.get(
+                        "role",
+                        ""
+                    )
+                    or ""
+                ).strip()
+
+                sample_id = str(
+                    row.get(
+                        "sample_id",
+                        ""
+                    )
+                    or ""
+                ).strip()
+
+                invalid_items.append(
+                    batch_label
+                    + " / "
+                    + role
+                    + (
+                        " / " + sample_id
+                        if sample_id
+                        else ""
+                    )
+                    + "："
+                    + (
+                        status
+                        if status
+                        else "無法判定"
+                    )
+                )
+
+        # 3B：重複分析精密度
+        precision = batch.get(
+            "precision"
+        )
+
+        if precision:
+
+            status = str(
+                precision.get(
+                    "status",
+                    ""
+                )
+                or ""
+            ).strip()
+
+            if status != "合格":
+
+                invalid_items.append(
+                    batch_label
+                    + " / 重複分析精密度："
+                    + (
+                        status
+                        if status
+                        else "無法判定"
+                    )
+                )
+
+        # 3C：MS / MSD 回收率
+        for row in batch.get(
+            "spike_recovery",
+            []
+        ):
+
+            status = str(
+                row.get(
+                    "status",
+                    ""
+                )
+                or ""
+            ).strip()
+
+            if status != "合格":
+
+                role = str(
+                    row.get(
+                        "role",
+                        ""
+                    )
+                    or ""
+                ).strip()
+
+                invalid_items.append(
+                    batch_label
+                    + " / "
+                    + role
+                    + " 回收率："
+                    + (
+                        status
+                        if status
+                        else "無法判定"
+                    )
+                )
+
+    if invalid_items:
+
+        return (
+            False,
+            "QA/QC 尚未全部符合，"
+            "不可匯出：\n"
+            + "\n".join(
+                invalid_items
+            )
+        )
+
+    return (
+        True,
+        ""
+    )
+
+def redirect_metal_analysis_error(
+    error_message,
+    method_code
+):
+
+    analysis_state_key = (
+        get_analysis_state_key(
+            method_code
+        )
+    )
+
+    analysis_state = (
+        load_analysis_state(
+            analysis_state_key
+        )
+    )
+
+    redirect_args = {
+        "error_message":
+            error_message
+    }
+
+    if analysis_state:
+
+        redirect_args[
+            "saved"
+        ] = "1"
+
+    return redirect(
+        url_for(
+            "analysis_w43401",
+            **redirect_args
+        )
+    )
+
+@app.route(
+    "/analysis/update-batch-remarks",
+    methods=["POST"]
+)
+@login_required
+def update_batch_remarks():
+
+    form_data = session.get(
+        "basic_info_form"
+    ) or {}
+
+    method_code = str(
+        form_data.get(
+            "method_code",
+            ""
+        )
+        or ""
+    ).strip().upper()
+
+    if not method_code:
+
+        return (
+            "尚未找到目前分析方法。",
+            400
+        )
+
+    analysis_state_key = (
+        get_analysis_state_key(
+            method_code
+        )
+    )
+
+    analysis_state = (
+        load_analysis_state(
+            analysis_state_key
+        )
+        or {}
+    )
+
+    included_batches = (
+        analysis_state.get(
+            "included_batches",
+            []
+        )
+    )
+
+    qaqc_results = (
+        analysis_state.get(
+            "qaqc_results",
+            []
+        )
+    )
+
+    if not included_batches:
+
+        return (
+            "尚未找到分析批次資料。",
+            400
+        )
+
+    remark_map = {}
+
+    for batch in included_batches:
+
+        batch_no = batch.get(
+            "batch_no"
+        )
+
+        if batch_no is None:
+            continue
+
+        remark = (
+            request.form.get(
+                "batch_remark_"
+                + str(batch_no),
+                ""
+            )
+            .strip()
+        )
+
+        batch[
+            "batch_remark"
+        ] = remark
+
+        remark_map[
+            str(batch_no)
+        ] = remark
+
+    # QA/QC 顯示資料也同步帶入
+    for batch in qaqc_results:
+
+        batch_no = batch.get(
+            "batch_no"
+        )
+
+        if batch_no is None:
+            continue
+
+        batch[
+            "batch_remark"
+        ] = remark_map.get(
+            str(batch_no),
+            ""
+        )
+
+    analysis_state[
+        "included_batches"
+    ] = included_batches
+
+    analysis_state[
+        "qaqc_results"
+    ] = qaqc_results
+
+    save_analysis_state(
+        analysis_state_key,
+        analysis_state
+    )
+
+    if method_code == "W330":
+
+        return redirect(
+            url_for(
+                "analysis_w330",
+                saved="1"
+            )
+        )
+
+    return redirect(
+        url_for(
+            "analysis_w43401",
+            saved="1"
+        )
+    )
+
 def split_analysis_rows(rows):
 
     calibration_rows = []
@@ -3016,6 +3363,741 @@ def split_analysis_rows(rows):
             sample_qaqc_rows.append(row)
 
     return calibration_rows, sample_qaqc_rows
+
+@app.route(
+    "/analysis/w330",
+    methods=["GET", "POST"]
+)
+@login_required
+def analysis_w330():
+
+    form_data = session.get(
+        "basic_info_form"
+    ) or {}
+
+    if not form_data:
+
+        return redirect(
+            url_for(
+                "basic_info"
+            )
+        )
+
+    import_error = None
+    uploaded_filename = None
+
+    ra7000_data = None
+
+    calibration_rows = []
+    calibration_result = None
+    sample_qaqc_rows = []
+    included_batches = []
+    control_data = None
+    method_data = None
+    load_error = None
+    qdl_value = None
+    qaqc_results = []
+
+    if form_data:
+
+     (
+        control_data,
+        method_data,
+        load_error
+     ) = load_control_and_method_data(
+        form_data
+     )
+
+    if (
+    request.method == "GET"
+    and request.args.get("saved") == "1"
+):
+
+      saved_state = load_analysis_state(
+        "W330_CURRENT"
+    )
+
+      if saved_state:
+
+        ra7000_data = saved_state.get(
+            "ra7000_data"
+             )
+
+        calibration_rows = saved_state.get(
+            "calibration_rows",
+            []
+        )
+
+        calibration_result = saved_state.get(
+            "calibration_result"
+        )
+
+        sample_qaqc_rows = saved_state.get(
+            "sample_qaqc_rows",
+            []
+        )
+
+        included_batches = saved_state.get(
+            "included_batches",
+            []
+        )
+
+        qaqc_results = saved_state.get(
+            "qaqc_results",
+            []
+        )
+
+        qdl_value = saved_state.get(
+            "qdl_value"
+        )
+
+        uploaded_filename = saved_state.get(
+            "uploaded_filename"
+        )
+    
+
+    if request.method == "POST":
+
+        pdf_file = request.files.get(
+            "ra7000_pdf"
+        )
+
+        if (
+            pdf_file is None
+            or pdf_file.filename == ""
+        ):
+
+            import_error = (
+                "請先選擇 RA-7000A PDF 檔案。"
+            )
+
+        elif not pdf_file.filename.lower().endswith(
+            ".pdf"
+        ):
+
+            import_error = (
+                "只能匯入 PDF 檔案。"
+            )
+
+        else:
+
+            uploaded_filename = (
+                pdf_file.filename
+            )
+
+            temp_path = None
+
+            try:
+
+                fd, temp_path = (
+                    tempfile.mkstemp(
+                        suffix=".pdf"
+                    )
+                )
+
+                os.close(
+                    fd
+                )
+
+                pdf_file.save(
+                    temp_path
+                )
+
+                ra7000_data = (
+                    parse_ra7000_pdf(
+                        temp_path
+                    )
+                )
+
+                calibration_rows = []
+
+                for index, row in enumerate(
+                    ra7000_data.get(
+                        "standards",
+                        []
+                    ),
+                    start=1
+                ):
+
+                    calibration_rows.append(
+                        {
+                            "sequence_no":
+                                index,
+
+                            "sample_id":
+                                (
+                                    "STD"
+                                    + str(index - 1)
+                                ),
+
+                            "signal":
+                                row.get(
+                                    "area"
+                                ),
+
+                            "role":
+                                "STANDARD",
+
+                            "calibration_x":
+                                row.get(
+                                    "std_concentration"
+                                )
+                        }
+                    )
+
+                calibration_result = (
+                    calculate_calibration(
+                        calibration_rows
+                    )
+                )
+
+                # ========================================
+                # W330 QDL
+                # 與 W434 使用相同方法設定邏輯
+                # ========================================
+
+                if method_data and calibration_rows:
+
+                      qdl_source = str(
+                         method_data.get(
+                        "QDL_SOURCE",
+                      ""
+                      )
+                      or ""
+                      ).strip().upper()
+
+                      qdl_multiplier_text = str(
+                         method_data.get(
+                         "QDL_MULTIPLIER",
+                         ""
+                         )
+                         or ""
+                         ).strip()
+
+                      if (
+                             qdl_source
+                             == "FIRST_NONZERO_CALIBRATION_X"
+                         ):
+
+                             first_nonzero_x = None
+
+                             for row in calibration_rows:
+
+                                  x_value = row.get(
+                                  "calibration_x"
+                                  )
+
+                                  if (
+                                     x_value is not None
+                                     and x_value > 0
+                                ):
+
+                                     first_nonzero_x = (
+                                     x_value
+                                    )
+
+                                     break
+
+                             if first_nonzero_x is not None:
+
+                                 try:
+
+                                     qdl_multiplier = float(
+                                     qdl_multiplier_text
+                                    )
+
+                                     qdl_value = (
+                                       first_nonzero_x
+                                       * qdl_multiplier
+                                       / 1000.0
+                                     )
+
+                                 except ValueError:
+
+                                  qdl_value = None
+
+
+
+
+                # ========================================
+                # W330 SMP TABLE
+                # → 轉為金屬分析共用 sample_qaqc_rows
+                # ========================================
+
+                if (
+                      ra7000_data
+                       and calibration_result
+                ):
+
+                      raw_sample_rows = (
+                        ra7000_data.get(
+                          "samples",
+                         []
+                         )
+                     )
+
+                      for raw_row in raw_sample_rows:
+
+                        signal = raw_row.get(
+                        "area"
+                         )
+                        
+                        measured_concentration = None
+                        sample_concentration = None
+                        calculated_concentration = None                      
+                        qaqc_concentration = None 
+
+                        sample_id = str(
+                                raw_row.get(
+                                  "sample_name",
+                                   ""
+                                )
+                              or ""
+                             ).strip()
+
+                        sample_id_upper = (
+                                 sample_id.upper()
+                            )
+
+
+                        # --------------------------------
+                        # 共用 QA/QC Role 判斷
+                        # --------------------------------
+
+                        role = "SAMPLE"
+ 
+                        if (
+                               sample_id_upper == "ICBK"
+                             or sample_id_upper.startswith(
+                              "ICBK-"
+                              )
+                        ):
+                           role = "ICBK"
+
+                        elif (
+                              sample_id_upper == "ICV"
+                             or sample_id_upper.startswith(
+                              "ICV-"
+                              )
+                        ):
+                         role = "ICV"
+
+                        elif (
+                               sample_id_upper == "BK"
+                             or sample_id_upper.startswith(
+                                "BK-"
+                              )
+                        ):
+                         role = "BK"
+
+                        elif (
+                               sample_id_upper == "QC"
+                               or sample_id_upper.startswith(
+                                "QC-"
+                              )
+                        ):
+                         role = "QC"
+
+                        elif (
+                               sample_id_upper == "CCBK"
+                               or sample_id_upper.startswith(
+                                 "CCBK-"
+                                )
+                        ):
+                         role = "CCBK"
+
+                        elif (
+                               sample_id_upper == "CCV"
+                                or sample_id_upper.startswith(
+                               "CCV-"
+                             )
+                        ):
+                         role = "CCV"
+
+                        elif (
+                                sample_id_upper == "DUP"
+                                or sample_id_upper.startswith(
+                               "DUP-"
+                               )
+                         ):
+                           role = "DUP"
+
+                        elif (
+                                 sample_id_upper == "MSD"
+                                  or sample_id_upper.startswith(
+                                 "MSD-"
+                                   )
+                         ):
+                           role = "MSD"
+
+                        elif (
+                                   sample_id_upper == "MS"
+                                  or sample_id_upper.startswith(
+                                 "MS-"
+                                   )
+                        ):
+                          role = "MS"
+
+                        # --------------------------------
+                        # W330 濃度計算基準
+                        #
+                        # ICV / CCV：
+                        #   為檢量線確認 / 查核溶液，
+                        #   直接使用最終 100 mL 溶液的
+                        #   檢量線反算濃度，不再乘 100/50。
+                        #
+                        # 其他 SAMPLE / QC / DUP / MS / MSD：
+                        #   視同樣品，
+                        #   換算回原 50 mL 樣品濃度。
+                        # --------------------------------
+
+                        if signal is not None:
+
+                             try:
+
+                                 calc_sample_volume = 50.0
+                                 calc_final_volume = 100.0
+
+                                 result = (
+                                         calculate_sample_concentration(
+                                         signal=signal,
+                                         slope=calibration_result[
+                                         "slope"
+                                         ],
+                                         intercept=calibration_result[
+                                         "intercept"
+                                         ],
+                                         sample_volume=
+                                         calc_sample_volume,
+                                         final_volume=
+                                         calc_final_volume,
+                                         dilution_factor=1.0
+                                          )
+                                        )
+
+                                 measured_concentration = (
+                                     result.get(
+                                     "measured_concentration"
+                                      )
+                                 )
+
+                                 sample_concentration = (
+                                      result.get(
+                                      "sample_concentration"
+                                       )
+                                 )
+
+                                 calculated_concentration = (
+                                        result.get(
+                                      "calculated_concentration"
+                                       )
+                                 )
+
+                                 if role in {
+                                     "ICV",
+                                     "CCV"
+                                     }:
+                                         qaqc_concentration = (
+                                         measured_concentration
+                                        )
+                                 else:
+                                       qaqc_concentration = (
+                                           sample_concentration
+                                        ) 
+
+                             except ValueError:
+
+                                 calculated_concentration = None
+
+                        sample_qaqc_rows.append(
+                           {
+                               "sequence_no":
+                                raw_row.get(
+                                 "row_no"
+                               ),
+
+                             "sample_id":
+                              sample_id,
+
+                             "signal":
+                             signal,
+
+                             "role":
+                               role,
+
+                              "sample_volume":
+                              50.0,
+
+                            "final_volume":
+                            100.0,
+
+                            "dilution_factor":
+                            1.0,
+            
+                            "spike_concentration":
+                            "",
+
+                            "measured_concentration":
+                             measured_concentration,
+
+                            "sample_concentration":
+                             sample_concentration,
+
+                            "calculated_concentration":
+                             calculated_concentration,
+
+                            "qaqc_concentration":
+                             qaqc_concentration, 
+
+                            "remark":
+                                (
+                                 raw_row.get(
+                                  "note"
+                                )
+                                  or ""
+                               ),
+
+                             "is_excluded":
+                                  False
+                          }
+                       ) 
+
+                        # ========================================
+                        # W330 QA/QC 預設添加濃度
+                        # 與 W434 使用相同方法設定
+                        # ========================================
+
+                        if method_data and sample_qaqc_rows:
+
+                           spike_field_by_role = {
+                           "ICV": "ICV_SPIKE_CONC",
+                           "QC": "QC_SPIKE_CONC",
+                           "CCV": "CCV_SPIKE_CONC",
+                           "MS": "MS_SPIKE_CONC",
+                           "MSD": "MS_SPIKE_CONC"
+                           }
+
+                           for row in sample_qaqc_rows:
+
+                            role = str(
+                                row.get(
+                                 "role",
+                                  ""
+                                 )
+                                 or ""
+                              ).strip().upper()
+
+                            field_name = (
+                               spike_field_by_role.get(
+                                 role
+                                )
+                              )
+
+                            if field_name:
+
+                               row[
+                                 "spike_concentration"
+                                ] = str(
+                             method_data.get(
+                              field_name,
+                             ""
+                              )
+                              or ""
+                              ).strip()
+
+                        # ========================================
+                        # W330 分析批次
+                        # 使用金屬分析共用切批邏輯
+                        # ========================================
+
+                        if sample_qaqc_rows:
+
+                           (
+                              included_batches,
+                               pre_batch_rows
+                            ) = split_analysis_batches(
+                                sample_qaqc_rows
+                            )  
+
+                        # ========================================
+                        # W330 QA/QC 計算單位正規化
+                        # 畫面濃度：ug/L
+                        # QA/QC 管制資料：mg/L
+                        # ========================================
+
+                        qaqc_batches = []
+
+                        for batch in included_batches:
+
+                            qaqc_batch = batch.copy()
+
+                            qaqc_rows = []
+
+                            for row in batch.get(
+                              "rows",
+                                []
+                            ):
+
+                             qaqc_row = row.copy()
+
+                             concentration = (
+                               qaqc_row.get(
+                               "calculated_concentration"
+                               )
+                             )
+
+                             try:
+
+                                  if concentration not in {
+                                      None,
+                                      ""
+                                   }:
+
+                                      qaqc_row[
+                                       "calculated_concentration"
+                                    ] = (
+                                       float(concentration)
+                                      / 1000.0
+                                     )
+
+                             except (
+                                     TypeError,
+                                     ValueError
+                                    ):
+
+                                 pass
+
+                             qaqc_concentration = (
+                                qaqc_row.get(
+                                 "qaqc_concentration"
+                                      )
+                                 )
+
+                             try:
+
+                                 if qaqc_concentration not in {
+                                         None,
+                                         ""
+                                  }:
+
+                                     qaqc_row[
+                                        "qaqc_concentration"
+                                        ] = (
+                                         float(
+                                          qaqc_concentration
+                                         )
+                                       / 1000.0
+                                         )
+
+                             except (
+                                     TypeError,
+                                      ValueError
+                                     ):
+
+                                         pass                             
+
+                             qaqc_rows.append(
+                                qaqc_row
+                             )
+
+                            qaqc_batch[
+                                 "rows"
+                                  ] = qaqc_rows
+
+                            qaqc_batches.append(
+                                  qaqc_batch
+                                  ) 
+
+                        # ========================================
+                        # W330 QA/QC 檢核
+                        # ========================================
+
+                        qaqc_results = []
+
+                        if (
+                                   qaqc_batches
+                                and control_data
+                        ):
+
+                            qaqc_results = (
+                                  build_qaqc_check_results(
+                                  qaqc_batches,
+                                  control_data,
+                                  cc_relative_error_limit=20.0,
+                                  qdl_value=qdl_value
+                                    )
+                            )                            
+
+                            save_analysis_state(
+                                "W330_CURRENT",
+                                 {
+                                     "ra7000_data":
+                                          ra7000_data,
+                                     
+                                     "calibration_rows":
+                                          calibration_rows,
+
+                                     "calibration_result":
+                                          calibration_result,
+
+                                     "sample_qaqc_rows":
+                                          sample_qaqc_rows,
+
+                                     "included_batches":
+                                          included_batches,
+
+                                     "qaqc_results":
+                                          qaqc_results,
+
+                                      "qdl_value":
+                                           qdl_value,
+
+                                      "uploaded_filename":
+                                           uploaded_filename
+                                        }
+                                    )
+                            
+
+            except Exception as ex:
+
+                import_error = (
+                    "RA-7000A PDF 解析失敗："
+                    + str(ex)
+                )
+
+            finally:
+
+                if (
+                    temp_path
+                    and os.path.exists(
+                        temp_path
+                    )
+                ):
+
+                    os.remove(
+                        temp_path
+                    )
+
+    return render_template(
+    "methods/w330.html",
+    active_page="analysis_method",
+    form_data=form_data,
+    import_error=import_error,
+    uploaded_filename=uploaded_filename,
+    ra7000_data=ra7000_data,
+    calibration_rows=calibration_rows,
+    calibration_result=calibration_result,
+    sample_qaqc_rows=sample_qaqc_rows,
+    sample_data_saved=False,
+    control_data=control_data,
+    method_data=method_data,
+    qdl_value=qdl_value,
+    calibration_unit="ug/L",
+    calibration_signal_label="AREA",
+    show_calibration_error=False,
+    included_batches=included_batches,
+    qaqc_3a_results=qaqc_results,
+)
 
 @app.route("/analysis/w43401", methods=["GET", "POST"])
 @login_required
@@ -3204,6 +4286,8 @@ def analysis_w43401():
                 calibration_result=saved_state.get(
                     "calibration_result"
                 ),
+
+                show_calibration_error=False,
 
                 qdl_value=saved_state.get(
                     "qdl_value"
@@ -3742,6 +4826,7 @@ def analysis_w43401():
         control_data=control_data,
         report_data=report_data,
         calibration_result=calibration_result,
+        show_calibration_error=False,
         qdl_value=qdl_value,
         confirmed_wavelength=confirmed_wavelength,
         wavelength_warning=wavelength_warning,
@@ -4831,10 +5916,24 @@ def save_w434_record():
 
     if not form_data:
 
-        return (
-            "尚未建立分析基本資料。",
-            400
+      return redirect_metal_analysis_error(
+        "尚未建立分析基本資料。",
+        current_method_code
+    )
+
+    current_method_code = str(
+        form_data.get(
+            "method_code",
+            ""
         )
+        or ""
+    ).strip().upper()
+
+    analysis_state_key = (
+        get_analysis_state_key(
+            current_method_code
+        )
+    )    
 
     (
         control_data,
@@ -4846,24 +5945,48 @@ def save_w434_record():
 
     if load_error:
 
-        return (
-            load_error,
-            400
-        )
+      return redirect_metal_analysis_error(
+        load_error,
+        current_method_code
+    )
 
     analysis_state = load_analysis_state(
-        "W434_CURRENT"
+    analysis_state_key
     )
 
     if not analysis_state:
 
-        return (
-            "尚未找到 W434 分析資料，請先匯入儀器 PDF。",
-            400
-        )
+      return redirect_metal_analysis_error(
+        "尚未找到 W434 分析資料，"
+        "請先匯入儀器 PDF。",
+        current_method_code
+    )
 
     form_data = session.get(
         "basic_info_form"
+    )
+
+    qaqc_results = (
+    analysis_state.get(
+        "qaqc_results",
+        []
+    )
+)
+
+    qaqc_ready, qaqc_error = (
+    validate_qaqc_export_ready(
+        qaqc_results
+    )
+)
+
+    if not qaqc_ready:
+
+      return redirect_metal_analysis_error(
+        qaqc_error.replace(
+            "不可匯出",
+            "不可儲存正式分析紀錄"
+        ),
+        current_method_code
     )
 
     current_user = (
@@ -4919,8 +6042,8 @@ def save_w434_record():
 ]
 
     save_analysis_state(
-        "W434_CURRENT",
-        analysis_state
+    analysis_state_key,
+    analysis_state
     )
 
     return redirect(
@@ -4941,9 +6064,9 @@ def export_w434_pdf():
 
     if not form_data:
 
-        return (
+        return redirect_metal_analysis_error(
             "尚未建立分析基本資料。",
-            400
+            current_method_code
         )
 
     (
@@ -4954,11 +6077,25 @@ def export_w434_pdf():
         form_data
     )
 
+    current_method_code = str(
+        form_data.get(
+            "method_code",
+            ""
+        )
+        or ""
+    ).strip().upper()
+
+    analysis_state_key = (
+        get_analysis_state_key(
+            current_method_code
+        )
+    )
+
     if load_error:
 
-        return (
+        return redirect_metal_analysis_error(
             load_error,
-            400
+            current_method_code
         )
 
     (
@@ -4970,21 +6107,42 @@ def export_w434_pdf():
 
     if report_error:
 
-        return (
+        return redirect_metal_analysis_error(
             report_error,
-            400
+            current_method_code
         )
 
     analysis_state = load_analysis_state(
-        "W434_CURRENT"
+    analysis_state_key
     )
 
     if not analysis_state:
 
-        return (
-            "尚未找到 W434 分析結果，請先匯入並解析 PE900 PDF。",
-            400
-        ) 
+      return redirect_metal_analysis_error(
+        "尚未找到 W434 分析結果，"
+        "請先匯入並解析 PE900 PDF。",
+        current_method_code
+    ) 
+
+    qaqc_results = (
+    analysis_state.get(
+        "qaqc_results",
+        []
+    )
+)
+
+    qaqc_ready, qaqc_error = (
+    validate_qaqc_export_ready(
+        qaqc_results
+    )
+)
+
+    if not qaqc_ready:
+
+      return redirect_metal_analysis_error(
+        qaqc_error,
+        current_method_code
+    )      
 
     pdf_buffer = build_w434_pdf(
     report_data,
@@ -5026,11 +6184,25 @@ def export_w434_lims():
         "basic_info_form"
     )
 
+    current_method_code = str(
+        form_data.get(
+            "method_code",
+            ""
+        )
+        or ""
+    ).strip().upper()
+
+    analysis_state_key = (
+        get_analysis_state_key(
+            current_method_code
+        )
+    )
+
     if not form_data:
 
-        return (
+        return redirect_metal_analysis_error(
             "尚未建立分析基本資料。",
-            400
+            current_method_code
         )
 
     (
@@ -5043,22 +6215,43 @@ def export_w434_lims():
 
     if load_error:
 
-        return (
+        return redirect_metal_analysis_error(
             load_error,
-            400
+            current_method_code
         )
 
     analysis_state = load_analysis_state(
-        "W434_CURRENT"
+    analysis_state_key
     )
 
     if not analysis_state:
 
-        return (
-            "尚未找到 W434 分析結果，請先完成分析資料。",
-            400
-        )
+      return redirect_metal_analysis_error(
+        "尚未找到 W434 分析結果，"
+        "請先完成分析資料。",
+        current_method_code
+    )
 
+    qaqc_results = (
+    analysis_state.get(
+        "qaqc_results",
+        []
+    )
+)
+
+    qaqc_ready, qaqc_error = (
+    validate_qaqc_export_ready(
+        qaqc_results
+    )
+)
+
+    if not qaqc_ready:
+
+      return redirect_metal_analysis_error(
+        qaqc_error,
+        current_method_code
+    )
+    
     export_data = (
         build_w434_lims_export_data(
             form_data=form_data,
@@ -5070,17 +6263,17 @@ def export_w434_lims():
 
     if not export_data.qc_rows:
 
-        return (
-            "目前沒有可匯出的 LIMS 品管資料。",
-            400
-        )
+      return redirect_metal_analysis_error(
+        "目前沒有可匯出的 LIMS 品管資料。",
+        current_method_code
+    )
 
     if not export_data.analysis_rows:
 
-        return (
-            "目前沒有可匯出的正式樣品資料。",
-            400
-        )
+      return redirect_metal_analysis_error(
+        "目前沒有可匯出的正式樣品資料。",
+        current_method_code
+    )
 
     template_path = os.path.join(
         app.root_path,

@@ -390,12 +390,15 @@ def build_qaqc_check_results(
                 "sequence_no"
             )
 
-            calculated_concentration = (
+            qaqc_concentration = (
                 _to_float(
+                     row.get(
+                           "qaqc_concentration",
                     row.get(
-                        "calculated_concentration"
-                    )
-                )
+                           "calculated_concentration"
+                        )
+                     )
+                 )
             )
 
             spike_concentration = (
@@ -417,10 +420,10 @@ def build_qaqc_check_results(
             }:
 
                 check_value = (
-                    calculate_relative_error(
-                        calculated_concentration,
-                        spike_concentration
-                    )
+                     calculate_relative_error(
+                     qaqc_concentration,
+                     spike_concentration
+                       )
                 )
 
                 calculation_type = (
@@ -464,7 +467,7 @@ def build_qaqc_check_results(
 
                 check_value = (
                     calculate_recovery(
-                        calculated_concentration,
+                        qaqc_concentration,
                         spike_concentration
                     )
                 )
@@ -589,7 +592,7 @@ def build_qaqc_check_results(
                         spike_concentration,
 
                     "calculated_concentration":
-                        calculated_concentration,
+                        qaqc_concentration,
 
                     "calculation_type":
                         calculation_type,
@@ -675,13 +678,19 @@ def build_qaqc_check_results(
 
              duplicate_value = _to_float(
                 duplicate_row.get(
-                    "calculated_concentration"
+                    "qaqc_concentration",
+                        duplicate_row.get(
+                     "calculated_concentration"
                 )
+              )  
             )
 
              original_value = _to_float(
                 original_row.get(
-                    "calculated_concentration"
+                   "qaqc_concentration",
+                          original_row.get(
+                      "calculated_concentration"
+                     )
                 )
             )
 
@@ -766,13 +775,19 @@ def build_qaqc_check_results(
 
                     ms_value = _to_float(
                         ms_row.get(
+                            "qaqc_concentration",
+                             ms_row.get(
                             "calculated_concentration"
+                             )
                         )
                     )
 
                     msd_value = _to_float(
                         msd_row.get(
+                            "qaqc_concentration",
+                               msd_row.get(
                             "calculated_concentration"
+                             )
                         )
                     )
 
@@ -869,6 +884,7 @@ def build_qaqc_check_results(
         ms_row = None
         msd_row = None
         original_sample_row = None
+        msd_original_row = None
 
         for index, row in enumerate(
             batch_rows
@@ -887,7 +903,6 @@ def build_qaqc_check_results(
 
                 ms_row = row
 
-                # MS 往前尋找最近一筆正式 SAMPLE
                 for previous_index in range(
                     index - 1,
                     -1,
@@ -911,7 +926,40 @@ def build_qaqc_check_results(
 
                     if previous_role == "SAMPLE":
 
-                        original_sample_row = (
+                        ms_original_row = (
+                            previous_row
+                        )
+
+                        break
+
+            elif role == "MSD":
+
+                msd_row = row
+
+                for previous_index in range(
+                    index - 1,
+                    -1,
+                    -1
+                ):
+
+                    previous_row = (
+                        batch_rows[
+                            previous_index
+                        ]
+                    )
+
+                    previous_role = (
+                        previous_row.get(
+                            "role",
+                            ""
+                        )
+                        .strip()
+                        .upper()
+                    )
+
+                    if previous_role == "SAMPLE":
+
+                        msd_original_row = (
                             previous_row
                         )
 
@@ -922,19 +970,25 @@ def build_qaqc_check_results(
                 msd_row = row
 
         if (
-            original_sample_row is not None
-            and ms_row is not None
-        ):
+                  ms_original_row is not None
+                 and ms_row is not None
+            ):
 
             original_value = _to_float(
-                original_sample_row.get(
-                    "calculated_concentration"
+                ms_original_row.get(
+                    "qaqc_concentration",
+                           ms_original_row.get(
+                     "calculated_concentration"
+                    )
                 )
             )
 
             ms_value = _to_float(
                 ms_row.get(
-                    "calculated_concentration"
+                     "qaqc_concentration",
+                              ms_row.get(
+                      "calculated_concentration"
+                     )
                 )
             )
 
@@ -964,7 +1018,7 @@ def build_qaqc_check_results(
                         ),
 
                     "original_sample_id":
-                        original_sample_row.get(
+                        ms_original_row.get(
                             "sample_id",
                             ""
                         ),
@@ -1005,21 +1059,27 @@ def build_qaqc_check_results(
             )
 
         if (
-            original_sample_row is not None
-            and msd_row is not None
-        ):
+                  msd_original_row is not None
+                 and msd_row is not None
+              ):
 
             original_value = _to_float(
-                original_sample_row.get(
-                    "calculated_concentration"
+                msd_original_row.get(
+                    "qaqc_concentration",
+                    msd_original_row.get(
+                        "calculated_concentration"
+                    )
                 )
             )
 
             msd_value = _to_float(
-                msd_row.get(
-                    "calculated_concentration"
-                )
-            )
+                    msd_row.get(
+                           "qaqc_concentration",
+                     msd_row.get(
+                               "calculated_concentration"
+                            )
+                       )
+               )
 
             msd_spike = _to_float(
                 msd_row.get(
@@ -1047,7 +1107,7 @@ def build_qaqc_check_results(
                         ),
 
                     "original_sample_id":
-                        original_sample_row.get(
+                        msd_original_row.get(
                             "sample_id",
                             ""
                         ),

@@ -1531,6 +1531,39 @@
 
     {% if qaqc_results %}
 
+    {% set ns_batch_remark = namespace(count=0) %}
+
+    {% for item in qaqc_results %}
+
+        {% if item.qaqc_type == "BATCH_REMARK" %}
+
+            {% set ns_batch_remark.count =
+                ns_batch_remark.count + 1
+            %}
+
+            <div style="
+                margin-bottom: 10px;
+                padding: 10px 14px;
+                background-color: #f5f8fb;
+                border: 1px solid #d6e0e8;
+                border-radius: 5px;
+            ">
+
+                <strong>
+                    {{ item.remark or "批次" }}
+                </strong>
+
+                {% if item.result_value %}
+                    &nbsp;｜&nbsp;
+                    批次備註：
+                    {{ item.result_value }}
+                {% endif %}
+
+            </div>
+
+        {% endif %}
+
+    {% endfor %}    
 
     <!-- ========================================
          3A 例行 QA/QC
@@ -1598,7 +1631,12 @@
 
                     {% for item in qaqc_results %}
 
-                        {% if item.qaqc_type not in ["PRECISION", "MS", "MSD"] %}
+                        {% if item.qaqc_type not in [
+                          "PRECISION",
+                          "MS",
+                          "MSD",
+                          "BATCH_REMARK"
+                        ] %}
 
                             {% set ns_3a.index = ns_3a.index + 1 %}
 

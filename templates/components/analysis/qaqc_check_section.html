@@ -6,12 +6,21 @@
     margin-top: 22px;
 ">
 
-    <h3 style="margin-top: 0;">
+    <h3 style="margin-top: 0;
+        color: #03646d;
+    ">
         3. QA/QC 檢核
+       
     </h3>
 
 
     {% if qaqc_3a_results %}
+
+    <form
+    id="batch-remark-form"
+    method="post"
+    action="{{ url_for('update_batch_remarks') }}"
+> 
 
         {% for batch in qaqc_3a_results %}
 
@@ -22,20 +31,68 @@
             background-color: #f5f8fb;
             border: 1px solid #d6e0e8;
             border-radius: 5px;
+
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
         ">
 
-            <strong>
-                Batch {{ batch.batch_no }}
-            </strong>
+            <div style="
+                 display: flex;
+                 align-items: center;
+                 gap: 8px;
+                 flex-shrink: 0;
+                ">
+                <strong>
+                     Batch {{ batch.batch_no }}
+                </strong>
 
-            &nbsp;｜&nbsp;
+                <span>｜</span>
 
-            類別：
-            <strong>
-                {{ batch.batch_category or "-" }}
-            </strong>
+                <span>
+                     類別：
+                     <strong>
+                         {{ batch.batch_category or "-" }}
+                     </strong>
+                </span>
+            </div>
 
-            &nbsp;&nbsp;
+            <div style="
+                 display: flex;
+                 align-items: center;
+                 gap: 8px;
+                 flex: 1;
+                 justify-content: flex-end;
+                ">
+               <label
+                 for="batch_remark_{{ batch.batch_no }}"
+                 style="
+                 white-space: nowrap;
+                 font-weight: 600;
+                 color: #045093;
+                 "
+                 >
+                批次備註
+               </label>
+
+               <input
+                  type="text"
+                  id="batch_remark_{{ batch.batch_no }}"
+                  name="batch_remark_{{ batch.batch_no }}"
+                  value="{{ batch.batch_remark if batch.batch_remark is defined else '' }}"
+                  placeholder="輸入本批次異常說明"
+                  style="
+                         width: 620px;
+                         max-width: 100%;
+                         padding: 7px 9px;
+                         border: 1px solid #bfc8d2;
+                         border-radius: 5px;
+                         font-size: 15px;
+                         background-color: white;
+                         "
+                         >
+               </div>
 
         </div>
 
@@ -308,6 +365,21 @@
             </tbody>
 
         </table>
+
+        <div style="
+    margin-top: 14px;
+    display: flex;
+    justify-content: flex-end;
+">
+    <button
+        type="submit"
+        class="eacs-button eacs-button-secondary"
+    >
+        儲存批次備註
+    </button>
+</div>
+
+</form>
 
         {% else %}
 

@@ -211,89 +211,32 @@
 
 </div>
 
-<div class="analysis-action-bar">
+{% set show_temp_save = true %}
+{% set show_formal_save = true %}
+{% set show_pdf_export = true %}
+{% set show_lims_export = true %}
 
-    <div class="analysis-action-status">
+{% set temp_save_form_id = "sample-qaqc-form" %}
 
-{% if sample_qaqc_rows %}
+{% set formal_save_url =
+    url_for("save_w434_record")
+%}
 
-    {% if sample_data_saved %}
+{% set pdf_export_url =
+    url_for("export_w434_pdf")
+%}
 
-    <span class="status-badge status-success">
-    分析資料已暫存
-    </span>
+{% set lims_export_url =
+    url_for("export_w434_lims")
+%}
 
-    {% else %}
+{% set formal_saved_message =
+    "正式分析紀錄已建立或更新完成。"
+    if request.args.get("formal_saved") == "1"
+    else ""
+%}
 
-    <span class="status-badge status-warning">
-    分析資料已載入，尚未儲存
-    </span>
-
-    {% endif %}
-
-{% else %}
-
-<span>
-    尚未載入分析資料
-</span>
-
-{% endif %}
-
-{% if request.args.get("formal_saved") == "1" %}
-
-<div class="analysis-message analysis-message-success">
-    正式分析紀錄已建立或更新完成。
-</div>
-
-{% endif %}
-
-    </div>
-
-
-    <div class="analysis-action-buttons">
-
-        {% if sample_qaqc_rows %}
-
-        <button
-    type="submit"
-    form="sample-qaqc-form"
-    class="eacs-button eacs-button-primary"
->
-    暫存分析資料
-        </button>
-
-        <form
-    method="post"
-    action="{{ url_for('save_w434_record') }}"
-    style="display: inline;"
->
-        <button
-        type="submit"
-        class="eacs-button eacs-button-primary"
-    >
-        儲存分析紀錄
-        </button>
-      </form>
-
-        <a
-    href="{{ url_for('export_w434_pdf') }}"
-    class="eacs-button eacs-button-secondary"
->
-    匯出檢驗紀錄表
-       </a>
-
-        <a
-    href="{{ url_for('export_w434_lims') }}"
-    class="eacs-button eacs-button-accent"
->
-    匯出 LIMS
-       </a>
-
-        {% endif %}
-
-    </div>
-
-</div>
+{% include "components/analysis/analysis_action_bar.html" %}
 
 {% include "components/analysis/calibration_section.html" %}
 

@@ -257,6 +257,21 @@ class AnalysisSample(Base):
         nullable=True
     )
 
+    measured_concentration: Mapped[Optional[float]] = mapped_column(
+        Float,
+        nullable=True
+    )
+
+    sample_concentration: Mapped[Optional[float]] = mapped_column(
+        Float,
+        nullable=True
+    )
+
+    qaqc_concentration: Mapped[Optional[float]] = mapped_column(
+        Float,
+        nullable=True
+    )    
+
     remark: Mapped[str] = mapped_column(
         String(500),
         nullable=False,
