@@ -40,7 +40,7 @@ def main():
                 )
                 continue
 
-            if engine.dialect.name == "firebird":
+            if engine.dialect.name.startswith("firebird"):
 
                    sql = (
                   "ALTER TABLE "
