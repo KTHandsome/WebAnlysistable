@@ -40,14 +40,27 @@ def main():
                 )
                 continue
 
-            sql = (
-                "ALTER TABLE "
-                + TABLE_NAME
-                + " ADD COLUMN "
-                + column_name
-                + " "
-                + column_type
-            )
+            if engine.dialect.name == "firebird":
+
+                   sql = (
+                  "ALTER TABLE "
+                 + TABLE_NAME
+                     + " ADD "
+                  + column_name
+                  + " "
+                  + column_type
+                  )
+
+            else:
+
+                sql = (
+                  "ALTER TABLE "
+                  + TABLE_NAME
+                  + " ADD COLUMN "
+                  + column_name
+                  + " "
+                  + column_type
+                  )
 
             print(
                 "ADD:",
