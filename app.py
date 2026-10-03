@@ -56,7 +56,7 @@ from exports.lims_excel_exporter import (
 )
 
 from services.analysis_record_service import (
-    save_w434_analysis_record
+    save_analysis_record
 )
 
 from auth_session import (
@@ -3491,6 +3491,31 @@ def get_analysis_session_key(method_code):
         + "_formal_analysis_id"
     )
 
+def get_analysis_page_endpoint(
+    method_code
+):
+
+    method_code = str(
+        method_code or ""
+    ).strip().upper()
+
+    if method_code == "W330":
+
+        return "analysis_w330"
+
+    if method_code in {
+        "W434",
+        "W341"
+    }:
+
+        return "analysis_w43401"
+
+    raise ValueError(
+        "尚未設定分析方法 "
+        + method_code
+        + " 的分析頁面。"
+    )
+
 def validate_qaqc_export_ready(
     qaqc_results,
     has_control_data=True
@@ -3714,6 +3739,12 @@ def redirect_metal_analysis_error(
         )
     )
 
+    analysis_endpoint = (
+        get_analysis_page_endpoint(
+            method_code
+        )
+    )
+
     redirect_args = {
         "error_message":
             error_message
@@ -3727,7 +3758,7 @@ def redirect_metal_analysis_error(
 
     return redirect(
         url_for(
-            "analysis_w43401",
+            analysis_endpoint,
             **redirect_args
         )
     )
@@ -3914,6 +3945,8 @@ def analysis_w330():
     qdl_value = None
     qaqc_results = []
 
+    sample_data_saved = False
+
     if form_data:
 
      (
@@ -3952,6 +3985,11 @@ def analysis_w330():
             "sample_qaqc_rows",
             []
         )
+
+        sample_data_saved = saved_state.get(
+               "sample_data_saved",
+              False
+        )         
 
         included_batches = saved_state.get(
             "included_batches",
@@ -4435,6 +4473,27 @@ def analysis_w330():
                                 sample_qaqc_rows
                             )  
 
+                        qaqc_conc_factor = 1.0
+
+                        if method_data:
+
+                           try:
+
+                                qaqc_conc_factor = float(
+                                 method_data.get(
+                                  "QAQC_CONC_FACTOR",
+                                  "1"
+                                  )
+                                  or "1"
+                                 )
+
+                           except (
+                                       TypeError,
+                                         ValueError
+                                     ):
+
+                                   qaqc_conc_factor = 1.0   
+
                         # ========================================
                         # W330 QA/QC 計算單位正規化
                         # 畫面濃度：ug/L
@@ -4473,7 +4532,7 @@ def analysis_w330():
                                        "calculated_concentration"
                                     ] = (
                                        float(concentration)
-                                      / 1000.0
+                                      * qaqc_conc_factor
                                      )
 
                              except (
@@ -4502,7 +4561,7 @@ def analysis_w330():
                                          float(
                                           qaqc_concentration
                                          )
-                                       / 1000.0
+                                       * qaqc_conc_factor
                                          )
 
                              except (
@@ -4604,7 +4663,7 @@ def analysis_w330():
     calibration_rows=calibration_rows,
     calibration_result=calibration_result,
     sample_qaqc_rows=sample_qaqc_rows,
-    sample_data_saved=False,
+    sample_data_saved=sample_data_saved,
     control_data=control_data,
     method_data=method_data,
     qdl_value=qdl_value,
@@ -5890,12 +5949,11 @@ def update_w434_calibration():
     )
 
 @app.route(
-    "/analysis/w43401/update-samples",
+    "/analysis/update-samples",
     methods=["POST"]
 )
-
 @login_required
-def update_w434_samples():
+def update_analysis_samples():
 
     form_data = session.get(
         "basic_info_form"
@@ -6413,18 +6471,95 @@ def update_w434_samples():
     qaqc_results = []
 
     if (
-        included_batches
-        and control_data
+         included_batches
+          and control_data
     ):
 
-        qaqc_results = (
-            build_qaqc_check_results(
-                included_batches,
-                control_data,
-                cc_relative_error_limit=20.0,
-                qdl_value=qdl_value
+         qaqc_conc_factor = 1.0
+
+         if method_data:
+
+            try:
+
+                qaqc_conc_factor = float(
+                method_data.get(
+                    "QAQC_CONC_FACTOR",
+                    "1"
+                )
+                or "1"
             )
+
+            except (
+            TypeError,
+            ValueError
+        ):
+              qaqc_conc_factor = 1.0
+
+    qaqc_batches = []
+
+    for batch in included_batches:
+
+        qaqc_batch = batch.copy()
+        qaqc_rows = []
+
+        for row in batch.get(
+            "rows",
+            []
+        ):
+
+            qaqc_row = row.copy()
+
+            for field_name in {
+                "calculated_concentration",
+                "qaqc_concentration"
+            }:
+
+                value = qaqc_row.get(
+                    field_name
+                )
+
+                if value in {
+                    None,
+                    ""
+                }:
+                    continue
+
+                try:
+
+                    qaqc_row[
+                        field_name
+                    ] = (
+                        float(value)
+                        * qaqc_conc_factor
+                    )
+
+                except (
+                    TypeError,
+                    ValueError
+                ):
+
+                    pass
+
+            qaqc_rows.append(
+                qaqc_row
+            )
+
+        qaqc_batch[
+            "rows"
+        ] = qaqc_rows
+
+        qaqc_batches.append(
+            qaqc_batch
         )
+
+    qaqc_results = (
+        build_qaqc_check_results(
+            qaqc_batches,
+            control_data,
+            cc_relative_error_limit=20.0,
+            qdl_value=qdl_value
+        )
+    )
 
     analysis_state[
         "preview_rows"
@@ -6448,19 +6583,28 @@ def update_w434_samples():
         analysis_state
     )
 
-    return redirect(
+    if current_method_code == "W330":
+
+      return redirect(
         url_for(
-            "analysis_w43401",
+            "analysis_w330",
             saved="1"
         )
     )
 
+    return redirect(
+    url_for(
+        "analysis_w43401",
+        saved="1"
+    )
+)
+
 @app.route(
-    "/analysis/w43401/save-record",
+    "/analysis/save-record",
     methods=["POST"]
 )
 @login_required
-def save_w434_record():
+def save_analysis_record_route():
 
     form_data = session.get(
         "basic_info_form"
@@ -6485,7 +6629,19 @@ def save_w434_record():
         get_analysis_state_key(
             current_method_code
         )
-    )    
+    )
+
+    analysis_session_key = (
+        get_analysis_session_key(
+        current_method_code
+        )
+    )       
+
+    analysis_endpoint = (
+        get_analysis_page_endpoint(
+        current_method_code
+        )
+    )
 
     (
         control_data,
@@ -6523,9 +6679,10 @@ def save_w434_record():
     if not analysis_state:
 
       return redirect_metal_analysis_error(
-        "尚未找到 W434 分析資料，"
-        "請先匯入儀器 PDF。",
-        current_method_code
+        "尚未找到 "
+         + current_method_code
+         + " 分析資料，"
+         "請先完成分析資料匯入或建立。"
     )
 
     form_data = session.get(
@@ -6566,7 +6723,7 @@ def save_w434_record():
     try:
 
         save_result = (
-            save_w434_analysis_record(
+            save_analysis_record(
                 form_data=form_data,
                 control_data=control_data,
                 method_data=method_data,
@@ -6580,7 +6737,7 @@ def save_w434_record():
 
         return redirect(
             url_for(
-                "analysis_w43401",
+                analysis_endpoint,
                 saved="1",
                 error_message=str(ex)
             )
@@ -6590,7 +6747,7 @@ def save_w434_record():
 
         return redirect(
             url_for(
-                "analysis_w43401",
+                analysis_endpoint,
                 saved="1",
                 error_message=(
                     "建立正式分析紀錄失敗："
@@ -6606,7 +6763,7 @@ def save_w434_record():
     ]
 
     session[
-    "w434_formal_analysis_id"
+    analysis_session_key
 ] = save_result[
     "analysis_id"
 ]
@@ -6618,7 +6775,7 @@ def save_w434_record():
 
     return redirect(
         url_for(
-            "analysis_w43401",
+            analysis_endpoint,
             saved="1",
             formal_saved="1"
         )
@@ -7183,6 +7340,10 @@ def method_settings_import():
                     "BLANK_MDL_MULTIPLIER",
                     "QDL_SOURCE",
                     "QDL_MULTIPLIER",
+                    "SAMPLE_VOLUME_DEFAULT",
+                    "FINAL_VOLUME_DEFAULT",
+                    "DISPLAY_CONC_UNIT",
+                    "QAQC_CONC_FACTOR",
                     "ACTIVE"
                 }
 
@@ -7287,7 +7448,27 @@ def method_settings_import():
                             qdl_multiplier_text = row.get(
                                "QDL_MULTIPLIER",
                                ""
-                            ).strip()                         
+                            ).strip()     
+
+                            sample_volume_default_text = row.get(
+                               "SAMPLE_VOLUME_DEFAULT",
+                                ""
+                            ).strip()
+
+                            final_volume_default_text = row.get(
+                              "FINAL_VOLUME_DEFAULT",
+                               ""
+                            ).strip()
+
+                            display_conc_unit = row.get(
+                              "DISPLAY_CONC_UNIT",
+                               ""
+                            ).strip()
+
+                            qaqc_conc_factor_text = row.get(
+                             "QAQC_CONC_FACTOR",
+                             ""
+                            ).strip()                    
 
                             active = row.get(
                                 "ACTIVE",
@@ -7431,7 +7612,7 @@ def method_settings_import():
                                     + " 個。"
                                 )
 
-                                                            # DATA_ENTRY_MODE
+                            # DATA_ENTRY_MODE
                             allowed_data_entry_modes = {
                                 "MANUAL",
                                 "IMPORT",
@@ -7597,6 +7778,119 @@ def method_settings_import():
                                       + str(row_index)
                                         + " 列：QDL_MULTIPLIER 必須為數字。"
                                        )
+
+                            # 樣品預設取樣體積
+                            if sample_volume_default_text == "":
+
+                              validation_errors.append(
+                                 "第 "
+                                 + str(row_index)
+                                 + " 列：SAMPLE_VOLUME_DEFAULT 不可空白。"
+                                )
+
+                            else:
+
+                                 try:
+
+                                      sample_volume_default = float(
+                                      sample_volume_default_text
+                                      )
+
+                                      if sample_volume_default <= 0:
+
+                                       validation_errors.append(
+                                       "第 "
+                                       + str(row_index)
+                                       + " 列：SAMPLE_VOLUME_DEFAULT 必須大於 0。"
+                                      )
+
+                                 except ValueError:
+
+                                       validation_errors.append(
+                                       "第 "
+                                       + str(row_index)
+                                       + " 列：SAMPLE_VOLUME_DEFAULT 必須為數字。"
+                                        )
+
+
+                            # 最終定量體積
+                            if final_volume_default_text == "":
+
+                                 validation_errors.append(
+                                 "第 "
+                                 + str(row_index)
+                                 + " 列：FINAL_VOLUME_DEFAULT 不可空白。"
+                                  )
+
+                            else:
+
+                                 try:
+
+                                      final_volume_default = float(
+                                      final_volume_default_text
+                                      )
+
+                                      if final_volume_default <= 0:
+
+                                           validation_errors.append(
+                                            "第 "
+                                          + str(row_index)
+                                          + " 列：FINAL_VOLUME_DEFAULT 必須大於 0。"
+                                          )
+
+                                 except ValueError:
+
+                                       validation_errors.append(
+                                       "第 "
+                                       + str(row_index)
+                                       + " 列：FINAL_VOLUME_DEFAULT 必須為數字。"
+                                )
+
+
+                           # 畫面濃度單位
+                            if not display_conc_unit:
+
+                                 validation_errors.append(
+                                 "第 "
+                                  + str(row_index)
+                                  + " 列：DISPLAY_CONC_UNIT 不可空白。"
+                                  )
+
+
+                            # QA/QC 濃度換算倍率
+                            if qaqc_conc_factor_text == "":
+
+                                   validation_errors.append(
+                                   "第 "
+                                   + str(row_index)
+                                   + " 列：QAQC_CONC_FACTOR 不可空白。"
+                                   )
+
+                            else:
+
+                                try:
+
+                                       qaqc_conc_factor = float(
+                                       qaqc_conc_factor_text
+                                        )
+
+                                       if qaqc_conc_factor <= 0:
+
+                                          validation_errors.append(
+                                          "第 "
+                                          + str(row_index)
+                                          + " 列：QAQC_CONC_FACTOR 必須大於 0。"
+                                          )
+
+                                except ValueError:
+
+                                          validation_errors.append(
+                                           "第 "
+                                           + str(row_index)
+                                          + " 列：QAQC_CONC_FACTOR 必須為數字。"
+                                           )
+
+                                     
                             
                 if validation_errors:
 

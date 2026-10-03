@@ -142,90 +142,50 @@ W330 汞分析 - EACS Web
 
 {% set analysis_loaded = ra7000_data is not none %}
 
-{% set show_temp_save = false %}
-{% set show_formal_save = false %}
+{% set show_temp_save = true %}
+{% set show_formal_save = true %}
 {% set show_pdf_export = false %}
 {% set show_lims_export = false %}
 
-{% set formal_saved_message = "" %}
+{% set formal_save_url =
+    url_for("save_analysis_record_route")
+%}
+
+{% set formal_saved_message =
+    "正式分析紀錄已建立或更新完成。"
+    if request.args.get("formal_saved") == "1"
+    else ""
+%}
 
 {% include "components/analysis/analysis_action_bar.html" %}
 
 {% if ra7000_data %}
 
-<div class="eacs-card">
-
-    <h2 class="eacs-card-title">
-        儀器資訊
-    </h2>
-
-    <div class="eacs-info-grid">
-
-        <div class="eacs-info-item">
-
-            <div class="eacs-info-label">
-                分析日期時間
-            </div>
-
-            <div class="eacs-info-value">
-                {{ ra7000_data.analysis_datetime }}
-            </div>
-
-        </div>
-
-
-        <div class="eacs-info-item">
-
-            <div class="eacs-info-label">
-                UNIT
-            </div>
-
-            <div class="eacs-info-value">
-                {{ ra7000_data.unit }}
-            </div>
-
-        </div>
-
-
-        <div class="eacs-info-item">
-
-            <div class="eacs-info-label">
-                STD 筆數
-            </div>
-
-            <div class="eacs-info-value">
-                {{ ra7000_data.standards|length }}
-            </div>
-
-        </div>
-
-
-        <div class="eacs-info-item">
-
-            <div class="eacs-info-label">
-                SMP 筆數
-            </div>
-
-            <div class="eacs-info-value">
-                {{ ra7000_data.samples|length }}
-            </div>
-
-        </div>
-
-    </div>
-
-</div>
-
 
 
 {% include "components/analysis/calibration_section.html" %}
 
-{% set sample_volume_default = 50 %}
-{% set final_volume_default = 100 %}
-{% set sample_concentration_unit = "ug/L" %}
+{% set sample_volume_default =
+    method_data.SAMPLE_VOLUME_DEFAULT
+%}
+
+{% set final_volume_default =
+    method_data.FINAL_VOLUME_DEFAULT
+%}
+
+{% set sample_concentration_unit =
+    method_data.DISPLAY_CONC_UNIT
+%}
+
 {% set sample_signal_label = "AREA" %}
-{% set interpretation_concentration_factor = 0.001 %}
-{% set sample_update_url = "" %}
+
+{% set interpretation_concentration_factor =
+    method_data.QAQC_CONC_FACTOR
+%}
+
+{% set sample_update_url =
+    url_for("update_analysis_samples")
+%}
 {% set show_sample_update_button = false %}
 
 {% include "components/analysis/sample_qaqc_section.html" %}

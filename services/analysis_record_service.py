@@ -191,10 +191,10 @@ def _build_range_text(
     )
 
 # ========================================
-# W434 正式分析紀錄
+# 正式分析紀錄
 # ========================================
 
-def save_w434_analysis_record(
+def save_analysis_record(
     form_data,
     control_data,
     method_data,
@@ -220,7 +220,7 @@ def save_w434_analysis_record(
 
     if not analysis_state:
         raise ValueError(
-            "尚未取得 W434 暫存分析資料。"
+            "尚未取得暫存分析資料。"
         )
 
     source_sample_rows = analysis_state.get(
