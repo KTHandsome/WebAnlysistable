@@ -668,21 +668,33 @@ def build_w434_pdf(
     # 取得實際分析計算條件
     # -----------------------------
     sample_volume = None
-    final_volume = None   
+    final_volume = None
 
     for row in sample_qaqc_rows:
 
         if sample_volume is None:
-             value = row.get(
-            "sample_volume"
-        )
-             if value is not None:
-                final_volume = value       
+
+            value = row.get(
+                "sample_volume"
+            )
+
+            if value is not None:
+                sample_volume = value
+
+        if final_volume is None:
+
+            value = row.get(
+                "final_volume"
+            )
+
+            if value is not None:
+                final_volume = value
+
         if (
-        sample_volume is not None
-        and final_volume is not None
-    ):
-         break
+            sample_volume is not None
+            and final_volume is not None
+        ):
+            break
 
     sample_volume_text = (
     format(
@@ -724,34 +736,36 @@ def build_w434_pdf(
     sample_title_y - 22
 )
     pdf_canvas.drawString(
-    left_margin,
-    formula_y,
-    "計算式：計算濃度 = 測定濃度 × "
-    "(最終定量體積 / 取樣體積) × "
-    "稀釋倍數(D)"
-)
+        left_margin,
+        formula_y,
+        "計算式：樣品濃度 = 測定濃度 × "
+        "(最終定量體積 / 取樣體積) × "
+        "稀釋倍數(D)"
+    )
     sample_table_top_y = (
     sample_title_y - 29
 )
     sample_row_height = 17
 
     sample_column_widths = [
-    45,   # 序號
-    105,  # 樣品編號
-    80,   # 稀釋倍數
-    75,   # 測定值
-    100,  # 添加濃度
-    110   # 計算濃度
-]
+        40,   # 序號
+        95,   # 樣品編號
+        65,   # 稀釋倍數
+        65,   # 測定值
+        80,   # 添加濃度
+        85,   # 測定濃度
+        85    # 樣品濃度
+    ]
 
     sample_headers = [
-    "序號",
-    "樣品編號",
-    "稀釋倍數(D)",
-    "測定值",
-    "添加濃度 (mg/L)",
-    "計算濃度 (mg/L)"
-]
+        "序號",
+        "樣品編號",
+        "稀釋倍數(D)",
+        "測定值",
+        "添加濃度 (mg/L)",
+        "測定濃度 (mg/L)",
+        "樣品濃度 (mg/L)"
+    ]
 
     current_x = left_margin
 
@@ -817,8 +831,12 @@ def build_w434_pdf(
             ""
         )
 
-        calculated_concentration = row.get(
-            "calculated_concentration"
+        measured_concentration = row.get(
+            "measured_concentration"
+        )
+
+        sample_concentration = row.get(
+            "sample_concentration"
         )
 
         row_values = [
@@ -859,10 +877,19 @@ def build_w434_pdf(
 
             (
                 format(
-                    calculated_concentration,
+                    measured_concentration,
                     ".6f"
                 )
-                if calculated_concentration is not None
+                if measured_concentration is not None
+                else "-"
+            ),
+
+            (
+                format(
+                    sample_concentration,
+                    ".6f"
+                )
+                if sample_concentration is not None
                 else "-"
             )
         ]
@@ -1055,7 +1082,7 @@ def build_w434_pdf(
 
                     "control":
                         (
-                            "≤ "
+                            "<= "
                             + format(
                                 ucl,
                                 ".1f"

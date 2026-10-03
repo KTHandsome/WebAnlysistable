@@ -198,6 +198,7 @@ def save_w434_analysis_record(
     form_data,
     control_data,
     method_data,
+    report_data,
     analysis_state,
     current_user
 ):
@@ -1616,6 +1617,21 @@ def save_w434_analysis_record(
             form_data,
             ensure_ascii=False
         )
+
+        work_state.control_data_json = json.dumps(
+            control_data,
+            ensure_ascii=False
+        )
+
+        work_state.method_data_json = json.dumps(
+            method_data,
+            ensure_ascii=False
+        )    
+
+        work_state.report_data_json = json.dumps(
+            report_data,
+            ensure_ascii=False
+        )    
 
         db.commit()
 

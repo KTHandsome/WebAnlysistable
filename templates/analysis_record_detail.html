@@ -192,6 +192,55 @@
 
 </div>
 
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        正式輸出
+    </h2>
+
+    <div
+        style="
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        "
+    >
+
+        <a
+            href="{{ url_for(
+                'export_analysis_record_pdf',
+                analysis_id=record.analysis_id
+            ) }}"
+            class="eacs-button eacs-button-secondary"
+        >
+            匯出檢驗紀錄表
+        </a>
+
+        <a
+            href="{{ url_for(
+                'export_analysis_record_lims',
+                analysis_id=record.analysis_id
+            ) }}"
+            class="eacs-button eacs-button-accent"
+        >
+            匯出 LIMS
+        </a>
+
+    </div>
+
+    <div
+        style="
+            margin-top: 10px;
+            color: #6b7280;
+            font-size: 13px;
+        "
+    >
+        匯出內容以此正式分析紀錄儲存時的
+        年度管制、方法設定及報表設定 Snapshot 為準。
+    </div>
+
+</div>
+
 {% if record.status == "UNDER_REVIEW" %}
 
 <div class="eacs-card">
@@ -1225,19 +1274,7 @@
                     </th>
 
                     <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
-                        測定值
-                    </th>
-
-                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
                         取樣體積
-                    </th>
-
-                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
-                        定量體積
-                    </th>
-
-                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
-                        稀釋倍數
                     </th>
 
                     <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
@@ -1245,7 +1282,23 @@
                     </th>
 
                     <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
-                        分析值
+                        定量體積
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        測定值
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        稀釋倍數
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        測定濃度
+                    </th>
+
+                    <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
+                        樣品濃度
                     </th>
 
                     <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
@@ -1262,60 +1315,69 @@
 
                 <tr>
 
-                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
-                        {{ sample.display_order }}
-                    </td>
+                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;text-align: center;">
+    {{ sample.display_order }}
+</td>
 
-                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
-                        {{ sample.sample_id }}
-                    </td>
+<td style="padding: 10px; border-bottom: 1px solid #edf0f3;text-align: center;">
+    {{ sample.sample_id }}
+</td>
 
-                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
-                        {{ sample.role }}
-                    </td>
+<td style="padding: 10px; border-bottom: 1px solid #edf0f3;text-align: center;">
+    {{ sample.role }}
+</td>
 
-                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
-                        {% if sample.signal is not none %}
-    {{ "%.6f"|format(sample.signal) }}
-{% else %}
-    -
-{% endif %}
-                    </td>
+<td style="padding: 10px; border-bottom: 1px solid #edf0f3;text-align: center;">
+    {{ sample.sample_volume if sample.sample_volume is not none else "-" }}
+</td>
 
-                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
-                        {{ sample.sample_volume if sample.sample_volume is not none else "-" }}
-                    </td>
+<td style="padding: 10px; border-bottom: 1px solid #edf0f3;text-align: center;">
+    {{ sample.spike_concentration if sample.spike_concentration is not none else "-" }}
+</td>
 
-                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
-                        {{ sample.final_volume if sample.final_volume is not none else "-" }}
-                    </td>
+<td style="padding: 10px; border-bottom: 1px solid #edf0f3;text-align: center;">
+    {{ sample.final_volume if sample.final_volume is not none else "-" }}
+</td>
 
-                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
-                        {{ sample.dilution_factor if sample.dilution_factor is not none else "-" }}
-                    </td>
+<td style="padding: 10px; border-bottom: 1px solid #edf0f3;text-align: center;">
+    {% if sample.signal is not none %}
+        {{ "%.6f"|format(sample.signal) }}
+    {% else %}
+        -
+    {% endif %}
+</td>
 
-                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
-                        {{ sample.spike_concentration if sample.spike_concentration is not none else "-" }}
-                    </td>
+<td style="padding: 10px; border-bottom: 1px solid #edf0f3;text-align: center;">
+    {{ sample.dilution_factor if sample.dilution_factor is not none else "-" }}
+</td>
 
-                    <td
-                        style="
-                            padding: 10px;
-                            border-bottom: 1px solid #edf0f3;
-                            color: #2563a6;
-                            font-weight: 700;
-                        "
-                    >
-                        {% if sample.calculated_concentration is not none %}
-                           {{ "%.6f"|format(sample.calculated_concentration) }}
-                           {% else %}
-                             -
-                        {% endif %}
-                    </td>
+<td style="padding: 10px; border-bottom: 1px solid #edf0f3;text-align: center;">
+    {% if sample.measured_concentration is not none %}
+        {{ "%.6f"|format(sample.measured_concentration) }}
+    {% else %}
+        -
+    {% endif %}
+</td>
 
-                    <td style="padding: 10px; border-bottom: 1px solid #edf0f3;">
-                        {{ sample.remark or "-" }}
-                    </td>
+<td
+    style="
+        padding: 10px;
+        border-bottom: 1px solid #edf0f3;
+        color: #2563a6;
+        font-weight: 700;
+        text-align: center;
+    "
+>
+    {% if sample.sample_concentration is not none %}
+        {{ "%.6f"|format(sample.sample_concentration) }}
+    {% else %}
+        -
+    {% endif %}
+</td>
+
+<td style="padding: 10px; border-bottom: 1px solid #edf0f3;text-align: center;">
+    {{ sample.remark or "-" }}
+</td>
 
                 </tr>
 

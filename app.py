@@ -1206,6 +1206,364 @@ def analysis_record_detail(
 
         db.close()
 
+@app.route(
+    "/analysis-records/<analysis_id>/export-pdf"
+)
+@login_required
+def export_analysis_record_pdf(
+    analysis_id
+):
+
+    db = SessionLocal()
+
+    try:
+
+        record = (
+            db.query(
+                AnalysisRecord
+            )
+            .filter(
+                AnalysisRecord.analysis_id
+                == analysis_id
+            )
+            .first()
+        )
+
+        if record is None:
+
+            return (
+                "查無此分析紀錄。",
+                404
+            )
+
+        work_state = (
+            db.query(
+                AnalysisWorkState
+            )
+            .filter(
+                AnalysisWorkState.analysis_id
+                == analysis_id
+            )
+            .first()
+        )
+
+        if work_state is None:
+
+            return (
+                "此正式分析紀錄沒有可供匯出的 Snapshot。",
+                400
+            )
+
+        try:
+
+            analysis_state = json.loads(
+                work_state.state_json
+                or "{}"
+            )
+
+            form_data = json.loads(
+                work_state.form_data_json
+                or "{}"
+            )
+
+            control_data = json.loads(
+                work_state.control_data_json
+                or "{}"
+            )
+
+            method_data = json.loads(
+                work_state.method_data_json
+                or "{}"
+            )
+
+            report_data = json.loads(
+                work_state.report_data_json
+                or "{}"
+            )
+
+        except json.JSONDecodeError:
+
+            return (
+                "正式分析紀錄 Snapshot 格式異常，"
+                "無法重新匯出 PDF。",
+                500
+            )
+
+        if not analysis_state:
+
+            return (
+                "正式分析紀錄缺少分析結果 Snapshot。",
+                400
+            )
+
+        if not form_data:
+
+            return (
+                "正式分析紀錄缺少基本資料 Snapshot。",
+                400
+            )
+
+        if not control_data:
+
+            return (
+                "正式分析紀錄缺少年度管制 Snapshot。",
+                400
+            )
+
+        if not method_data:
+
+            return (
+                "正式分析紀錄缺少方法設定 Snapshot。",
+                400
+            )
+
+        if not report_data:
+
+            return (
+                "正式分析紀錄缺少報表設定 Snapshot。",
+                400
+            )
+
+        pdf_buffer = build_w434_pdf(
+            report_data,
+            method_data,
+            control_data,
+            form_data,
+            analysis_state
+        )
+
+        analyte_display = str(
+            method_data.get(
+                "ANALYTE_DISPLAY",
+                ""
+            )
+            or ""
+        ).strip()
+
+        if not analyte_display:
+
+            analyte_display = (
+                record.exam_name
+                or "Analysis"
+            )
+
+        method_code = str(
+            record.method_code
+            or "Analysis"
+        ).strip()
+
+        download_name = (
+            method_code
+            + "_"
+            + analyte_display
+            + "_Analysis_Record.pdf"
+        )
+
+        return send_file(
+            pdf_buffer,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=download_name
+        )
+
+    finally:
+
+        db.close()
+
+@app.route(
+    "/analysis-records/<analysis_id>/export-lims"
+)
+@login_required
+def export_analysis_record_lims(
+    analysis_id
+):
+
+    db = SessionLocal()
+
+    try:
+
+        record = (
+            db.query(
+                AnalysisRecord
+            )
+            .filter(
+                AnalysisRecord.analysis_id
+                == analysis_id
+            )
+            .first()
+        )
+
+        if record is None:
+
+            return (
+                "查無此分析紀錄。",
+                404
+            )
+
+        work_state = (
+            db.query(
+                AnalysisWorkState
+            )
+            .filter(
+                AnalysisWorkState.analysis_id
+                == analysis_id
+            )
+            .first()
+        )
+
+        if work_state is None:
+
+            return (
+                "此正式分析紀錄沒有可供匯出的 Snapshot。",
+                400
+            )
+
+        try:
+
+            analysis_state = json.loads(
+                work_state.state_json
+                or "{}"
+            )
+
+            form_data = json.loads(
+                work_state.form_data_json
+                or "{}"
+            )
+
+            control_data = json.loads(
+                work_state.control_data_json
+                or "{}"
+            )
+
+        except json.JSONDecodeError:
+
+            return (
+                "正式分析紀錄 Snapshot 格式異常，"
+                "無法重新匯出 LIMS Excel。",
+                500
+            )
+
+        if not analysis_state:
+
+            return (
+                "正式分析紀錄缺少分析結果 Snapshot。",
+                400
+            )
+
+        if not form_data:
+
+            return (
+                "正式分析紀錄缺少基本資料 Snapshot。",
+                400
+            )
+
+        if not control_data:
+
+            return (
+                "正式分析紀錄缺少年度管制 Snapshot。",
+                400
+            )
+
+        export_data = (
+            build_w434_lims_export_data(
+                form_data=form_data,
+                control_data=control_data,
+                analysis_state=analysis_state,
+                analyst=(
+                    record.analyst_name
+                    or ""
+                )
+            )
+        )
+
+        if not export_data.qc_rows:
+
+            return (
+                "此正式分析紀錄沒有可匯出的 "
+                "LIMS 品管資料。",
+                400
+            )
+
+        if not export_data.analysis_rows:
+
+            return (
+                "此正式分析紀錄沒有可匯出的 "
+                "正式樣品資料。",
+                400
+            )
+
+        template_path = os.path.join(
+            app.root_path,
+            "resources",
+            "lims",
+            "lims匯入表格.xlsx"
+        )
+
+        if not os.path.exists(
+            template_path
+        ):
+
+            return (
+                "找不到 LIMS Excel 範本。",
+                500
+            )
+
+        analysis_method = str(
+            control_data.get(
+                "EM_NO",
+                ""
+            )
+            or ""
+        ).strip()
+
+        analyst_id = str(
+            record.analyst_employee_id
+            or ""
+        ).strip()
+
+        analyst_name = str(
+            record.analyst_name
+            or ""
+        ).strip()
+
+        excel_buffer = build_lims_excel(
+            template_path=template_path,
+            export_data=export_data,
+            analyst_id=analyst_id,
+            analyst_name=analyst_name,
+            analysis_method=analysis_method
+        )
+
+        exam_no = str(
+            control_data.get(
+                "EXAMNO",
+                ""
+            )
+            or ""
+        ).strip()
+
+        if not exam_no:
+
+            exam_no = "LIMS"
+
+        download_name = (
+            exam_no
+            + "_LIMS_Import.xlsx"
+        )
+
+        return send_file(
+            excel_buffer,
+            mimetype=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+            as_attachment=True,
+            download_name=download_name
+        )
+
+    finally:
+
+        db.close()
 
 @app.route(
     "/analysis-records/<analysis_id>/delete",
@@ -4810,6 +5168,16 @@ def analysis_w43401():
             }
         )
 
+    # 尚未載入任何分析資料時，
+    # 不保留前一次 Working State 的波長確認顯示
+    if (
+        not preview_rows
+        and not sample_qaqc_rows
+    ):
+        confirmed_wavelength = None
+        wavelength_warning = None
+        instrument_wavelength = None
+
     return render_template(
         "methods/w43401.html",
         active_page="analysis_method",
@@ -4846,7 +5214,7 @@ def analysis_w43401():
     "/analysis/w43401/confirm-wavelength",
     methods=["POST"]
 )
-@login_required
+
 def confirm_w434_wavelength():
 
     choice = request.form.get(
@@ -4854,20 +5222,46 @@ def confirm_w434_wavelength():
         ""
     ).strip().lower()
 
+    form_data = session.get(
+        "basic_info_form"
+    ) or {}
+
+    current_method_code = str(
+        form_data.get(
+            "method_code",
+            ""
+        )
+        or ""
+    ).strip().upper()
+
+    if not current_method_code:
+        current_method_code = "W434"
+
+    analysis_state_key = (
+        get_analysis_state_key(
+            current_method_code
+        )
+    )
+
     analysis_state = load_analysis_state(
-        "W434_CURRENT"
+        analysis_state_key
     )
 
     if not analysis_state:
 
         return (
-            "尚未找到 W434 分析資料。",
+            "尚未找到 "
+            + current_method_code
+            + " 分析資料。",
             400
         )
 
-    form_data = session.get(
-        "basic_info_form"
-    )
+    if not form_data:
+
+        return (
+            "尚未找到基本資料。",
+            400
+        )
 
     if not form_data:
 
@@ -4968,7 +5362,7 @@ def confirm_w434_wavelength():
         )
 
     save_analysis_state(
-        "W434_CURRENT",
+        analysis_state_key,
         analysis_state
     )
 
@@ -5950,6 +6344,20 @@ def save_w434_record():
         current_method_code
     )
 
+    (
+        report_data,
+        report_error
+    ) = load_report_setting(
+        method_data
+    )
+
+    if report_error:
+
+        return redirect_metal_analysis_error(
+            report_error,
+            current_method_code
+        )
+
     analysis_state = load_analysis_state(
     analysis_state_key
     )
@@ -6001,6 +6409,7 @@ def save_w434_record():
                 form_data=form_data,
                 control_data=control_data,
                 method_data=method_data,
+                report_data=report_data,
                 analysis_state=analysis_state,
                 current_user=current_user
             )

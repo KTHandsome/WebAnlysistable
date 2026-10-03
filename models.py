@@ -524,6 +524,24 @@ class AnalysisWorkState(Base):
         default="{}"
     )
 
+    control_data_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="{}"
+    )
+
+    method_data_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="{}"
+    )
+
+    report_data_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="{}"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
