@@ -368,39 +368,141 @@ def home():
         url_for("basic_info")
     )
 
-
 def load_control_and_method_data(form_data):
 
-    control_data = None
+    control_data = {}
     method_data = None
-    error_message = None
 
-    ctrl_year = form_data.get("ctrl_year", "").strip()
-    category = form_data.get("category", "").strip()
-    exam_name = form_data.get("exam_name", "").strip()
-    method_code = form_data.get("method_code", "").strip()
-    instrument_id = form_data.get("instrument_id", "").strip()
+    ctrl_year = form_data.get(
+        "ctrl_year",
+        ""
+    ).strip()
+
+    category = form_data.get(
+        "category",
+        ""
+    ).strip()
+
+    exam_name = form_data.get(
+        "exam_name",
+        ""
+    ).strip()
+
+    method_code = form_data.get(
+        "method_code",
+        ""
+    ).strip()
+
+    instrument_id = form_data.get(
+        "instrument_id",
+        ""
+    ).strip()
+
+    selected_exam_no = form_data.get(
+    "selected_exam_no",
+    ""
+).strip()
 
     if not ctrl_year:
-        return None, None, "請選擇管制年度。"
+        return {}, None, "請選擇管制年度。"
 
     if not exam_name:
-        return None, None, "請輸入測項名稱。"
+        return {}, None, "請輸入測項名稱。"
 
     if not method_code:
-        return None, None, "請輸入分析方法。"
+        return {}, None, "請輸入分析方法。"
 
+    # ========================================
+    # 先載入方法設定
+    # 方法設定是分析流程必要資料，
+    # 不應依賴是否存在年度管制圖
+    # ========================================
+    method_file = os.path.join(
+        app.root_path,
+        "data",
+        "Phyon_Method_Settings.csv"
+    )
+
+    if not os.path.exists(
+        method_file
+    ):
+
+        return (
+            {},
+            None,
+            "尚未匯入方法設定資料。"
+        )
+
+    method_matches = []
+
+    with open(
+        method_file,
+        "r",
+        encoding="utf-8-sig",
+        newline=""
+    ) as f:
+
+        method_reader = csv.DictReader(
+            f
+        )
+
+        for method_row in method_reader:
+
+            if (
+                method_row.get(
+                    "ACTIVE",
+                    ""
+                )
+                .strip()
+                .upper()
+                != "Y"
+            ):
+                continue
+
+            if (
+                method_row.get(
+                    "METHOD_CODE",
+                    ""
+                )
+                .strip()
+                .upper()
+                != method_code.upper()
+            ):
+                continue
+
+            method_matches.append(
+                method_row
+            )
+
+    if len(method_matches) == 0:
+
+        return (
+            {},
+            None,
+            "查無對應的方法設定。"
+        )
+
+    method_data = method_matches[0]
+
+    # ========================================
+    # 再載入年度管制資料
+    # 年度檔案本身不存在仍視為設定錯誤
+    # ========================================
     csv_file = os.path.join(
         app.root_path,
         "data",
-        "Phyon_Control_" + ctrl_year + ".csv"
+        "Phyon_Control_"
+        + ctrl_year
+        + ".csv"
     )
 
-    if not os.path.exists(csv_file):
+    if not os.path.exists(
+        csv_file
+    ):
 
         return (
-            None,
-            None,
+            {},
+            method_data,
             "尚未匯入 "
             + ctrl_year
             + " 年管制資料。"
@@ -415,64 +517,90 @@ def load_control_and_method_data(form_data):
         newline=""
     ) as f:
 
-        reader = csv.DictReader(f)
+        reader = csv.DictReader(
+            f
+        )
 
         for row in reader:
 
-            if row.get("CTRL_YEAR", "").strip() != ctrl_year:
+            if (
+                row.get(
+                    "CTRL_YEAR",
+                    ""
+                ).strip()
+                != ctrl_year
+            ):
                 continue
 
             if (
-                row.get("CATEGORY_CODE", "").strip().upper()
+                row.get(
+                    "CATEGORY_CODE",
+                    ""
+                )
+                .strip()
+                .upper()
                 != category.upper()
             ):
                 continue
 
             row_exam_name = (
-               row.get(
-                 "EXAMNAME",
-                 ""
+                row.get(
+                    "EXAMNAME",
+                    ""
                 )
-              .strip()
+                .strip()
             )
 
             row_exam_alias = (
-              row.get(
-               "EXALIAS",
-               ""
-               )
-             .strip()
+                row.get(
+                    "EXALIAS",
+                    ""
+                )
+                .strip()
             )
 
             if (
-              exam_name != row_exam_name
-                and exam_name != row_exam_alias
+                exam_name
+                != row_exam_name
+                and exam_name
+                != row_exam_alias
             ):
-             continue  
+                continue
 
             if (
-                row.get("EM_NUM", "").strip().upper()
+                row.get(
+                    "EM_NUM",
+                    ""
+                )
+                .strip()
+                .upper()
                 != method_code.upper()
             ):
                 continue
 
-            base_matches.append(row)
+            base_matches.append(
+                row
+            )
 
+    # ========================================
+    # 找不到該測項年度管制資料
+    # → 視為「無管制圖項目」
+    # → 不阻止進入分析頁
+    # ========================================
     if len(base_matches) == 0:
 
         return (
-            None,
-            None,
-            "查無符合條件的年度管制資料。"
+            {},
+            method_data,
+            None
         )
 
     # ========================================
-    # 年度管制資料的儀器適用規則
+    # 有管制資料時才套用儀器適用規則
     #
-    # 1. 若有該 LABPARTID 的專屬管制資料，優先使用
-    # 2. 若沒有專屬資料，回退使用 LABPARTID 空白的共用資料
+    # 1. 儀器專屬資料優先
+    # 2. 沒有專屬資料時使用共用資料
     # ========================================
-
     specific_matches = []
     common_matches = []
 
@@ -502,7 +630,10 @@ def load_control_and_method_data(form_data):
                 row
             )
 
-    if instrument_id and specific_matches:
+    if (
+        instrument_id
+        and specific_matches
+    ):
 
         matches = specific_matches
 
@@ -510,106 +641,80 @@ def load_control_and_method_data(form_data):
 
         matches = common_matches
 
+    # 已確認這個項目有管制資料，
+    # 但選定儀器沒有適用資料，
+    # 這仍屬於設定問題，不可當成無管制項目
     if len(matches) == 0:
 
         if instrument_id:
 
             return (
-                None,
-                None,
-                "查無此儀器專屬或共用的年度管制資料。"
+                {},
+                method_data,
+                "此項目已有年度管制資料，"
+                "但查無此儀器專屬或共用的管制資料。"
             )
 
         return (
-            None,
-            None,
-            "查無共用的年度管制資料。"
+            {},
+            method_data,
+            "此項目已有年度管制資料，"
+            "但查無共用管制資料。"
         )
 
     if len(matches) > 1:
 
-        if instrument_id and specific_matches:
+        # 使用者已指定測項代碼時，
+        # 依 EXAMNO 精確鎖定
+        if selected_exam_no:
 
-            return (
-                None,
-                None,
-                "找到多筆相同儀器的年度管制資料，"
-                "請檢查管制資料設定。"
-            )
+            selected_matches = []
 
+            for row in matches:
+
+                if (
+                    row.get(
+                        "EXAMNO",
+                        ""
+                    )
+                    .strip()
+                    == selected_exam_no
+                ):
+
+                    selected_matches.append(
+                        row
+                    )
+
+            if len(selected_matches) == 1:
+
+                control_data = (
+                    selected_matches[0]
+                )
+
+                return (
+                    control_data,
+                    method_data,
+                    None
+                )
+
+        # 尚未選擇，回傳候選資料給 Basic Info
         return (
-            None,
-            None,
-            "找到多筆共用年度管制資料，"
-            "請檢查管制資料設定。"
+            {
+                "_multiple_matches":
+                    matches
+            },
+            method_data,
+            "找到多筆符合的年度管制資料，"
+            "請選擇測項代碼。"
         )
 
     control_data = matches[0]
-    
-    method_file = os.path.join(
-        app.root_path,
-        "data",
-        "Phyon_Method_Settings.csv"
+
+    return (
+        control_data,
+        method_data,
+        None
     )
-
-    if not os.path.exists(method_file):
-
-        return (
-            control_data,
-            None,
-            "尚未匯入方法設定資料。"
-        )
-
-    method_matches = []
-
-    with open(
-        method_file,
-        "r",
-        encoding="utf-8-sig",
-        newline=""
-    ) as f:
-
-        method_reader = csv.DictReader(f)
-
-        for method_row in method_reader:
-
-            if (
-                method_row.get("ACTIVE", "")
-                .strip()
-                .upper()
-                != "Y"
-            ):
-                continue
-
-            if (
-                method_row.get("METHOD_CODE", "")
-                .strip()
-                .upper()
-                != method_code.upper()
-            ):
-                continue
-
-            method_matches.append(method_row)
-
-    if len(method_matches) == 0:
-
-        return (
-            control_data,
-            None,
-            "已找到年度管制資料，但查無對應的方法設定。"
-        )
-
-    if len(method_matches) > 1:
-
-        return (
-            control_data,
-            None,
-            "找到多筆有效方法設定，請檢查 Phyon_Method_Settings.csv。"
-        )
-
-    method_data = method_matches[0]
-
-    return control_data, method_data, None
 
 def load_report_setting(method_data):
 
@@ -2372,7 +2477,8 @@ def basic_info():
     "analysis_start_date": "",
     "analysis_end_date": "",
     "form_date": "",
-    "wavelength": ""
+    "selected_exam_no": "",
+    "wavelength": ""    
     }
 
     form_data = session.get(
@@ -2425,10 +2531,15 @@ def basic_info():
                 ""
             ).strip(),
 
+            "selected_exam_no": request.form.get(
+                "selected_exam_no",
+                ""
+            ).strip(),
+
             "wavelength": request.form.get(
                 "wavelength",
                 ""
-            ).strip()
+            ).strip(),
         }
 
         next_action = (
@@ -3381,18 +3492,36 @@ def get_analysis_session_key(method_code):
     )
 
 def validate_qaqc_export_ready(
-    qaqc_results
+    qaqc_results,
+    has_control_data=True
 ):
 
+    # ========================================
+    # 無管制圖項目
+    # 不執行 QA/QC 管制判定，
+    # 直接允許正式儲存 / 匯出
+    # ========================================
+    if not has_control_data:
+
+        return (
+            True,
+            ""
+        )
+
+    # ========================================
+    # 有管制圖，但尚未產生 QA/QC 判定
+    # 仍然屬於不完整資料，不可放行
+    # ========================================
     if not qaqc_results:
 
         return (
             False,
-            "尚未完成 QA/QC 判定，"
+            "已有年度管制資料，"
+            "但尚未完成 QA/QC 判定，"
             "不可匯出。"
         )
 
-    invalid_items = []
+    invalid_batches = []
 
     for batch in qaqc_results:
 
@@ -3411,7 +3540,19 @@ def validate_qaqc_export_ready(
             else "未識別批次"
         )
 
+        batch_remark = str(
+            batch.get(
+                "batch_remark",
+                ""
+            )
+            or ""
+        ).strip()
+
+        batch_invalid_items = []
+
+        # ========================================
         # 3A：ICV / QC / CCV
+        # ========================================
         for row in batch.get(
             "rows",
             []
@@ -3443,12 +3584,11 @@ def validate_qaqc_export_ready(
                     or ""
                 ).strip()
 
-                invalid_items.append(
-                    batch_label
-                    + " / "
-                    + role
+                batch_invalid_items.append(
+                    role
                     + (
-                        " / " + sample_id
+                        " / "
+                        + sample_id
                         if sample_id
                         else ""
                     )
@@ -3460,7 +3600,9 @@ def validate_qaqc_export_ready(
                     )
                 )
 
+        # ========================================
         # 3B：重複分析精密度
+        # ========================================
         precision = batch.get(
             "precision"
         )
@@ -3477,9 +3619,8 @@ def validate_qaqc_export_ready(
 
             if status != "合格":
 
-                invalid_items.append(
-                    batch_label
-                    + " / 重複分析精密度："
+                batch_invalid_items.append(
+                    "重複分析精密度："
                     + (
                         status
                         if status
@@ -3487,7 +3628,9 @@ def validate_qaqc_export_ready(
                     )
                 )
 
+        # ========================================
         # 3C：MS / MSD 回收率
+        # ========================================
         for row in batch.get(
             "spike_recovery",
             []
@@ -3511,10 +3654,8 @@ def validate_qaqc_export_ready(
                     or ""
                 ).strip()
 
-                invalid_items.append(
-                    batch_label
-                    + " / "
-                    + role
+                batch_invalid_items.append(
+                    role
                     + " 回收率："
                     + (
                         status
@@ -3523,14 +3664,31 @@ def validate_qaqc_export_ready(
                     )
                 )
 
-    if invalid_items:
+        # ========================================
+        # 此批次若有超限，
+        # 必須有批次備註才可放行
+        # ========================================
+        if batch_invalid_items:
+
+            if not batch_remark:
+
+                invalid_batches.append(
+                    batch_label
+                    + " 尚有 QA/QC 超限，"
+                    + "但未填寫批次備註：\n"
+                    + "\n".join(
+                        batch_invalid_items
+                    )
+                )
+
+    if invalid_batches:
 
         return (
             False,
-            "QA/QC 尚未全部符合，"
+            "QA/QC 有超限批次尚未填寫備註，"
             "不可匯出：\n"
             + "\n".join(
-                invalid_items
+                invalid_batches
             )
         )
 
@@ -6382,10 +6540,13 @@ def save_w434_record():
 )
 
     qaqc_ready, qaqc_error = (
-    validate_qaqc_export_ready(
-        qaqc_results
+        validate_qaqc_export_ready(
+            qaqc_results,
+            has_control_data=bool(
+                control_data
+            )
+        )
     )
-)
 
     if not qaqc_ready:
 
@@ -6542,7 +6703,10 @@ def export_w434_pdf():
 
     qaqc_ready, qaqc_error = (
     validate_qaqc_export_ready(
-        qaqc_results
+        qaqc_results,
+        has_control_data=bool(
+            control_data
+        )
     )
 )
 
@@ -6650,7 +6814,10 @@ def export_w434_lims():
 
     qaqc_ready, qaqc_error = (
     validate_qaqc_export_ready(
-        qaqc_results
+        qaqc_results,
+        has_control_data=bool(
+            control_data
+        )
     )
 )
 

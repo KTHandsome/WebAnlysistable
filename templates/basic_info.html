@@ -617,17 +617,56 @@
     <div class="eacs-info-grid">
 
 
-        <div class="eacs-info-item">
+<div class="eacs-info-item">
 
-            <div class="eacs-info-label">
-                測項代碼
-            </div>
+    <div class="eacs-info-label">
+        測項代碼
+    </div>
 
-            <div class="eacs-info-value">
-                {{ control_data.EXAMNO if control_data else "-" }}
-            </div>
+    <div class="eacs-info-value">
 
-        </div>
+        {% if
+            control_data
+            and control_data._multiple_matches
+        %}
+
+        <select
+            name="selected_exam_no"
+            form="basic-info-form"
+            class="eacs-form-control"
+            onchange="submitSelectedExamNo()"
+        >
+            <option value="">
+                請選擇測項代碼
+            </option>
+
+            {% for item in control_data._multiple_matches %}
+
+            <option
+                value="{{ item.EXAMNO }}"
+                {% if
+                    form_data.selected_exam_no == item.EXAMNO
+                %}
+                    selected
+                {% endif %}
+            >
+                {{ item.EXAMNO }}
+                ｜{{ item.EXAMNAME }}
+            </option>
+
+            {% endfor %}
+
+        </select>
+
+        {% else %}
+
+            {{ control_data.EXAMNO if control_data else "-" }}
+
+        {% endif %}
+
+    </div>
+
+</div>
 
 
         <div class="eacs-info-item">
@@ -1091,6 +1130,31 @@ function submitBasicInfoForImport() {
 
     form.submit();
 }
+
+function submitSelectedExamNo() {
+
+    const select = document.querySelector(
+        'select[name="selected_exam_no"]'
+    );
+
+    if (
+        !select
+        || !select.value
+    ) {
+        return;
+    }
+
+    const form = document.getElementById(
+        "basic-info-form"
+    );
+
+    if (!form) {
+        return;
+    }
+
+    form.submit();
+}
+
 </script>
 
 {% endblock %}
