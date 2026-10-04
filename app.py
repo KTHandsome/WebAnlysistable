@@ -6930,6 +6930,7 @@ def save_analysis_record_route():
         )
     )
 
+@app.route("/analysis/w330/export-pdf")
 @app.route("/analysis/w43401/export-pdf")
 @login_required
 def export_w434_pdf():
@@ -7003,9 +7004,11 @@ def export_w434_pdf():
 
     if not analysis_state:
 
-      return redirect_metal_analysis_error(
-        "尚未找到 W434 分析結果，"
-        "請先匯入並解析 PE900 PDF。",
+       return redirect_metal_analysis_error(
+        "尚未找到 "
+        + current_method_code
+        + " 分析結果，"
+        "請先完成分析資料。",
         current_method_code
     ) 
 
@@ -7052,9 +7055,10 @@ def export_w434_pdf():
         analyte_display = "Analysis"
 
     download_name = (
-        "W434_"
-        + analyte_display
-        + "_Analysis_Record.pdf"
+    current_method_code
+    + "_"
+    + analyte_display
+    + "_Analysis_Record.pdf"
     )
 
     return send_file(

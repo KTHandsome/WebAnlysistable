@@ -144,11 +144,15 @@ W330 汞分析 - EACS Web
 
 {% set show_temp_save = true %}
 {% set show_formal_save = true %}
-{% set show_pdf_export = false %}
+{% set show_pdf_export = true %}
 {% set show_lims_export = false %}
 
 {% set formal_save_url =
     url_for("save_analysis_record_route")
+%}
+
+{% set pdf_export_url =
+    url_for("export_w434_pdf")
 %}
 
 {% set formal_saved_message =

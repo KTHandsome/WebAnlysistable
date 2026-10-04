@@ -162,15 +162,104 @@ def build_w434_pdf(
     )
     if method_data
     else ""
-)
+    )
+
+    calibration_unit = str(
+    method_data.get(
+        "CALIBRATION_UNIT",
+        ""
+       )
+       or ""
+    ).strip()
+
+    display_conc_unit = str(
+    method_data.get(
+        "DISPLAY_CONC_UNIT",
+        ""
+       )
+      or ""
+    ).strip()
+
+    signal_field = str(
+    method_data.get(
+        "SIGNAL_FIELD",
+        ""
+       )
+      or ""
+    ).strip().upper()
+
+    if signal_field == "AREA":
+
+        signal_label = "AREA"
+
+    elif signal_field in {
+        "ABSORBANCE",
+        "ABS",
+        "BLNKCORR_SIGNAL_MEAN"
+    }:
+
+       signal_label = "吸光度"
+
+    else:
+
+        signal_label = "測定值"
+
+    spike_conc_unit = str(
+        control_data.get(
+        "CTRL_UNIT",
+        ""
+        )
+      or ""
+    ).strip()
+
+    if not spike_conc_unit:
+
+       spike_conc_unit = (
+        display_conc_unit
+    )   
+
+    spike_conc_unit = str(
+    control_data.get(
+        "CTRL_UNIT",
+        ""
+    )
+    or ""
+).strip()
+
+    if not spike_conc_unit:
+       spike_conc_unit = display_conc_unit
+
+
 
     confirmed_wavelength = (
-    analysis_state.get(
-        "confirmed_wavelength"
+         analysis_state.get(
+         "confirmed_wavelength"
+         )
+         if analysis_state
+         else None
     )
-    if analysis_state
-    else None
-)
+
+    if confirmed_wavelength is None:
+
+        basic_wavelength = str(
+             form_data.get(
+                "wavelength",
+                ""
+             )
+             or ""
+        ).strip()
+
+        if basic_wavelength:
+
+           try:
+ 
+             confirmed_wavelength = float(
+                basic_wavelength
+             )
+
+           except ValueError:
+
+               confirmed_wavelength = None
 
     instrument_model = (
     form_data.get(
@@ -255,6 +344,15 @@ def build_w434_pdf(
        else []
     )
 
+    included_batches = (
+    analysis_state.get(
+        "included_batches",
+        []
+    )
+    if analysis_state
+    else []
+    )
+
     qaqc_results = (
     analysis_state.get(
         "qaqc_results",
@@ -262,369 +360,317 @@ def build_w434_pdf(
     )
     if analysis_state
     else []
-)
+    )
+
+    qaqc_result_map = {}
+
+    for batch_result in qaqc_results:
+
+        batch_no = str(
+           batch_result.get(
+            "batch_no",
+            ""
+            )
+           or ""
+        ).strip()
+
+        if not batch_no:
+          continue
+
+        qaqc_result_map[
+            batch_no
+        ] = batch_result
     
 
-    # -----------------------------
-    # 左上：公司名稱
-    # -----------------------------
-    pdf_canvas.setFont(
-        "MicrosoftJhengHei",
-        8
-    )
+    # ========================================
+    # 每頁共用：表頭 + 檢量線
+    # ========================================
+    def draw_page_header_and_calibration():
 
-    pdf_canvas.drawString(
-        left_margin,
-        top_y,
-        company_name
-    )
-
-    # -----------------------------
-    # 右上：文件資訊
-    # -----------------------------
-    pdf_canvas.setFont(
-        "MicrosoftJhengHei",
-        8
-    )
-
-    right_x = page_width - right_margin
-
-    pdf_canvas.drawRightString(
-        right_x,
-        top_y,
-        doc_no
-        + " 版次："
-        + revision
-    )
-
-    pdf_canvas.drawRightString(
-        right_x,
-        top_y - 14,
-        "發行日期："
-        + issue_date
-    )
-
-    # -----------------------------
-    # 中央：文件名稱
-    # -----------------------------
-    pdf_canvas.setFont(
-        "MicrosoftJhengHei",
-        12
-    )
-
-    pdf_canvas.drawCentredString(
-        page_width / 2,
-        top_y - 26,
-        form_title
-    )
-
-    # -----------------------------
-    # 檢驗項目
-    # -----------------------------
-    pdf_canvas.setFont(
-        "MicrosoftJhengHei",
-        9
-    )
-
-    pdf_canvas.drawCentredString(
-        page_width / 2,
-        top_y - 43,
-        "檢驗項目："
-        + analyte_display
-    )
-
-    # -----------------------------
-    # 波長
-    # -----------------------------
-    if confirmed_wavelength is not None:
-
-       wavelength_text = (
-        format(
-            confirmed_wavelength,
-            ".2f"
+        right_x = (
+            page_width
+            - right_margin
         )
-        + " nm"
-    )
-
-    else:
-
-      wavelength_text = "-"
-
-    pdf_canvas.drawCentredString(
-    page_width / 2,
-    top_y - 58,
-    "使用波長："
-    + wavelength_text
-)
-
-    # -----------------------------
-    # 下方基本資訊
-    # -----------------------------
-    pdf_canvas.setFont(
-    "MicrosoftJhengHei",
-    9
-)
-
-    pdf_canvas.drawString(
-    left_margin,
-    top_y - 76,
-    "儀器型號："
-    + instrument_model
-)
-
-    pdf_canvas.drawRightString(
-    right_x,
-    top_y - 76,
-    "填表日期："
-    + form_date
-)
-
-    pdf_canvas.drawString(
-    left_margin,
-    top_y - 91,
-    "檢驗方法："
-    + exam_method
-)
-
-    pdf_canvas.drawRightString(
-    right_x,
-    top_y - 91,
-    "分析日期："
-    + analysis_start_date
-    + " ～ "
-    + analysis_end_date
-)
-
-    # -----------------------------
-    # 表頭下方分隔線
-    # -----------------------------
-    pdf_canvas.line(
-        left_margin,
-        top_y - 99,
-        page_width - right_margin,
-        top_y - 99
-    )
-
-    # -----------------------------
-    # 檢量線結果
-    # -----------------------------
-    calibration_title_y = (
-        top_y - 113
-    )
-
-    pdf_canvas.setFont(
-        "MicrosoftJhengHei",
-        10
-    )
-
-    pdf_canvas.drawString(
-        left_margin,
-        calibration_title_y,
-        "一、檢量線"
-    )
-
-    if calibration_result:
-
-        slope = calibration_result.get(
-            "slope"
-        )
-
-        intercept = calibration_result.get(
-            "intercept"
-        )
-
-        r_value = calibration_result.get(
-            "r"
-        )
-
-        passed = calibration_result.get(
-            "passed"
-        )
-
-        regression_y = (
-            calibration_title_y
-        )
-
-        pdf_canvas.setFont(
-            "MicrosoftJhengHei",
-            9
-        )
-
-        if (
-            slope is not None
-            and intercept is not None
-        ):
-
-            if intercept >= 0:
-
-                equation_text = (
-                    "Y = "
-                    + format(
-                        slope,
-                        ".5f"
-                    )
-                    + "X + "
-                    + format(
-                        intercept,
-                        ".5f"
-                    )
-                )
-
-            else:
-
-                equation_text = (
-                    "Y = "
-                    + format(
-                        slope,
-                        ".5f"
-                    )
-                    + "X - "
-                    + format(
-                        abs(intercept),
-                        ".5f"
-                    )
-                )
-
-        else:
-            equation_text = "Y = -"
-
-        pdf_canvas.drawString(
-            left_margin + 60,
-            regression_y,
-            equation_text
-        )
-
-        pdf_canvas.drawString(
-            left_margin + 250,
-            regression_y,
-            "相關係數(r)："
-            + (
-                format(
-                    r_value,
-                    ".6f"
-                )
-                if r_value is not None
-                else "-"
-            )
-        )
-
-        table_top_y = (
-            regression_y - 8
-        )
-
-        table_left = left_margin
-
-        row_height = 16
-
-        column_widths = [
-            80,
-            145,
-            120,
-            170
-        ]
-
-        headers = [
-            "標準品",
-            "設定濃度 (mg/L)",
-            "吸光度",
-            "回歸濃度 (mg/L)"
-        ]
 
         # -----------------------------
-        # 欄首
+        # 左上：公司名稱
         # -----------------------------
-        current_x = table_left
-
         pdf_canvas.setFont(
             "MicrosoftJhengHei",
             8
         )
 
-        for index, header in enumerate(
-            headers
-        ):
-
-            width = column_widths[
-                index
-            ]
-
-            pdf_canvas.rect(
-                current_x,
-                table_top_y - row_height,
-                width,
-                row_height
-            )
-
-            pdf_canvas.drawCentredString(
-                current_x + width / 2,
-                table_top_y - 12,
-                header
-            )
-
-            current_x += width
-
-        # -----------------------------
-        # 資料列
-        # -----------------------------
-        current_y = (
-            table_top_y
-            - row_height
+        pdf_canvas.drawString(
+            left_margin,
+            top_y,
+            company_name
         )
 
-        for point_index, point in enumerate(
-            calibration_points
-        ):
+        # -----------------------------
+        # 右上：文件資訊
+        # -----------------------------
+        pdf_canvas.setFont(
+            "MicrosoftJhengHei",
+            8
+        )
 
-            current_y -= row_height
+        pdf_canvas.drawRightString(
+            right_x,
+            top_y,
+            doc_no
+            + " 版次："
+            + revision
+        )
 
-            x_value = point.get(
-                "x"
+        pdf_canvas.drawRightString(
+            right_x,
+            top_y - 14,
+            "發行日期："
+            + issue_date
+        )
+
+        # -----------------------------
+        # 中央：文件名稱
+        # -----------------------------
+        pdf_canvas.setFont(
+            "MicrosoftJhengHei",
+            12
+        )
+
+        pdf_canvas.drawCentredString(
+            page_width / 2,
+            top_y - 26,
+            form_title
+        )
+
+        # -----------------------------
+        # 檢驗項目
+        # -----------------------------
+        pdf_canvas.setFont(
+            "MicrosoftJhengHei",
+            9
+        )
+
+        pdf_canvas.drawCentredString(
+            page_width / 2,
+            top_y - 39,
+            "檢驗項目："
+            + analyte_display
+        )
+
+        # -----------------------------
+        # 波長
+        # -----------------------------
+        if confirmed_wavelength is not None:
+
+            wavelength_text = (
+                format(
+                    confirmed_wavelength,
+                    ".2f"
+                )
+                + " nm"
             )
 
-            y_value = point.get(
-                "y"
+        else:
+
+            wavelength_text = "-"
+
+        pdf_canvas.drawCentredString(
+            page_width / 2,
+            top_y - 51,
+            "使用波長："
+            + wavelength_text
+        )
+
+        # -----------------------------
+        # 基本資訊
+        # -----------------------------
+        pdf_canvas.setFont(
+            "MicrosoftJhengHei",
+            9
+        )
+
+        pdf_canvas.drawString(
+            left_margin,
+            top_y - 64,
+            "儀器型號："
+            + instrument_model
+        )
+
+        pdf_canvas.drawRightString(
+            right_x,
+            top_y - 64,
+            "填表日期："
+            + form_date
+        )
+
+        pdf_canvas.drawString(
+            left_margin,
+            top_y - 77,
+            "檢驗方法："
+            + exam_method
+        )
+
+        pdf_canvas.drawRightString(
+            right_x,
+            top_y - 77,
+            "分析日期："
+            + analysis_start_date
+            + " ～ "
+            + analysis_end_date
+        )
+
+        # -----------------------------
+        # 表頭下方分隔線
+        # -----------------------------
+        pdf_canvas.line(
+            left_margin,
+            top_y - 84,
+            page_width - right_margin,
+            top_y - 84
+        )
+
+        # -----------------------------
+        # 一、檢量線
+        # -----------------------------
+        calibration_title_y = (
+            top_y - 96
+        )
+
+        pdf_canvas.setFont(
+            "MicrosoftJhengHei",
+            10
+        )
+
+        pdf_canvas.drawString(
+            left_margin,
+            calibration_title_y,
+            "一、檢量線"
+        )
+
+        current_y = (
+            calibration_title_y
+        )
+
+        if calibration_result:
+
+            slope = calibration_result.get(
+                "slope"
             )
 
-            back_x = point.get(
-                "back_calculated_x"
+            intercept = calibration_result.get(
+                "intercept"
             )
 
-            row_values = [
-                "STD"
-                + str(point_index),
+            r_value = calibration_result.get(
+                "r"
+            )
 
-                (
-                    format(
-                        x_value,
-                        ".5f"
+            regression_y = (
+                calibration_title_y
+            )
+
+            pdf_canvas.setFont(
+                "MicrosoftJhengHei",
+                9
+            )
+
+            if (
+                slope is not None
+                and intercept is not None
+            ):
+
+                if intercept >= 0:
+
+                    equation_text = (
+                        "Y = "
+                        + format(
+                            slope,
+                            ".5f"
+                        )
+                        + "X + "
+                        + format(
+                            intercept,
+                            ".5f"
+                        )
                     )
-                    if x_value is not None
+
+                else:
+
+                    equation_text = (
+                        "Y = "
+                        + format(
+                            slope,
+                            ".5f"
+                        )
+                        + "X - "
+                        + format(
+                            abs(intercept),
+                            ".5f"
+                        )
+                    )
+
+            else:
+
+                equation_text = "Y = -"
+
+            pdf_canvas.drawString(
+                left_margin + 60,
+                regression_y,
+                equation_text
+            )
+
+            pdf_canvas.drawString(
+                left_margin + 250,
+                regression_y,
+                "相關係數(r)："
+                + (
+                    format(
+                        r_value,
+                        ".6f"
+                    )
+                    if r_value is not None
                     else "-"
+                )
+            )
+
+            table_top_y = (
+                regression_y - 8
+            )
+
+            row_height = 16
+
+            column_widths = [
+                80,
+                145,
+                120,
+                170
+            ]
+
+            headers = [
+                "標準品",
+                (
+                    "設定濃度 ("
+                    + calibration_unit
+                    + ")"
                 ),
-
+                signal_label,
                 (
-                    format(
-                        y_value,
-                        ".4f"
-                    )
-                    if y_value is not None
-                    else "-"
-                ),
-
-                (
-                    format(
-                        back_x,
-                        ".7f"
-                    )
-                    if back_x is not None
-                    else "-"
+                    "回歸濃度 ("
+                    + calibration_unit
+                    + ")"
                 )
             ]
 
-            current_x = table_left
+            current_x = left_margin
 
-            for index, value in enumerate(
-                row_values
+            pdf_canvas.setFont(
+                "MicrosoftJhengHei",
+                8
+            )
+
+            for index, header in enumerate(
+                headers
             ):
 
                 width = column_widths[
@@ -633,118 +679,102 @@ def build_w434_pdf(
 
                 pdf_canvas.rect(
                     current_x,
-                    current_y,
+                    table_top_y - row_height,
                     width,
                     row_height
                 )
 
                 pdf_canvas.drawCentredString(
                     current_x + width / 2,
-                    current_y + 5,
-                    value
+                    table_top_y - 12,
+                    header
                 )
 
                 current_x += width
 
-    # -----------------------------
-    # 二、樣品及品管分析結果
-    # -----------------------------
-    sample_title_y = (
-        current_y - 18
-    )
-
-    pdf_canvas.setFont(
-        "MicrosoftJhengHei",
-        10
-    )
-
-    pdf_canvas.drawString(
-        left_margin,
-        sample_title_y,
-        "二、樣品及品管分析結果"
-    )
-
-    # -----------------------------
-    # 取得實際分析計算條件
-    # -----------------------------
-    sample_volume = None
-    final_volume = None
-
-    for row in sample_qaqc_rows:
-
-        if sample_volume is None:
-
-            value = row.get(
-                "sample_volume"
+            current_y = (
+                table_top_y
+                - row_height
             )
 
-            if value is not None:
-                sample_volume = value
+            for point_index, point in enumerate(
+                calibration_points
+            ):
 
-        if final_volume is None:
+                current_y -= row_height
 
-            value = row.get(
-                "final_volume"
-            )
+                x_value = point.get(
+                    "x"
+                )
 
-            if value is not None:
-                final_volume = value
+                y_value = point.get(
+                    "y"
+                )
 
-        if (
-            sample_volume is not None
-            and final_volume is not None
-        ):
-            break
+                back_x = point.get(
+                    "back_calculated_x"
+                )
 
-    sample_volume_text = (
-    format(
-        sample_volume,
-        "g"
-    )
-    if sample_volume is not None
-    else "-"
-)
-    final_volume_text = (
-    format(
-        final_volume,
-        "g"
-    )
-    if final_volume is not None
-    else "-"
-)
-    # -----------------------------
-    # 品保驗算必要計算條件
-    # -----------------------------
-    pdf_canvas.setFont(
-    "MicrosoftJhengHei",
-    7.5
-)    
-    condition_y = (
-    sample_title_y - 12
-)   
-    pdf_canvas.drawString(
-    left_margin,
-    condition_y,
-    "計算條件：取樣體積 "
-    + sample_volume_text
-    + " mL"
-    + "　｜　最終定量體積 "
-    + final_volume_text
-    + " mL"
-)
-    formula_y = (
-    sample_title_y - 22
-)
-    pdf_canvas.drawString(
-        left_margin,
-        formula_y,
-        "計算式：樣品濃度 = 測定濃度 × "
-        "(最終定量體積 / 取樣體積) × "
-        "稀釋倍數(D)"
-    )
-    sample_table_top_y = (
-    sample_title_y - 29
-)
+                row_values = [
+                    "STD"
+                    + str(point_index),
+
+                    (
+                        format(
+                            x_value,
+                            ".5f"
+                        )
+                        if x_value is not None
+                        else "-"
+                    ),
+
+                    (
+                        format(
+                            y_value,
+                            ".4f"
+                        )
+                        if y_value is not None
+                        else "-"
+                    ),
+
+                    (
+                        format(
+                            back_x,
+                            ".7f"
+                        )
+                        if back_x is not None
+                        else "-"
+                    )
+                ]
+
+                current_x = left_margin
+
+                for index, value in enumerate(
+                    row_values
+                ):
+
+                    width = column_widths[
+                        index
+                    ]
+
+                    pdf_canvas.rect(
+                        current_x,
+                        current_y,
+                        width,
+                        row_height
+                    )
+
+                    pdf_canvas.drawCentredString(
+                        current_x + width / 2,
+                        current_y + 5,
+                        value
+                    )
+
+                    current_x += width
+
+        return current_y
+
+
     sample_row_height = 17
 
     sample_column_widths = [
@@ -758,146 +788,142 @@ def build_w434_pdf(
     ]
 
     sample_headers = [
-        "序號",
-        "樣品編號",
-        "稀釋倍數(D)",
-        "測定值",
-        "添加濃度 (mg/L)",
-        "測定濃度 (mg/L)",
-        "樣品濃度 (mg/L)"
+    "序號",
+    "樣品編號",
+    "稀釋倍數(D)",
+    signal_label,
+    (
+        "添加濃度 ("
+        + spike_conc_unit
+        + ")"
+    ),
+    (
+        "測定濃度 ("
+        + display_conc_unit
+        + ")"
+    ),
+    (
+        "樣品濃度 ("
+        + display_conc_unit
+        + ")"
+    )
     ]
 
-    current_x = left_margin
-
-    pdf_canvas.setFont(
-        "MicrosoftJhengHei",
-        7.5
-    )
-
-    # 表頭
-    for index, header in enumerate(
-        sample_headers
+    # ========================================
+    # 共用：單一 Batch 樣品及品管分析結果
+    # ========================================
+    def draw_batch_samples(
+        start_y,
+        batch_rows
     ):
 
-        width = sample_column_widths[
-            index
-        ]
+        sample_volume = None
+        final_volume = None
 
-        pdf_canvas.rect(
-            current_x,
-            sample_table_top_y - sample_row_height,
-            width,
-            sample_row_height
-        )
+        for row in batch_rows:
 
-        pdf_canvas.drawCentredString(
-            current_x + width / 2,
-            sample_table_top_y - 12,
-            header
-        )
+            if sample_volume is None:
 
-        current_x += width
-
-    current_y = (
-        sample_table_top_y
-        - sample_row_height
-    )
-
-    # 資料列
-    for row in sample_qaqc_rows:
-
-        current_y -= sample_row_height
-
-        sequence_no = row.get(
-            "sequence_no"
-        )
-
-        sample_id = row.get(
-            "sample_id",
-            ""
-        )
-
-        dilution_factor = row.get(
-    "dilution_factor",
-    1
-)
-
-        signal = row.get(
-            "signal"
-        )
-
-        spike_concentration = row.get(
-            "spike_concentration",
-            ""
-        )
-
-        measured_concentration = row.get(
-            "measured_concentration"
-        )
-
-        sample_concentration = row.get(
-            "sample_concentration"
-        )
-
-        row_values = [
-            str(sequence_no)
-            if sequence_no is not None
-            else "-",
-
-            sample_id
-            if sample_id
-            else "-",
-
-            (
-        str(dilution_factor)
-           if dilution_factor not in {
-             None,
-             ""
-              }
-           else "1"
-            ),
-
-            (
-                format(
-                    signal,
-                    ".4f"
+                value = row.get(
+                    "sample_volume"
                 )
-                if signal is not None
-                else "-"
-            ),
 
-            (
-                str(spike_concentration)
-                if spike_concentration not in {
-                    None,
-                    ""
-                }
-                else "-"
-            ),
+                if value is not None:
+                    sample_volume = value
 
-            (
-                format(
-                    measured_concentration,
-                    ".6f"
+            if final_volume is None:
+
+                value = row.get(
+                    "final_volume"
                 )
-                if measured_concentration is not None
-                else "-"
-            ),
 
-            (
-                format(
-                    sample_concentration,
-                    ".6f"
-                )
-                if sample_concentration is not None
-                else "-"
+                if value is not None:
+                    final_volume = value
+
+            if (
+                sample_volume is not None
+                and final_volume is not None
+            ):
+                break
+
+        sample_volume_text = (
+            format(
+                sample_volume,
+                "g"
             )
-        ]
+            if sample_volume is not None
+            else "-"
+        )
+
+        final_volume_text = (
+            format(
+                final_volume,
+                "g"
+            )
+            if final_volume is not None
+            else "-"
+        )
+
+        sample_title_y = (
+            start_y - 18
+        )
+
+        pdf_canvas.setFont(
+            "MicrosoftJhengHei",
+            10
+        )
+
+        pdf_canvas.drawString(
+            left_margin,
+            sample_title_y,
+            "二、樣品及品管分析結果"
+        )
+
+        condition_y = (
+            sample_title_y - 12
+        )
+
+        pdf_canvas.setFont(
+            "MicrosoftJhengHei",
+            7.5
+        )
+
+        pdf_canvas.drawString(
+            left_margin,
+            condition_y,
+            "計算條件：取樣體積 "
+            + sample_volume_text
+            + " mL"
+            + "　｜　最終定量體積 "
+            + final_volume_text
+            + " mL"
+        )
+
+        formula_y = (
+            sample_title_y - 22
+        )
+
+        pdf_canvas.drawString(
+            left_margin,
+            formula_y,
+            "計算式：樣品濃度 = 測定濃度 × "
+            "(最終定量體積 / 取樣體積) × "
+            "稀釋倍數(D)"
+        )
+
+        sample_table_top_y = (
+            sample_title_y - 29
+        )
 
         current_x = left_margin
 
-        for index, value in enumerate(
-            row_values
+        pdf_canvas.setFont(
+            "MicrosoftJhengHei",
+            7.5
+        )
+
+        for index, header in enumerate(
+            sample_headers
         ):
 
             width = sample_column_widths[
@@ -906,25 +932,166 @@ def build_w434_pdf(
 
             pdf_canvas.rect(
                 current_x,
-                current_y,
+                sample_table_top_y
+                - sample_row_height,
                 width,
                 sample_row_height
             )
 
             pdf_canvas.drawCentredString(
                 current_x + width / 2,
-                current_y + 5,
-                str(value)
+                sample_table_top_y - 12,
+                header
             )
 
             current_x += width
 
+        current_y = (
+            sample_table_top_y
+            - sample_row_height
+        )
+
+        for row in batch_rows:
+
+            current_y -= sample_row_height
+
+            sequence_no = row.get(
+                "sequence_no"
+            )
+
+            sample_id = row.get(
+                "sample_id",
+                ""
+            )
+
+            dilution_factor = row.get(
+                "dilution_factor",
+                1
+            )
+
+            signal = row.get(
+                "signal"
+            )
+
+            spike_concentration = row.get(
+                "spike_concentration",
+                ""
+            )
+
+            measured_concentration = (
+                row.get(
+                    "measured_concentration"
+                )
+            )
+
+            sample_concentration = (
+                row.get(
+                    "sample_concentration"
+                )
+            )
+
+            row_values = [
+                (
+                    str(sequence_no)
+                    if sequence_no is not None
+                    else "-"
+                ),
+
+                (
+                    sample_id
+                    if sample_id
+                    else "-"
+                ),
+
+                (
+                    str(dilution_factor)
+                    if dilution_factor not in {
+                        None,
+                        ""
+                    }
+                    else "1"
+                ),
+
+                (
+                    format(
+                        signal,
+                        ".4f"
+                    )
+                    if signal is not None
+                    else "-"
+                ),
+
+                (
+                    str(spike_concentration)
+                    if spike_concentration not in {
+                        None,
+                        ""
+                    }
+                    else "-"
+                ),
+
+                (
+                    format(
+                        measured_concentration,
+                        ".6f"
+                    )
+                    if measured_concentration
+                    is not None
+                    else "-"
+                ),
+
+                (
+                    format(
+                        sample_concentration,
+                        ".6f"
+                    )
+                    if sample_concentration
+                    is not None
+                    else "-"
+                )
+            ]
+
+            current_x = left_margin
+
+            for index, value in enumerate(
+                row_values
+            ):
+
+                width = sample_column_widths[
+                    index
+                ]
+
+                pdf_canvas.rect(
+                    current_x,
+                    current_y,
+                    width,
+                    sample_row_height
+                )
+
+                pdf_canvas.drawCentredString(
+                    current_x + width / 2,
+                    current_y + 5,
+                    str(value)
+                )
+
+                current_x += width
+
+        return current_y    
+
     # -----------------------------
     # 三、QA/QC 判定
     # -----------------------------
-    qaqc_summary_rows = []
+    # ========================================
+    # 單一 Batch QA/QC 摘要資料
+    # ========================================
+    def build_batch_qaqc_summary_rows(
+        batch_result
+    ):
 
-    for batch_result in qaqc_results:
+        summary_rows = []
+
+        if not batch_result:
+            return summary_rows
 
         batch_no = str(
             batch_result.get(
@@ -953,21 +1120,24 @@ def build_w434_pdf(
         batch_title_parts = []
 
         if batch_no:
+
             batch_title_parts.append(
                 "Batch " + batch_no
             )
 
         if batch_category:
+
             batch_title_parts.append(
                 "類別：" + batch_category
             )
 
         if batch_remark:
+
             batch_title_parts.append(
                 "批次備註：" + batch_remark
             )
 
-        qaqc_summary_rows.append(
+        summary_rows.append(
             {
                 "row_type":
                     "BATCH_HEADER",
@@ -977,7 +1147,7 @@ def build_w434_pdf(
                         batch_title_parts
                     )
             }
-        )        
+        )
 
         # 3A：ICV / QC / CCV
         for check in batch_result.get(
@@ -1030,18 +1200,25 @@ def build_w434_pdf(
                 )
             ).strip()
 
-            qaqc_summary_rows.append(
+            summary_rows.append(
                 {
-                    "item": item_text,
-                    "result": result_text,
-                    "control": check.get(
-                        "control_text",
-                        "-"
-                    ),
-                    "status": check.get(
-                        "status",
-                        "-"
-                    )
+                    "item":
+                        item_text,
+
+                    "result":
+                        result_text,
+
+                    "control":
+                        check.get(
+                            "control_text",
+                            "-"
+                        ),
+
+                    "status":
+                        check.get(
+                            "status",
+                            "-"
+                        )
                 }
             )
 
@@ -1060,7 +1237,7 @@ def build_w434_pdf(
                 "ucl"
             )
 
-            qaqc_summary_rows.append(
+            summary_rows.append(
                 {
                     "item":
                         precision.get(
@@ -1140,7 +1317,7 @@ def build_w434_pdf(
 
                 control_text = "-"
 
-            qaqc_summary_rows.append(
+            summary_rows.append(
                 {
                     "item":
                         spike.get(
@@ -1171,33 +1348,13 @@ def build_w434_pdf(
                 }
             )
 
-    # -----------------------------
-    # 三、QA/QC 判定
-    # -----------------------------
-    qaqc_title_y = (
-        current_y - 16
-    )
-
-    pdf_canvas.setFont(
-        "MicrosoftJhengHei",
-        10
-    )
-
-    pdf_canvas.drawString(
-        left_margin,
-        qaqc_title_y,
-        "三、QA/QC 判定"
-    )
-
-    qaqc_table_top_y = (
-        qaqc_title_y - 6
-    )
+        return summary_rows
 
     qaqc_row_height = 14
 
     qaqc_column_widths = [
         175,  # 項目
-        105,   # 結果
+        105,  # 結果
         160,  # 管制標準
         75    # 判定
     ]
@@ -1209,120 +1366,42 @@ def build_w434_pdf(
         "判定"
     ]
 
-    current_x = left_margin
-
-    pdf_canvas.setFont(
-        "MicrosoftJhengHei",
-        7.5
-    )
-
-    # 表頭
-    for index, header in enumerate(
-        qaqc_headers
+    # ========================================
+    # 共用：單一 Batch QA/QC 判定
+    # ========================================
+    def draw_batch_qaqc(
+        start_y,
+        summary_rows
     ):
 
-        width = qaqc_column_widths[
-            index
-        ]
-
-        pdf_canvas.rect(
-            current_x,
-            qaqc_table_top_y - qaqc_row_height,
-            width,
-            qaqc_row_height
+        qaqc_title_y = (
+            start_y - 16
         )
 
-        pdf_canvas.drawCentredString(
-            current_x + width / 2,
-            qaqc_table_top_y - 10,
-            header
+        pdf_canvas.setFont(
+            "MicrosoftJhengHei",
+            10
         )
 
-        current_x += width
+        pdf_canvas.drawString(
+            left_margin,
+            qaqc_title_y,
+            "三、QA/QC 判定"
+        )
 
-    current_y = (
-        qaqc_table_top_y
-        - qaqc_row_height
-    )
-
-    # 資料列
-    for row in qaqc_summary_rows:
-
-        current_y -= qaqc_row_height
-
-        if (
-            row.get(
-                "row_type"
-            )
-            == "BATCH_HEADER"
-        ):
-
-            total_width = sum(
-                qaqc_column_widths
-            )
-
-            pdf_canvas.setFillColorRGB(
-                0.94,
-                0.96,
-                0.98
-            )
-
-            pdf_canvas.rect(
-                left_margin,
-                current_y,
-                total_width,
-                qaqc_row_height,
-                fill=1
-            )
-
-            pdf_canvas.setFillColorRGB(
-                0,
-                0,
-                0
-            )
-
-            pdf_canvas.setFont(
-                "MicrosoftJhengHei",
-                7.5
-            )
-
-            pdf_canvas.drawString(
-                left_margin + 5,
-                current_y + 4,
-                row.get(
-                    "item",
-                    ""
-                )
-            )
-
-            continue
-
-        row_values = [
-            row.get(
-                "item",
-                "-"
-            ),
-
-            row.get(
-                "result",
-                "-"
-            ),
-
-            row.get(
-                "control",
-                "-"
-            ),
-
-            row.get(
-                "status",
-                "-"
-            )
-        ]
+        qaqc_table_top_y = (
+            qaqc_title_y - 6
+        )
 
         current_x = left_margin
 
-        for index, value in enumerate(
-            row_values
+        pdf_canvas.setFont(
+            "MicrosoftJhengHei",
+            7.5
+        )
+
+        for index, header in enumerate(
+            qaqc_headers
         ):
 
             width = qaqc_column_widths[
@@ -1331,28 +1410,223 @@ def build_w434_pdf(
 
             pdf_canvas.rect(
                 current_x,
-                current_y,
+                qaqc_table_top_y
+                - qaqc_row_height,
                 width,
                 qaqc_row_height
             )
 
             pdf_canvas.drawCentredString(
                 current_x + width / 2,
-                current_y + 4,
-                str(value)
+                qaqc_table_top_y - 10,
+                header
             )
 
             current_x += width
 
-    # -----------------------------
-    # 本頁頁尾
-    # 目前尚未啟用跨頁，因此固定 1 / 1
-    # 下一階段跨頁時改由各頁傳入實際頁次
-    # -----------------------------
-    draw_page_footer(
-        page_no=1,
-        total_pages=1
+        current_y = (
+            qaqc_table_top_y
+            - qaqc_row_height
+        )
+
+        for row in summary_rows:
+
+            current_y -= qaqc_row_height
+
+            if (
+                row.get(
+                    "row_type"
+                )
+                == "BATCH_HEADER"
+            ):
+
+                total_width = sum(
+                    qaqc_column_widths
+                )
+
+                pdf_canvas.setFillColorRGB(
+                    0.94,
+                    0.96,
+                    0.98
+                )
+
+                pdf_canvas.rect(
+                    left_margin,
+                    current_y,
+                    total_width,
+                    qaqc_row_height,
+                    fill=1
+                )
+
+                pdf_canvas.setFillColorRGB(
+                    0,
+                    0,
+                    0
+                )
+
+                pdf_canvas.setFont(
+                    "MicrosoftJhengHei",
+                    7.5
+                )
+
+                pdf_canvas.drawString(
+                    left_margin + 5,
+                    current_y + 4,
+                    row.get(
+                        "item",
+                        ""
+                    )
+                )
+
+                continue
+
+            row_values = [
+                row.get(
+                    "item",
+                    "-"
+                ),
+                row.get(
+                    "result",
+                    "-"
+                ),
+                row.get(
+                    "control",
+                    "-"
+                ),
+                row.get(
+                    "status",
+                    "-"
+                )
+            ]
+
+            current_x = left_margin
+
+            for index, value in enumerate(
+                row_values
+            ):
+
+                width = qaqc_column_widths[
+                    index
+                ]
+
+                pdf_canvas.rect(
+                    current_x,
+                    current_y,
+                    width,
+                    qaqc_row_height
+                )
+
+                pdf_canvas.drawCentredString(
+                    current_x + width / 2,
+                    current_y + 4,
+                    str(value)
+                )
+
+                current_x += width
+
+        return current_y
+
+    # ========================================
+    # 所有 Batch 共用同一套頁面繪製流程
+    # ========================================
+    page_batches = (
+        included_batches
+        if included_batches
+        else [
+            {
+                "batch_no": "",
+                "rows": sample_qaqc_rows
+            }
+        ]
     )
+
+    total_pages = len(
+        page_batches
+    )
+
+    for batch_index, current_batch in enumerate(
+        page_batches
+    ):
+
+        if batch_index > 0:
+
+            pdf_canvas.showPage()
+
+        # -----------------------------
+        # 每頁完整表頭 + 檢量線
+        # -----------------------------
+        current_y = (
+            draw_page_header_and_calibration()
+        )
+
+        # -----------------------------
+        # 本 Batch 樣品
+        # -----------------------------
+        current_batch_rows = (
+            current_batch.get(
+                "rows",
+                []
+            )
+        )
+
+        current_y = (
+            draw_batch_samples(
+                current_y,
+                current_batch_rows
+            )
+        )        
+
+        # -----------------------------
+        # 本 Batch QA/QC
+        # -----------------------------
+        current_batch_no = str(
+            current_batch.get(
+                "batch_no",
+                ""
+            )
+            or ""
+        ).strip()
+
+        current_batch_qaqc = (
+            qaqc_result_map.get(
+                current_batch_no,
+                {}
+            )
+        )
+
+        # fallback：
+        # 沒有 included_batches 時，
+        # 保留單一 QA/QC 結果
+        if (
+            not current_batch_qaqc
+            and not current_batch_no
+            and qaqc_results
+        ):
+
+            current_batch_qaqc = (
+                qaqc_results[0]
+            )
+
+        current_qaqc_rows = (
+            build_batch_qaqc_summary_rows(
+                current_batch_qaqc
+            )
+        )
+
+        current_y = (
+            draw_batch_qaqc(
+                current_y,
+                current_qaqc_rows
+            )
+        )
+
+        # -----------------------------
+        # 本頁頁尾
+        # -----------------------------
+        draw_page_footer(
+            page_no=batch_index + 1,
+            total_pages=total_pages
+        )
 
     pdf_canvas.showPage()
     pdf_canvas.save()
