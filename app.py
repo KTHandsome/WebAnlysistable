@@ -1540,6 +1540,11 @@ def export_analysis_record_lims(
                 or "{}"
             )
 
+            method_data = json.loads(
+                work_state.method_data_json
+                or "{}"
+            )
+
         except json.JSONDecodeError:
 
             return (
@@ -1569,10 +1574,18 @@ def export_analysis_record_lims(
                 400
             )
 
+        if not method_data:
+
+            return (
+                "正式分析紀錄缺少方法設定 Snapshot。",
+                400
+            )
+
         export_data = (
             build_w434_lims_export_data(
                 form_data=form_data,
                 control_data=control_data,
+                method_data=method_data,
                 analysis_state=analysis_state,
                 analyst=(
                     record.analyst_name
@@ -7068,6 +7081,7 @@ def export_w434_pdf():
         download_name=download_name
     )
 
+@app.route("/analysis/w330/export-lims")
 @app.route("/analysis/w43401/export-lims")
 @login_required
 def export_w434_lims():
@@ -7119,12 +7133,13 @@ def export_w434_lims():
 
     if not analysis_state:
 
-      return redirect_metal_analysis_error(
-        "尚未找到 W434 分析結果，"
-        "請先完成分析資料。",
-        current_method_code
-    )
-
+        return redirect_metal_analysis_error(
+            "尚未找到 "
+            + current_method_code
+            + " 分析結果，"
+            "請先完成分析資料。",
+            current_method_code
+        )
     qaqc_results = (
     analysis_state.get(
         "qaqc_results",
@@ -7152,6 +7167,7 @@ def export_w434_lims():
         build_w434_lims_export_data(
             form_data=form_data,
             control_data=control_data,
+            method_data=method_data,
             analysis_state=analysis_state,
             analyst=""
         )

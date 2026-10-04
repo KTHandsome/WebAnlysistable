@@ -279,15 +279,36 @@ def _build_lims_result(
         ""
     )
 
-
 def build_w434_lims_export_data(
     form_data,
     control_data,
+    method_data,
     analysis_state,
     analyst=""
 ):
 
     export_data = LimsExportData()
+
+    qaqc_conc_factor = 1.0
+
+    if method_data:
+
+        try:
+
+            qaqc_conc_factor = float(
+                method_data.get(
+                    "QAQC_CONC_FACTOR",
+                    "1"
+                )
+                or "1"
+            )
+
+        except (
+            TypeError,
+            ValueError
+        ):
+
+            qaqc_conc_factor = 1.0
 
     if not analysis_state:
         return export_data
@@ -643,18 +664,41 @@ def build_w434_lims_export_data(
                 continue
 
             calculated_concentration = (
-                      row.get(
-                     "calculated_concentration"
-                     )
+                row.get(
+                    "calculated_concentration"
+                )
             )
 
+            lims_concentration = None
+
+            try:
+
+                if calculated_concentration not in {
+                    None,
+                    ""
+                }:
+
+                    lims_concentration = (
+                        float(
+                            calculated_concentration
+                        )
+                        * qaqc_conc_factor
+                    )
+
+            except (
+                TypeError,
+                ValueError
+            ):
+
+                lims_concentration = None
+
             (
-               result_text,
-               result_remark
+                result_text,
+                result_remark
             ) = _build_lims_result(
-               calculated_concentration,
-               mdl_value,
-               qdl_value
+                lims_concentration,
+                mdl_value,
+                qdl_value
             )
 
             export_data.analysis_rows.append(
