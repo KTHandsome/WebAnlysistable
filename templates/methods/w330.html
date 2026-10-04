@@ -177,6 +177,12 @@ W330 汞分析 - EACS Web
     method_data.DISPLAY_CONC_UNIT
 %}
 
+{% set spike_concentration_unit =
+    control_data.CTRL_UNIT
+    if control_data
+    else "mg/L"
+%}
+
 {% set sample_signal_label = "AREA" %}
 
 {% set interpretation_concentration_factor =

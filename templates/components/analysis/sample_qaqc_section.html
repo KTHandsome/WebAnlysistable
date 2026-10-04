@@ -16,6 +16,12 @@
     else "mg/L"
 %}
 
+{% set spike_concentration_unit_text =
+    spike_concentration_unit
+    if spike_concentration_unit is defined
+    else "mg/L"
+%}
+
 {% set sample_signal_label_text =
     sample_signal_label
     if sample_signal_label is defined
@@ -317,7 +323,7 @@
                         padding: 9px;
                         width: 105px;
                     ">
-                        添加濃度<br>({{ sample_concentration_unit_text }})
+                        添加濃度<br>({{ spike_concentration_unit_text }})
                     </th>
 
                     <th style="

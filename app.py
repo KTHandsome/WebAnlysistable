@@ -3158,15 +3158,22 @@ def manual_analysis_entry():
               "MSD": "MS_SPIKE_CONC"
             }
 
+            (
+              sample_volume_default,
+              final_volume_default
+               ) = get_method_volume_defaults(
+              method_data
+            )
+
             for row in sample_qaqc_rows:
 
                 row[
                     "sample_volume"
-                ] = 25
+                ] = sample_volume_default
 
                 row[
                     "final_volume"
-                ] = 50
+                ] = final_volume_default
 
                 row[
                     "dilution_factor"
@@ -3459,6 +3466,30 @@ def classify_analysis_rows(preview_rows, method_data):
 
     return classified_rows
 
+def get_method_volume_defaults(
+    method_data
+):
+
+    sample_volume = float(
+        method_data.get(
+            "SAMPLE_VOLUME_DEFAULT",
+            ""
+        )
+    )
+
+    final_volume = float(
+        method_data.get(
+            "FINAL_VOLUME_DEFAULT",
+            ""
+        )
+    )
+
+    return (
+        sample_volume,
+        final_volume
+    )
+
+
 def get_analysis_state_key(method_code):
 
     method_code = str(
@@ -3499,20 +3530,94 @@ def get_analysis_page_endpoint(
         method_code or ""
     ).strip().upper()
 
-    if method_code == "W330":
+    if not method_code:
+
+        raise ValueError(
+            "缺少分析方法代碼，"
+            "無法取得分析頁面。"
+        )
+
+    method_file = os.path.join(
+        app.root_path,
+        "data",
+        "Phyon_Method_Settings.csv"
+    )
+
+    if not os.path.exists(
+        method_file
+    ):
+
+        raise ValueError(
+            "尚未匯入方法設定資料。"
+        )
+
+    method_data = None
+
+    with open(
+        method_file,
+        "r",
+        encoding="utf-8-sig",
+        newline=""
+    ) as f:
+
+        reader = csv.DictReader(
+            f
+        )
+
+        for row in reader:
+
+            row_method_code = str(
+                row.get(
+                    "METHOD_CODE",
+                    ""
+                )
+                or ""
+            ).strip().upper()
+
+            active = str(
+                row.get(
+                    "ACTIVE",
+                    ""
+                )
+                or ""
+            ).strip().upper()
+
+            if (
+                row_method_code
+                == method_code
+                and active == "Y"
+            ):
+
+                method_data = row
+                break
+
+    if method_data is None:
+
+        raise ValueError(
+            "查無分析方法 "
+            + method_code
+            + " 的有效方法設定。"
+        )
+
+    import_type = str(
+        method_data.get(
+            "IMPORT_TYPE",
+            ""
+        )
+        or ""
+    ).strip().upper()
+
+    if import_type == "RA7000A_PDF":
 
         return "analysis_w330"
 
-    if method_code in {
-        "W434",
-        "W341"
-    }:
+    if import_type == "PE900_PDF":
 
         return "analysis_w43401"
 
     raise ValueError(
-        "尚未設定分析方法 "
-        + method_code
+        "尚未設定 IMPORT_TYPE "
+        + import_type
         + " 的分析頁面。"
     )
 
@@ -3881,20 +3986,17 @@ def update_batch_remarks():
         analysis_state
     )
 
-    if method_code == "W330":
-
-        return redirect(
-            url_for(
-                "analysis_w330",
-                saved="1"
-            )
-        )
+    analysis_endpoint = (
+       get_analysis_page_endpoint(
+        method_code
+       )
+    )
 
     return redirect(
-        url_for(
-            "analysis_w43401",
-            saved="1"
-        )
+      url_for(
+          analysis_endpoint,
+          saved="1"
+      )
     )
 
 def split_analysis_rows(rows):
@@ -4157,26 +4259,37 @@ def analysis_w330():
                                  try:
 
                                      qdl_multiplier = float(
-                                     qdl_multiplier_text
-                                    )
+                                        qdl_multiplier_text
+                                            )
+
+                                     qaqc_conc_factor = float(
+                                        method_data.get(
+                                             "QAQC_CONC_FACTOR",
+                                                 ""
+                                             )
+                                            )
 
                                      qdl_value = (
-                                       first_nonzero_x
-                                       * qdl_multiplier
-                                       / 1000.0
-                                     )
+                                        first_nonzero_x
+                                        * qdl_multiplier
+                                        * qaqc_conc_factor
+                                        )
 
                                  except ValueError:
 
                                   qdl_value = None
 
-
-
-
                 # ========================================
                 # W330 SMP TABLE
                 # → 轉為金屬分析共用 sample_qaqc_rows
                 # ========================================
+
+                (
+                   sample_volume_default,
+                   final_volume_default
+                   ) = get_method_volume_defaults(
+                   method_data
+                )
 
                 if (
                       ra7000_data
@@ -4309,8 +4422,13 @@ def analysis_w330():
 
                              try:
 
-                                 calc_sample_volume = 50.0
-                                 calc_final_volume = 100.0
+                                 calc_sample_volume = (
+                                    sample_volume_default
+                                 )
+
+                                 calc_final_volume = (
+                                    final_volume_default
+                                 )
 
                                  result = (
                                          calculate_sample_concentration(
@@ -4379,11 +4497,11 @@ def analysis_w330():
                              "role":
                                role,
 
-                              "sample_volume":
-                              50.0,
+                            "sample_volume":
+                               sample_volume_default,
 
                             "final_volume":
-                            100.0,
+                             final_volume_default,
 
                             "dilution_factor":
                             1.0,
@@ -4667,12 +4785,19 @@ def analysis_w330():
     control_data=control_data,
     method_data=method_data,
     qdl_value=qdl_value,
-    calibration_unit="ug/L",
+    calibration_unit=(
+    method_data.get(
+        "DISPLAY_CONC_UNIT",
+        ""
+    )
+    if method_data
+    else ""
+    ),
     calibration_signal_label="AREA",
     show_calibration_error=False,
     included_batches=included_batches,
     qaqc_3a_results=qaqc_results,
-)
+    )
 
 @app.route("/analysis/w43401", methods=["GET", "POST"])
 @login_required
@@ -5135,10 +5260,22 @@ def analysis_w43401():
     "SAMPLE"
                }
 
+    (
+       sample_volume_default,
+        final_volume_default
+       ) = get_method_volume_defaults(
+       method_data
+    )
+
     for row in sample_qaqc_rows:
 
-        row["sample_volume"] = 25
-        row["final_volume"] = 50
+        row["sample_volume"] = (
+    sample_volume_default
+)
+
+        row["final_volume"] = (
+    final_volume_default
+)
         row["dilution_factor"] = 1
         row["remark"] = ""
         row["is_excluded"] = False
@@ -6011,6 +6148,13 @@ def update_analysis_samples():
             400
         )
 
+    (
+      sample_volume_default,
+      final_volume_default
+      ) = get_method_volume_defaults(
+       method_data
+    )
+
     preview_rows = analysis_state.get(
         "preview_rows",
         []
@@ -6126,7 +6270,9 @@ def update_analysis_samples():
             request.form.get(
                 "sample_volume_"
                 + str(index),
-                "25"
+                str(
+                sample_volume_default
+                )
             )
             .strip()
         )
@@ -6135,7 +6281,9 @@ def update_analysis_samples():
             request.form.get(
                 "final_volume_"
                 + str(index),
-                "50"
+                str(
+                final_volume_default
+                )
             )
             .strip()
         )
@@ -6607,23 +6755,24 @@ def update_analysis_samples():
 def save_analysis_record_route():
 
     form_data = session.get(
-        "basic_info_form"
-    )
-
-    if not form_data:
-
-      return redirect_metal_analysis_error(
-        "尚未建立分析基本資料。",
-        current_method_code
-    )
+    "basic_info_form"
+       ) or {}
 
     current_method_code = str(
         form_data.get(
-            "method_code",
-            ""
+        "method_code",
+        ""
+       )
+       or ""
+       ).strip().upper()
+
+    if not form_data:
+
+      return redirect(
+        url_for(
+            "basic_info"
         )
-        or ""
-    ).strip().upper()
+    )
 
     analysis_state_key = (
         get_analysis_state_key(
@@ -6786,15 +6935,24 @@ def save_analysis_record_route():
 def export_w434_pdf():
 
     form_data = session.get(
-        "basic_info_form"
+    "basic_info_form"
+    ) or {}
+
+    current_method_code = str(
+    form_data.get(
+        "method_code",
+        ""
     )
+    or ""
+).strip().upper()
 
     if not form_data:
 
-        return redirect_metal_analysis_error(
-            "尚未建立分析基本資料。",
-            current_method_code
+       return redirect(
+        url_for(
+            "basic_info"
         )
+     )
 
     (
         control_data,
@@ -6912,28 +7070,29 @@ def export_w434_lims():
 
     form_data = session.get(
         "basic_info_form"
+    ) or {}
+
+    if not form_data:
+
+       return redirect(
+        url_for(
+            "basic_info"
+        )
     )
 
     current_method_code = str(
-        form_data.get(
-            "method_code",
-            ""
+       form_data.get(
+        "method_code",
+        ""
         )
-        or ""
+       or ""
     ).strip().upper()
 
     analysis_state_key = (
         get_analysis_state_key(
-            current_method_code
-        )
+        current_method_code
+       )
     )
-
-    if not form_data:
-
-        return redirect_metal_analysis_error(
-            "尚未建立分析基本資料。",
-            current_method_code
-        )
 
     (
         control_data,
