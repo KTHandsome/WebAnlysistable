@@ -5073,24 +5073,38 @@ def analysis_w43401():
                     )
 
 
-                if preview_rows and control_data:
+                if preview_rows and method_data:
 
-                 selected_exam_no = (
-                 control_data.get(
-                 "EXAMNO",
-                 ""
-                 )
-                 .strip()
-                  )
+                    selected_exam_no = ""
 
-                 (
-                   preview_rows,
-                   excluded_rows,
-                   included_batches
-                 ) = filter_batches_by_exam_no(
-                   preview_rows,
-                   selected_exam_no
-                 )
+                    if control_data:
+
+                        selected_exam_no = (
+                            control_data.get(
+                                "EXAMNO",
+                                ""
+                            )
+                            .strip()
+                        )
+
+                    if not selected_exam_no:
+
+                        selected_exam_no = (
+                            method_data.get(
+                                "EXAMNO",
+                                ""
+                            )
+                            .strip()
+                        )
+
+                    (
+                        preview_rows,
+                        excluded_rows,
+                        included_batches
+                    ) = filter_batches_by_exam_no(
+                        preview_rows,
+                        selected_exam_no
+                    )
 
                 if preview_rows:
 
@@ -6840,12 +6854,13 @@ def save_analysis_record_route():
 
     if not analysis_state:
 
-      return redirect_metal_analysis_error(
-        "尚未找到 "
-         + current_method_code
-         + " 分析資料，"
-         "請先完成分析資料匯入或建立。"
-    )
+        return redirect_metal_analysis_error(
+            "尚未找到 "
+            + current_method_code
+            + " 分析資料，"
+            "請先完成分析資料匯入或建立。",
+            current_method_code
+        )
 
     form_data = session.get(
         "basic_info_form"

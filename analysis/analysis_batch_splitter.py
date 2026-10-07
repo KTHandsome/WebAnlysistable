@@ -359,24 +359,100 @@ def filter_batches_by_exam_no(
 
         
 
-        # 無正式樣品或混合類別：
-        # 先保留，不自動刪除
-        should_include = (
-            batch_category
-            in {
-                None,
-                "MIXED",
-                selected_category
-            }
-        )
+        # ========================================
+        # Batch 類別篩選
+        #
+        # 1. 單一類別且符合目前分析類別：
+        #    整批保留
+        #
+        # 2. MIXED：
+        #    QA/QC 全部保留，
+        #    正式 SAMPLE 僅保留目前分析類別
+        #
+        # 3. 其他類別：
+        #    整批排除
+        # ========================================
 
-        if should_include:
+        if batch_category == "MIXED":
 
-            included_batches.append(
-                batch
-            )
+            filtered_batch_rows = []
 
             for row in batch["rows"]:
+
+                role = (
+                    row.get(
+                        "role",
+                        ""
+                    )
+                    .strip()
+                    .upper()
+                )
+
+                # QA/QC 非正式樣品全部保留
+                if role != "SAMPLE":
+
+                    filtered_batch_rows.append(
+                        row
+                    )
+
+                    continue
+
+                sample_category = (
+                    detect_formal_sample_category(
+                        row.get(
+                            "sample_id",
+                            ""
+                        )
+                    )
+                )
+
+                if sample_category == selected_category:
+
+                    filtered_batch_rows.append(
+                        row
+                    )
+
+                else:
+
+                    excluded_row = row.copy()
+
+                    excluded_row[
+                        "exclude_reason"
+                    ] = (
+                        "正式樣品類別 "
+                        + str(
+                            sample_category
+                        )
+                        + " 與目前分析類別 "
+                        + selected_category
+                        + " 不符"
+                    )
+
+                    excluded_row[
+                        "batch_no"
+                    ] = batch[
+                        "batch_no"
+                    ]
+
+                    excluded_rows.append(
+                        excluded_row
+                    )
+
+            filtered_batch = batch.copy()
+
+            filtered_batch[
+                "rows"
+            ] = filtered_batch_rows
+
+            filtered_batch[
+                "batch_category"
+            ] = selected_category
+
+            included_batches.append(
+                filtered_batch
+            )
+
+            for row in filtered_batch_rows:
 
                 sequence_no = (
                     row.get(
@@ -384,8 +460,111 @@ def filter_batches_by_exam_no(
                     )
                 )
 
-                # CCV 可能同時存在於兩批，
-                # 畫面只保留一筆
+                if (
+                    sequence_no
+                    in added_sequence_numbers
+                ):
+                    continue
+
+                included_rows.append(
+                    row
+                )
+
+                added_sequence_numbers.add(
+                    sequence_no
+                )
+
+        elif batch_category in {
+            None,
+            selected_category
+        }:
+
+            filtered_batch_rows = []
+
+            for row in batch["rows"]:
+
+                role = (
+                    row.get(
+                        "role",
+                        ""
+                    )
+                    .strip()
+                    .upper()
+                )
+
+                # QA/QC 資料保留
+                if role != "SAMPLE":
+
+                    filtered_batch_rows.append(
+                        row
+                    )
+
+                    continue
+
+                sample_category = (
+                    detect_formal_sample_category(
+                        row.get(
+                            "sample_id",
+                            ""
+                        )
+                    )
+                )
+
+                # 正式樣品必須明確屬於目前分析類別
+                if sample_category == selected_category:
+
+                    filtered_batch_rows.append(
+                        row
+                    )
+
+                else:
+
+                    excluded_row = row.copy()
+
+                    excluded_row[
+                        "exclude_reason"
+                    ] = (
+                        "正式樣品類別 "
+                        + str(
+                            sample_category
+                        )
+                        + " 與目前分析類別 "
+                        + selected_category
+                        + " 不符"
+                    )
+
+                    excluded_row[
+                        "batch_no"
+                    ] = batch[
+                        "batch_no"
+                    ]
+
+                    excluded_rows.append(
+                        excluded_row
+                    )
+
+            filtered_batch = batch.copy()
+
+            filtered_batch[
+                "rows"
+            ] = filtered_batch_rows
+
+            filtered_batch[
+                "batch_category"
+            ] = selected_category
+
+            included_batches.append(
+                filtered_batch
+            )
+
+            for row in filtered_batch_rows:
+
+                sequence_no = (
+                    row.get(
+                        "sequence_no"
+                    )
+                )
+
                 if (
                     sequence_no
                     in added_sequence_numbers

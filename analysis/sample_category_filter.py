@@ -6,7 +6,8 @@ FORMAL_SAMPLE_MIN_LENGTH = 10
 SUPPORTED_SAMPLE_CATEGORIES = {
     "W",
     "D",
-    "G"
+    "G",
+    "R"
 }
 
 
@@ -25,6 +26,9 @@ def get_analysis_category(exam_no):
 
     if value.startswith("W-"):
         return "W"
+
+    if value.startswith("R-"):
+        return "R"
 
     return None
 

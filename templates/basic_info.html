@@ -552,17 +552,10 @@
 
 {% if
     method_data
-    and (
-        (
-            method_data.METHOD_CODE|upper in ["W434", "W341"]
-            and method_data.IMPORT_TYPE|upper == "PE900_PDF"
-        )
-        or
-        (
-            method_data.METHOD_CODE|upper == "W330"
-            and method_data.IMPORT_TYPE|upper == "RA7000A_PDF"
-        )
-    )
+    and method_data.IMPORT_TYPE|upper in [
+        "PE900_PDF",
+        "RA7000A_PDF"
+    ]
 %}
 
     <div
