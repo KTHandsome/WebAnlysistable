@@ -57,7 +57,7 @@
         <div>
             <strong>相關係數 r</strong><br>
             <span id="calibration-r-display">
-                {{ "%.6f"|format(calibration_result.r) }}
+                {{ "%.4f"|format(calibration_result.r) }}
             </span>
         </div>
 
@@ -232,12 +232,18 @@
                     </td>
     
     
-                    <td class="calibration-backcalc-cell" style="
-                    border: 1px solid #ccc;
-                    padding: 8px;
-                    text-align: right;
-                ">
+                    <td class="calibration-backcalc-cell"
+                        data-display-decimals="{{ 2 if method_data and method_data.METHOD_CODE|upper == 'W532' else 7 }}"
+                        style="
+                                border: 1px solid #ccc;
+                                padding: 8px;
+                                text-align: right;
+                        ">
+                        {% if method_data and method_data.METHOD_CODE|upper == "W532" %}
+                        {{ "%.2f"|format(point.back_calculated_x) }}
+                        {% else %}
                         {{ "%.7f"|format(point.back_calculated_x) }}
+                        {% endif %}
                     </td>
     
                 {% if show_calibration_error_column %}

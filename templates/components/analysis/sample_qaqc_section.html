@@ -208,6 +208,18 @@
 
 <input
     type="hidden"
+    id="analysis-apply-volume-factor"
+    value="{{ method_data.get('APPLY_VOLUME_FACTOR', 'Y') if method_data else 'Y' }}"
+>
+
+<input
+    type="hidden"
+    id="analysis-sample-prep-factor"
+    value="{{ method_data.get('SAMPLE_PREP_FACTOR', '1') if method_data else '1' }}"
+>
+
+<input
+    type="hidden"
     name="row_count"
     value="{{ sample_qaqc_rows|length }}"
 >
@@ -545,11 +557,11 @@
                         <input
                             type="number"
                             name="sample_volume_{{ loop.index0 }}"
-                            value="{{
-    row.sample_volume
-    if row.sample_volume is defined
-    else sample_volume_default_value
-}}"
+                            value="{{ '%g' | format(
+                                row.sample_volume
+                                if row.sample_volume is defined
+                                else sample_volume_default_value
+                                ) }}"
                             readonly
                             style="
                                 width: 100%;
@@ -596,11 +608,11 @@
                         <input
                             type="number"
                             name="final_volume_{{ loop.index0 }}"
-                            value="{{
-    row.final_volume
-    if row.final_volume is defined
-    else final_volume_default_value
-}}"
+                            value="{{ '%g' | format(
+                                row.final_volume
+                                if row.final_volume is defined
+                                else final_volume_default_value
+                                ) }}"
                             readonly
                             style="
                                 width: 100%;
@@ -676,7 +688,11 @@
                         >
                      {% if row.measured_concentration is defined
                      and row.measured_concentration is not none %}
-                     {{ "%.6f"|format(row.measured_concentration) }}
+                     {% if method_data and method_data.METHOD_CODE|upper == "W532" %}
+    {{ "%.3f"|format(row.measured_concentration) }}
+{% else %}
+    {{ "%.6f"|format(row.measured_concentration) }}
+{% endif %}
                      {% else %}
                       -
                      {% endif %}
@@ -685,6 +701,7 @@
 
                     <td 
                             class="calculated-concentration-cell"
+                            data-display-decimals="{{ 3 if method_data and method_data.METHOD_CODE|upper == 'W532' else 6 }}"
                             style="
                                  border: 1px solid #ccc;
                                  padding: 8px;
@@ -693,7 +710,11 @@
                                  font-weight: 700;
                                  ">
                         {% if row.calculated_concentration is not none %}
-                        {{ "%.6f"|format(row.calculated_concentration) }}
+                        {% if method_data and method_data.METHOD_CODE|upper == "W532" %}
+    {{ "%.3f"|format(row.calculated_concentration) }}
+{% else %}
+    {{ "%.6f"|format(row.calculated_concentration) }}
+{% endif %}
                         {% else %}
                         -
                         {% endif %}

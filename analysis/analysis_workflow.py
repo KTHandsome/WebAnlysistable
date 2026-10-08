@@ -70,36 +70,73 @@ def recalculate_sample_rows(
 
             else:
 
-                sample_volume = float(
-                    row.get(
-                        "sample_volume",
-                        25
-                    )
+                apply_volume_factor = row.get(
+                    "apply_volume_factor",
+                    True
                 )
 
-                final_volume = float(
-                    row.get(
-                        "final_volume",
-                        50
+                if apply_volume_factor:
+
+                    sample_volume = float(
+                        row.get(
+                            "sample_volume",
+                            25
+                        )
                     )
+
+                    final_volume = float(
+                        row.get(
+                            "final_volume",
+                            50
+                        )
+                    )
+
+                else:
+
+                    sample_volume = 1.0
+                    final_volume = 1.0
+
+            if role in direct_instrument_roles:
+                dilution_factor = 1.0
+                sample_prep_factor = 1.0
+            else:
+                dilution_factor = float(
+                    row.get("dilution_factor", 1)
+                )
+                sample_prep_factor = float(
+                    row.get("sample_prep_factor", 1)
                 )
 
-            dilution_factor = float(
-                row.get(
-                    "dilution_factor",
-                    1
-                )
+            reagent_blank = float(
+                calibration_result.get("reagent_blank", 0.0)
             )
 
             result = (
                 calculate_concentration(
-                    signal=signal,
+                    signal=signal - reagent_blank,
                     slope=slope,
                     intercept=intercept,
                     sample_volume=sample_volume,
                     final_volume=final_volume,
                     dilution_factor=dilution_factor
                 )
+            )
+
+            # 原計算已包含體積倍率與額外稀釋 D，
+            # 此處只補上方法固定前處理倍率。
+            sample_concentration = result.get(
+                "sample_concentration",
+                result.get("calculated_concentration")
+            )
+
+            if sample_concentration is not None:
+                sample_concentration *= sample_prep_factor
+
+            result["sample_concentration"] = (
+                sample_concentration
+            )
+            result["calculated_concentration"] = (
+                sample_concentration
             )
 
             row[

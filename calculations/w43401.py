@@ -1,7 +1,7 @@
 import math
 
 
-def calculate_calibration(standard_rows):
+def calculate_calibration(standard_rows, reagent_blank=0.0):
     """
     W43401 檢量線計算
 
@@ -27,6 +27,11 @@ def calculate_calibration(standard_rows):
     r > 0.995
     """
 
+    reagent_blank = float(reagent_blank)
+
+    if not math.isfinite(reagent_blank) or reagent_blank < 0:
+        raise ValueError("Reagent Blank 必須是非負有限數值。")
+
     points = []
 
     for row in standard_rows:
@@ -45,7 +50,8 @@ def calculate_calibration(standard_rows):
                 "sequence_no": row.get("sequence_no"),
                 "sample_id": row.get("sample_id", ""),
                 "x": float(x),
-                "y": float(y)
+                "raw_y": float(y),
+                "y": float(y) - reagent_blank
             }
         )
 
@@ -140,7 +146,8 @@ def calculate_calibration(standard_rows):
                 "sequence_no": point["sequence_no"],
                 "sample_id": point["sample_id"],
                 "x": point["x"],
-                "y": point["y"],
+                "y": point["raw_y"],
+                "corrected_y": point["y"],
                 "back_calculated_x": back_calculated_x,
                 "back_calculation_error_percent":
                 back_calculation_error_percent
@@ -154,6 +161,7 @@ def calculate_calibration(standard_rows):
         "intercept": intercept,
         "r": r,
         "passed": passed,
+        "reagent_blank": reagent_blank,
         "points": calculated_points
     }
 
@@ -163,7 +171,8 @@ def calculate_sample_concentration(
     intercept,
     sample_volume=25.0,
     final_volume=50.0,
-    dilution_factor=1.0
+    dilution_factor=1.0,
+    reagent_blank=0.0
 ):
     """
     一般樣品濃度計算。
@@ -175,6 +184,11 @@ def calculate_sample_concentration(
         × (final_volume / sample_volume)
         × dilution_factor
     """
+
+    reagent_blank = float(reagent_blank)
+
+    if not math.isfinite(reagent_blank) or reagent_blank < 0:
+        raise ValueError("Reagent Blank 必須是非負有限數值。")
 
     if slope == 0:
         raise ValueError("檢量線斜率不得為 0。")
@@ -189,8 +203,10 @@ def calculate_sample_concentration(
         raise ValueError("樣品稀釋倍數 D 必須大於 0。")
 
     measured_concentration = (
-    float(signal) - float(intercept)
-     ) / float(slope)
+        float(signal)
+        - reagent_blank
+        - float(intercept)
+    ) / float(slope)
 
     volume_factor = (
     float(final_volume)
@@ -239,3 +255,5 @@ def calculate_sample_concentration(
     "calculated_concentration":
         calculated_concentration
 }
+
+

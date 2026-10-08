@@ -16,6 +16,8 @@ from datetime import datetime, timedelta
 
 from parsers.pe900_parser import parse_pe900_pdf
 
+from parsers.oi_toc_parser import parse_oi_toc_pdf
+
 from parsers.ra7000_parser import (
     parse_ra7000_pdf
 )
@@ -484,6 +486,27 @@ def load_control_and_method_data(form_data):
 
     method_data = method_matches[0]
 
+    method_exam_no = (
+        method_data.get(
+            "EXAMNO",
+            ""
+        )
+        .strip()
+    )
+
+    method_category = str(
+        method_data.get("CATEGORY_CODE", "")
+        or ""
+    ).strip().upper()
+
+    effective_exam_no = selected_exam_no
+
+    if (
+        not effective_exam_no
+        and method_category == category.upper()
+    ):
+        effective_exam_no = method_exam_no
+
     # ========================================
     # 再載入年度管制資料
     # 年度檔案本身不存在仍視為設定錯誤
@@ -507,6 +530,16 @@ def load_control_and_method_data(form_data):
             + ctrl_year
             + " 年管制資料。"
         )
+
+    print("DEBUG control lookup:", {
+        "category": category,
+        "exam_name": exam_name,
+        "method_code": method_code,
+        "selected_exam_no": selected_exam_no,
+        "method_category": method_data.get("CATEGORY_CODE"),
+        "method_exam_no": method_exam_no,
+        "effective_exam_no": effective_exam_no,
+    })
 
     base_matches = []
 
@@ -559,13 +592,31 @@ def load_control_and_method_data(form_data):
                 .strip()
             )
 
-            if (
-                exam_name
-                != row_exam_name
-                and exam_name
-                != row_exam_alias
-            ):
-                continue
+            row_exam_no = (
+                row.get(
+                    "EXAMNO",
+                    ""
+                )
+                .strip()
+            )
+
+            if effective_exam_no:
+
+                if (
+                    row_exam_no
+                    != effective_exam_no
+                ):
+                    continue
+
+            else:
+
+                if (
+                    exam_name
+                    != row_exam_name
+                    and exam_name
+                    != row_exam_alias
+                ):
+                    continue
 
             if (
                 row.get(
@@ -3624,8 +3675,10 @@ def get_analysis_page_endpoint(
 
         return "analysis_w330"
 
-    if import_type == "PE900_PDF":
-
+    if import_type in {
+        "PE900_PDF",
+        "TOC_PDF"
+    }:
         return "analysis_w43401"
 
     raise ValueError(
@@ -5061,9 +5114,62 @@ def analysis_w43401():
 
                 pdf_file.save(temp_path)
 
-                preview_rows = parse_pe900_pdf(
-                    temp_path
-                )
+                import_type = str(
+                    (method_data or {}).get(
+                        "IMPORT_TYPE",
+                        ""
+                    )
+                    or ""
+                ).strip().upper()
+
+                if import_type == "TOC_PDF":
+                    import math
+
+                    reagent_blank_text = request.form.get(
+                        "reagent_blank", ""
+                    ).strip()
+
+                    if not reagent_blank_text:
+                        raise ValueError(
+                            "請先輸入 Reagent Blank。"
+                        )
+
+                    try:
+                        reagent_blank = float(
+                            reagent_blank_text
+                        )
+                    except ValueError:
+                        raise ValueError(
+                            "Reagent Blank 必須是數字。"
+                        )
+
+                    if (
+                        not math.isfinite(reagent_blank)
+                        or reagent_blank < 0
+                    ):
+                        raise ValueError(
+                            "Reagent Blank 必須是非負有限數值。"
+                        )
+
+                    preview_rows = parse_oi_toc_pdf(temp_path)
+
+                    # 清洗紀錄不參與檢量線及樣品計算
+                    preview_rows = [
+                       row
+                       for row in preview_rows
+                       if str(
+                               row.get("sample_id", "") or ""
+                             ).strip().upper() != "WASH"
+                       ]
+                elif import_type == "PE900_PDF":
+                    preview_rows = parse_pe900_pdf(
+                        temp_path
+                    )
+                else:
+                    raise ValueError(
+                        "尚未支援的 PDF 匯入格式："
+                        + import_type
+                    )
 
                 if preview_rows and method_data:
 
@@ -5172,8 +5278,13 @@ def analysis_w43401():
                   try:
 
                     calibration_result = calculate_calibration(
-                    preview_rows
-                   )
+                        preview_rows,
+                        reagent_blank=(
+                            reagent_blank
+                            if import_type == "TOC_PDF"
+                            else 0.0
+                        )
+                    )
 
                   except ValueError as ex:
 
@@ -5184,13 +5295,13 @@ def analysis_w43401():
 
                 if len(preview_rows) == 0:
                     import_error = (
-                        "PDF 已讀取，但未解析到 PE900 資料。"
+                        "PDF 已讀取，但未解析到分析資料。"
                     )
 
             except Exception as ex:
 
                 import_error = (
-                    "PE900 PDF 解析失敗："
+                    "PDF解析失敗："
                     + str(ex)
                 )
 
@@ -5294,16 +5405,102 @@ def analysis_w43401():
        method_data
     )
 
+    sample_dilution_default = 1.0
+
+    try:
+
+        sample_dilution_default = float(
+            method_data.get(
+                "SAMPLE_DILUTION_DEFAULT",
+                "1"
+            )
+            or "1"
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        sample_dilution_default = 1.0
+
+    apply_volume_factor = (
+         str(
+        method_data.get(
+            "APPLY_VOLUME_FACTOR",
+            "Y"
+        )
+        or "Y"
+    )
+    .strip()
+    .upper()
+    == "Y"
+    )
+
     for row in sample_qaqc_rows:
 
-        row["sample_volume"] = (
-    sample_volume_default
-)
+        role = str(
+        row.get(
+            "role",
+            ""
+        )
+        or ""
+        ).strip().upper()
 
-        row["final_volume"] = (
-    final_volume_default
-)
-        row["dilution_factor"] = 1
+        if role in {
+           "ICBK",
+           "ICV",
+           "CCBK",
+           "CCV"
+        }:
+
+           row[
+            "sample_volume"
+           ] = sample_volume_default
+
+           row[
+            "final_volume"
+           ] = sample_volume_default
+
+           row[
+            "dilution_factor"
+           ] = 1.0
+
+        else:
+
+           row[
+            "sample_volume"
+           ] = sample_volume_default
+
+           row[
+            "final_volume"
+           ] = final_volume_default
+
+           row[
+            "dilution_factor"
+           ] = sample_dilution_default
+
+        row[
+        "apply_volume_factor"
+        ] = apply_volume_factor
+
+        row["sample_prep_factor"] = (
+            1.0
+            if role in {
+                "ICBK",
+                "ICV",
+                "CCBK",
+                "CCV"
+            }
+            else float(
+                method_data.get(
+                    "SAMPLE_PREP_FACTOR",
+                    "1"
+                )
+                or "1"
+            )
+        )        
+
         row["remark"] = ""
         row["is_excluded"] = False
         row["exclusion_reason"] = ""
@@ -5321,6 +5518,7 @@ def analysis_w43401():
     calculate_concentration=
         calculate_sample_concentration
     )
+
 
     included_batches = (
     sync_sample_rows_to_batches(
@@ -7534,11 +7732,15 @@ def method_settings_import():
                     "BLANK_MDL_MULTIPLIER",
                     "QDL_SOURCE",
                     "QDL_MULTIPLIER",
+                    "ACTIVE",
+                    "REMARK",
                     "SAMPLE_VOLUME_DEFAULT",
                     "FINAL_VOLUME_DEFAULT",
+                    "APPLY_VOLUME_FACTOR",
+                    "SAMPLE_PREP_FACTOR",                    
                     "DISPLAY_CONC_UNIT",
-                    "QAQC_CONC_FACTOR",
-                    "ACTIVE"
+                    "QAQC_CONC_FACTOR",                    
+                    "SAMPLE_DILUTION_DEFAULT",
                 }
 
                 actual_columns = set(
@@ -7653,6 +7855,11 @@ def method_settings_import():
                               "FINAL_VOLUME_DEFAULT",
                                ""
                             ).strip()
+
+                            apply_volume_factor = row.get(
+                               "APPLY_VOLUME_FACTOR",
+                               ""
+                            ).strip().upper()
 
                             display_conc_unit = row.get(
                               "DISPLAY_CONC_UNIT",
@@ -8039,6 +8246,20 @@ def method_settings_import():
                                        + str(row_index)
                                        + " 列：FINAL_VOLUME_DEFAULT 必須為數字。"
                                 )
+                            
+                            # 是否套用體積換算因子
+                            if apply_volume_factor not in {
+                                "Y",
+                                "N"
+                                 }:
+
+                                validation_errors.append(
+                                    "第 "
+                                    + str(row_index)
+                                    + " 列：APPLY_VOLUME_FACTOR "
+                                    "只能是 Y 或 N。"
+                                    )
+
 
 
                            # 畫面濃度單位
@@ -8084,8 +8305,32 @@ def method_settings_import():
                                           + " 列：QAQC_CONC_FACTOR 必須為數字。"
                                            )
 
-                                     
-                            
+                            sample_dilution_default_text = (
+                                     row.get(
+                                     "SAMPLE_DILUTION_DEFAULT",
+                                     ""
+                                     )
+                                     .strip()
+                            )
+
+                            try:
+                                sample_dilution_default = float(
+                                sample_dilution_default_text
+                                )
+
+                                if sample_dilution_default <= 0:
+                                         validation_errors.append(
+                                         f"第 {row_index} 列 SAMPLE_DILUTION_DEFAULT "
+                                         "必須大於 0。"
+                                          )
+
+                            except ValueError:
+
+                               validation_errors.append(
+                               f"第 {row_index} 列 SAMPLE_DILUTION_DEFAULT "
+                               "必須為數字。"
+                              )                                    
+
                 if validation_errors:
 
                             method_error_message = (

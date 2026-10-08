@@ -200,13 +200,68 @@ function loadInterpretationStateFromPage() {
             )
             / calibrationState.slope;
 
+                const applyVolumeFactorElement =
+            document.getElementById(
+                "analysis-apply-volume-factor"
+            );
+
+        const samplePrepFactorElement =
+            document.getElementById(
+                "analysis-sample-prep-factor"
+            );
+
+        const sampleRoleInput = row.querySelector(
+            'input[name^="role_"]'
+        );
+
+        const sampleRole = (
+            sampleRoleInput ? sampleRoleInput.value : ""
+        ).trim().toUpperCase();
+
+        const isDirectRole = [
+            "ICBK", "ICV", "CCBK", "CCV"
+        ].includes(sampleRole);
+
+        const applyVolumeFactor = (
+            applyVolumeFactorElement
+                ? applyVolumeFactorElement.value
+                : "Y"
+        ).trim().toUpperCase() === "Y";
+
+        const samplePrepFactor = isDirectRole
+            ? 1
+            : Number(
+                samplePrepFactorElement
+                    ? samplePrepFactorElement.value
+                    : "1"
+            );
+
+        if (
+            !Number.isFinite(samplePrepFactor)
+            || samplePrepFactor <= 0
+        ) {
+            resultCell.textContent = "-";
+            return;
+        }
+
+        const volumeFactor =
+            isDirectRole || !applyVolumeFactor
+                ? 1
+                : finalVolume / sampleVolume;
+
+        const effectiveDilutionFactor =
+            isDirectRole ? 1 : dilutionFactor;
+
         const calculatedConcentration =
             backCalculatedConcentration
-            * (finalVolume / sampleVolume)
-            * dilutionFactor;
+            * volumeFactor
+            * samplePrepFactor
+            * effectiveDilutionFactor;
 
         resultCell.textContent =
-            calculatedConcentration.toFixed(6);
+            calculatedConcentration.toFixed(
+               Number(resultCell.dataset.displayDecimals || 6)
+             );
 
             const interpretationCell =
               row.querySelector(
@@ -719,7 +774,7 @@ function updateCalibrationDisplay(
     if (rDisplay) {
 
         rDisplay.textContent =
-            result.r.toFixed(6);
+            result.r.toFixed(4);
     }
 
 
@@ -785,7 +840,9 @@ function updateCalibrationDisplay(
             if (backCalcCell) {
 
                 backCalcCell.textContent =
-                    backCalculatedX.toFixed(7);
+                    backCalculatedX.toFixed(
+                    Number(backCalcCell.dataset.displayDecimals || 7)
+                    );
             }
 
 

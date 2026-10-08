@@ -119,6 +119,29 @@
     class="analysis-inline-form"
 >
 
+{% if
+    method_data
+    and method_data.IMPORT_TYPE|upper == "TOC_PDF"
+%}
+    <div style="flex-basis: 100%; margin-bottom: 12px;">
+        <label for="reagent-blank">
+            Reagent Blank（Count）
+        </label>
+
+        <input
+            id="reagent-blank"
+            name="reagent_blank"
+            type="number"
+            step="any"
+            min="0"
+            required
+            placeholder="請輸入 Reagent Blank"
+            value="{{ request.form.get('reagent_blank', '') }}"
+            style="width: 180px; margin-left: 10px;"
+        >
+    </div>
+{% endif %}
+
         <input
             type="file"
             name="pe900_pdf"
