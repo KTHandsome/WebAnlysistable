@@ -136,7 +136,11 @@
             min="0"
             required
             placeholder="請輸入 Reagent Blank"
-            value="{{ request.form.get('reagent_blank', '') }}"
+            value="{{ request.form.get(
+              'reagent_blank',
+               calibration_result.get('reagent_blank', '')
+                if calibration_result else ''
+            ) }}"
             style="width: 180px; margin-left: 10px;"
         >
     </div>
@@ -261,7 +265,62 @@
 
 {% include "components/analysis/analysis_action_bar.html" %}
 
+<input
+    type="hidden"
+    id="calibration-reagent-blank"
+    value="{{ calibration_result.get('reagent_blank', 0)
+             if calibration_result else 0 }}"
+>
+
 {% include "components/analysis/calibration_section.html" %}
+
+{% if toc_tic_rows %}
+<div class="eacs-card">
+    <h3>2-1. 無機碳去除效率測試</h3>
+
+    <table style="width: 100%; border-collapse: collapse;"
+           border="1" cellpadding="8">
+        <thead>
+            <tr>
+                <th>樣品編號</th>
+                <th>添加濃度（mg C/L）</th>
+                <th>原始感應值（Count）</th>
+                <th>測定濃度（mgC/L）</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in toc_tic_rows %}
+            <tr style="text-align: center;">
+                <td>{{ row.sample_id }}</td>
+                <td>
+                    {% if row.spike_concentration is not none %}
+                        {{ "%.2f"|format(row.spike_concentration) }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>{{ "%g"|format(row.signal) }}</td>
+                <td>
+                    {% if row.measured_concentration is defined
+                    and row.measured_concentration is not none %}
+                    {{ "%.3f"|format(row.measured_concentration) }}
+                    {% else %}
+                     -
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if toc_tic_result
+      and toc_tic_result.removal_percent is not none %}
+    <p>
+        無機碳去除效率：
+        {{ "%.1f"|format(toc_tic_result.removal_percent) }}%
+    </p>
+{% endif %}
+</div>
+{% endif %}
 
 {% include "components/analysis/sample_qaqc_section.html" %}
 

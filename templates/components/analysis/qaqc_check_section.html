@@ -1,3 +1,18 @@
+{% set qaqc_concentration_decimals_text =
+    (method_data.get("UI_CONCENTRATION_DECIMALS", "") or "")|trim
+    if method_data else ""
+%}
+
+{% set qaqc_concentration_decimals =
+    qaqc_concentration_decimals_text|int
+    if qaqc_concentration_decimals_text != ""
+    else 6
+%}
+
+{% set qaqc_concentration_format =
+    "%." ~ qaqc_concentration_decimals ~ "f"
+%}
+
 <div style="
     background-color: white;
     border: 1px solid #d9d9d9;
@@ -214,7 +229,7 @@
                                         ">
     
             {% if row.spike_concentration is not none %}
-            {{ "%.6f"|format(row.spike_concentration) }}
+            {{ qaqc_concentration_format|format(row.spike_concentration) }}
             {% else %}
             -
             {% endif %}
@@ -229,7 +244,7 @@
                                         ">
     
             {% if row.calculated_concentration is not none %}
-            {{ "%.6f"|format(row.calculated_concentration) }}
+            {{ qaqc_concentration_format|format(row.calculated_concentration) }}
             {% else %}
             -
             {% endif %}
@@ -688,7 +703,7 @@
                         <th style="
                             border: 1px solid #ccc;
                             padding: 8px;
-                            width: 10%;
+                            width: 13%;
                         ">
                             樣品編號
                         </th>
@@ -696,7 +711,7 @@
                         <th style="
                             border: 1px solid #ccc;
                             padding: 8px;
-                            width: 12%;
+                            width: 10%;
                         ">
                             原樣品
                         </th>
@@ -704,7 +719,7 @@
                         <th style="
                             border: 1px solid #ccc;
                             padding: 8px;
-                            width: 10%;
+                            width: 9%;
                         ">
                             原樣濃度<br>
                             (mg/L)
@@ -795,7 +810,7 @@
                         ">
 
                             {% if row.original_value is not none %}
-                            {{ "%.6f"|format(row.original_value) }}
+                            {{ qaqc_concentration_format|format(row.original_value) }}
                             {% else %}
                             -
                             {% endif %}
@@ -809,7 +824,7 @@
                         ">
 
                             {% if row.spiked_value is not none %}
-                            {{ "%.6f"|format(row.spiked_value) }}
+                            {{ qaqc_concentration_format|format(row.spiked_value) }}
                             {% else %}
                             -
                             {% endif %}
@@ -823,7 +838,7 @@
                         ">
 
                             {% if row.spike_concentration is not none %}
-                            {{ "%.6f"|format(row.spike_concentration) }}
+                            {{ qaqc_concentration_format|format(row.spike_concentration) }}
                             {% else %}
                             -
                             {% endif %}

@@ -1,3 +1,5 @@
+import math
+
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -188,21 +190,44 @@ def build_w434_pdf(
       or ""
     ).strip().upper()
 
-    if signal_field == "AREA":
+    def get_pdf_decimals(field_name, default):
+        value = str(
+            method_data.get(field_name, "") or ""
+        ).strip()
 
-        signal_label = "AREA"
+        if not value:
+            return default
 
-    elif signal_field in {
-        "ABSORBANCE",
-        "ABS",
-        "BLNKCORR_SIGNAL_MEAN"
-    }:
+        try:
+            decimals = int(value)
+        except ValueError:
+            return default
 
-       signal_label = "吸光度"
+        return decimals if 0 <= decimals <= 10 else default    
 
-    else:
+    signal_label = "測定值"
 
-        signal_label = "測定值"
+    signal_format = ".{}f".format(
+        get_pdf_decimals("PDF_SIGNAL_DECIMALS", 4)
+    )
+
+    calibration_x_format = ".{}f".format(
+        get_pdf_decimals("PDF_CALIBRATION_X_DECIMALS", 5)
+    )
+
+    backcalc_format = ".{}f".format(
+        get_pdf_decimals("PDF_CALIBRATION_BACKCALC_DECIMALS", 7)
+    )
+
+    concentration_format = ".{}f".format(
+        get_pdf_decimals("PDF_CONCENTRATION_DECIMALS", 6)
+    )
+
+    is_toc = str(
+        method_data.get("METHOD_CODE", "") or ""
+    ).strip().upper() == "W532"
+
+    qaqc_result_format = ".1f" if is_toc else ".2f"
 
     spike_conc_unit = str(
         control_data.get(
@@ -344,6 +369,18 @@ def build_w434_pdf(
        else []
     )
 
+    toc_tic_rows = (
+        analysis_state.get("toc_tic_rows", [])
+        if analysis_state
+        else []
+    )
+
+    toc_tic_result = (
+        analysis_state.get("toc_tic_result") or {}
+        if analysis_state
+        else {}
+    )    
+
     included_batches = (
     analysis_state.get(
         "included_batches",
@@ -386,6 +423,8 @@ def build_w434_pdf(
     # 每頁共用：表頭 + 檢量線
     # ========================================
     def draw_page_header_and_calibration():
+
+        header_top_y = top_y
 
         right_x = (
             page_width
@@ -448,7 +487,7 @@ def build_w434_pdf(
         # -----------------------------
         pdf_canvas.setFont(
             "MicrosoftJhengHei",
-            9
+            8
         )
 
         pdf_canvas.drawCentredString(
@@ -461,33 +500,28 @@ def build_w434_pdf(
         # -----------------------------
         # 波長
         # -----------------------------
-        if confirmed_wavelength is not None:
-
+        # TOC 不顯示波長，並收回這一列的高度
+        if not is_toc:
             wavelength_text = (
-                format(
-                    confirmed_wavelength,
-                    ".2f"
-                )
-                + " nm"
+                format(confirmed_wavelength, ".2f") + " nm"
+                if confirmed_wavelength is not None
+                else "-"
             )
 
+            pdf_canvas.drawCentredString(
+                page_width / 2,
+                top_y - 51,
+                "使用波長：" + wavelength_text
+            )
         else:
-
-            wavelength_text = "-"
-
-        pdf_canvas.drawCentredString(
-            page_width / 2,
-            top_y - 51,
-            "使用波長："
-            + wavelength_text
-        )
+            header_top_y += 12
 
         # -----------------------------
         # 基本資訊
         # -----------------------------
         pdf_canvas.setFont(
             "MicrosoftJhengHei",
-            9
+            8
         )
 
         pdf_canvas.drawString(
@@ -525,21 +559,21 @@ def build_w434_pdf(
         # -----------------------------
         pdf_canvas.line(
             left_margin,
-            top_y - 84,
+            top_y - 82,
             page_width - right_margin,
-            top_y - 84
+            top_y - 82
         )
 
         # -----------------------------
         # 一、檢量線
         # -----------------------------
         calibration_title_y = (
-            top_y - 96
+            top_y - 94
         )
 
         pdf_canvas.setFont(
             "MicrosoftJhengHei",
-            10
+            8
         )
 
         pdf_canvas.drawString(
@@ -572,7 +606,7 @@ def build_w434_pdf(
 
             pdf_canvas.setFont(
                 "MicrosoftJhengHei",
-                9
+                8
             )
 
             if (
@@ -627,7 +661,7 @@ def build_w434_pdf(
                 + (
                     format(
                         r_value,
-                        ".6f"
+                        ".4f"
                     )
                     if r_value is not None
                     else "-"
@@ -638,7 +672,7 @@ def build_w434_pdf(
                 regression_y - 8
             )
 
-            row_height = 16
+            row_height = 14
 
             column_widths = [
                 80,
@@ -722,7 +756,7 @@ def build_w434_pdf(
                     (
                         format(
                             x_value,
-                            ".5f"
+                            calibration_x_format
                         )
                         if x_value is not None
                         else "-"
@@ -731,7 +765,7 @@ def build_w434_pdf(
                     (
                         format(
                             y_value,
-                            ".4f"
+                            signal_format
                         )
                         if y_value is not None
                         else "-"
@@ -740,7 +774,7 @@ def build_w434_pdf(
                     (
                         format(
                             back_x,
-                            ".7f"
+                            backcalc_format
                         )
                         if back_x is not None
                         else "-"
@@ -778,36 +812,160 @@ def build_w434_pdf(
     sample_row_height = 17
 
     sample_column_widths = [
-        40,   # 序號
-        95,   # 樣品編號
-        65,   # 稀釋倍數
-        65,   # 測定值
-        80,   # 添加濃度
-        85,   # 測定濃度
-        85    # 樣品濃度
+        30,   # 序號
+        85,   # 樣品編號
+        55,   # 稀釋倍數
+        55,   # 測定值
+        70,   # 添加濃度
+        70,   # 測定濃度
+        70,   # 樣品濃度
+        80    # 備註
     ]
 
     sample_headers = [
-    "序號",
-    "樣品編號",
-    "稀釋倍數(D)",
-    signal_label,
-    (
-        "添加濃度 ("
-        + spike_conc_unit
-        + ")"
-    ),
-    (
-        "測定濃度 ("
-        + display_conc_unit
-        + ")"
-    ),
-    (
-        "樣品濃度 ("
-        + display_conc_unit
-        + ")"
-    )
+        "序號",
+        "樣品編號",
+        "稀釋倍數(D)",
+        signal_label,
+        (
+            "添加濃度 ("
+            + spike_conc_unit
+            + ")"
+        ),
+        (
+            "測定濃度 ("
+            + display_conc_unit
+            + ")"
+        ),
+        (
+            "樣品濃度 ("
+            + display_conc_unit
+            + ")"
+        ),
+        "備註"
     ]
+
+    def draw_toc_tic_section(start_y):
+        if not toc_tic_rows:
+            return start_y
+
+        current_y = start_y - 14
+
+        pdf_canvas.setFont("MicrosoftJhengHei", 8)
+        pdf_canvas.drawString(
+            left_margin,
+            current_y,
+            "2-1. 無機碳去除效率"
+        )
+
+        widths = [95, 140, 140, 140]
+        headers = [
+            "樣品編號",
+            "添加濃度 (mg C/L)",
+            signal_label,
+            "測定濃度 (mg C/L)"
+        ]
+
+        def draw_tic_row(values, top_y):
+            bottom_y = top_y - 17
+            current_x = left_margin
+
+            pdf_canvas.setFont("MicrosoftJhengHei", 7.5)
+
+            for width, value in zip(widths, values):
+                pdf_canvas.rect(
+                    current_x, bottom_y, width, 17
+                )
+                pdf_canvas.drawCentredString(
+                    current_x + width / 2,
+                    bottom_y + 5,
+                    str(value)
+                )
+                current_x += width
+
+            return bottom_y
+
+        def format_tic_value(value, value_format):
+            if value is None or value == "":
+                return "-"
+            return format(float(value), value_format)
+
+        current_y = draw_tic_row(headers, current_y - 8)
+
+        for row in toc_tic_rows:
+            values = [
+                row.get("sample_id", ""),
+                format_tic_value(
+                    row.get("spike_concentration"),
+                    concentration_format
+                ),
+                format_tic_value(
+                    row.get("signal"),
+                    signal_format
+                ),
+                format_tic_value(
+                    row.get("measured_concentration"),
+                    concentration_format
+                )
+            ]
+            current_y = draw_tic_row(values, current_y)
+
+        return current_y
+
+    def evaluate_pdf_remark(row):
+        def finite_number(value):
+            if value is None or value == "":
+                return None
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                return None
+            return number if math.isfinite(number) else None
+
+        role = str(
+            row.get("role", "") or ""
+        ).strip().upper()
+
+        concentration = finite_number(
+            row.get("sample_concentration")
+        )
+
+        if concentration is None:
+            concentration = finite_number(
+                row.get("calculated_concentration")
+            )
+
+        mdl = finite_number(
+            (control_data or {}).get("DETECT_LIMITED")
+        )
+
+        qdl = finite_number(
+            (analysis_state or {}).get("qdl_value")
+        )
+
+        multiplier = finite_number(
+            (method_data or {}).get("BLANK_MDL_MULTIPLIER")
+        )
+
+        if concentration is None or mdl is None:
+            return ""
+
+        if role in {"ICBK", "BK", "CCBK"}:
+            if (
+                multiplier is not None
+                and concentration < mdl * multiplier
+            ):
+                return "<" + format(multiplier, ".10g") + "MDL"
+            return ""
+
+        if role in {"SAMPLE", "DUP"}:
+            if concentration < mdl:
+                return "ND<" + format(mdl, ".10g")
+
+            if qdl is not None and concentration < qdl:
+                return "<QDL=" + format(qdl, ".10g")
+
+        return ""
 
     # ========================================
     # 共用：單一 Batch 樣品及品管分析結果
@@ -870,7 +1028,7 @@ def build_w434_pdf(
 
         pdf_canvas.setFont(
             "MicrosoftJhengHei",
-            10
+            8
         )
 
         pdf_canvas.drawString(
@@ -1015,7 +1173,7 @@ def build_w434_pdf(
                 (
                     format(
                         signal,
-                        ".4f"
+                        signal_format
                     )
                     if signal is not None
                     else "-"
@@ -1033,7 +1191,7 @@ def build_w434_pdf(
                 (
                     format(
                         measured_concentration,
-                        ".6f"
+                        concentration_format
                     )
                     if measured_concentration
                     is not None
@@ -1043,12 +1201,12 @@ def build_w434_pdf(
                 (
                     format(
                         sample_concentration,
-                        ".6f"
+                        concentration_format
                     )
-                    if sample_concentration
-                    is not None
+                    if sample_concentration is not None
                     else "-"
-                )
+                ),
+                evaluate_pdf_remark(row)
             ]
 
             current_x = left_margin
@@ -1176,7 +1334,7 @@ def build_w434_pdf(
                 result_text = (
                     format(
                         check_value,
-                        ".2f"
+                        qaqc_result_format
                     )
                     + " %"
                 )
@@ -1185,7 +1343,7 @@ def build_w434_pdf(
 
                 result_text = format(
                     check_value,
-                    ".2f"
+                    qaqc_result_format
                 )
 
             item_text = (
@@ -1380,7 +1538,7 @@ def build_w434_pdf(
 
         pdf_canvas.setFont(
             "MicrosoftJhengHei",
-            10
+            8
         )
 
         pdf_canvas.drawString(
@@ -1558,6 +1716,8 @@ def build_w434_pdf(
         current_y = (
             draw_page_header_and_calibration()
         )
+
+        current_y = draw_toc_tic_section(current_y)
 
         # -----------------------------
         # 本 Batch 樣品

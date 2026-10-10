@@ -12,6 +12,10 @@ from services.lims_auth_service import (
     validate_lims_user
 )
 
+from analysis.sample_category_filter import (
+    detect_formal_sample_category
+)
+
 from datetime import datetime, timedelta
 
 from parsers.pe900_parser import parse_pe900_pdf
@@ -2423,16 +2427,13 @@ def resume_analysis_record(
                 400
             )
 
-        if (
-            record.method_code
-            != "W434"
-        ):
+        method_code = str(
+            record.method_code or ""
+        ).strip().upper()
 
-            return (
-                "目前只支援 W434 "
-                "退回紀錄重新進入修正。",
-                400
-            )
+        analysis_endpoint = get_analysis_page_endpoint(
+            method_code
+        )
 
         work_state = (
             db.query(
@@ -2502,22 +2503,22 @@ def resume_analysis_record(
         "formal_analysis_id"
     ] = analysis_id
 
+    form_data["method_code"] = method_code
+
     save_analysis_state(
-        "W434_CURRENT",
+        get_analysis_state_key(method_code),
         analysis_state
     )
 
-    session[
-        "basic_info_form"
-    ] = form_data
+    session["basic_info_form"] = form_data
 
     session[
-        "w434_formal_analysis_id"
+        get_analysis_session_key(method_code)
     ] = analysis_id
 
     return redirect(
         url_for(
-            "analysis_w43401",
+            analysis_endpoint,
             saved="1"
         )
     )
@@ -3408,6 +3409,90 @@ def manual_analysis_entry():
         error_message=error_message
     )
 
+def separate_toc_tic_rows(rows):
+    analysis_rows = []
+    tic_rows = []
+
+    for row in rows:
+        sample_id = str(
+            row.get("sample_id", "") or ""
+        ).strip().upper()
+
+        if sample_id in {"TIC", "TIC-SPK"}:
+            tic_row = dict(row)
+
+            tic_row["role"] = (
+                "TIC"
+                if sample_id == "TIC"
+                else "TIC_SPK"
+            )
+
+            tic_row["spike_concentration"] = (
+                3.0
+                if sample_id == "TIC-SPK"
+                else None
+            )
+
+            tic_row["apply_volume_factor"] = False
+            tic_row["sample_prep_factor"] = 1.0
+            tic_row["dilution_factor"] = 1.0
+
+            tic_rows.append(tic_row)
+        else:
+            analysis_rows.append(row)
+
+    return analysis_rows, tic_rows
+
+def calculate_toc_tic_result(tic_rows, calibration_result):
+    result = {
+        "removal_percent": None,
+        "passed": None
+    }
+
+    if not tic_rows or not calibration_result:
+        return result
+
+    recalculate_sample_rows(
+        rows=tic_rows,
+        calibration_result=calibration_result,
+        calculate_concentration=calculate_sample_concentration
+    )
+
+    tic = next(
+        (row for row in tic_rows if row.get("role") == "TIC"),
+        None
+    )
+    tic_spk = next(
+        (row for row in tic_rows if row.get("role") == "TIC_SPK"),
+        None
+    )
+
+    if tic is None or tic_spk is None:
+        return result
+
+    tic_conc = tic.get("measured_concentration")
+    tic_spk_conc = tic_spk.get("measured_concentration")
+    spike = tic_spk.get("spike_concentration")
+
+    if tic_conc is None or tic_spk_conc is None or spike is None:
+        return result
+
+    spike = float(spike)
+
+    if spike <= 0:
+        return result
+
+    removal_percent = (
+        (spike + tic_conc - tic_spk_conc)
+        / spike
+        * 100.0
+    )
+
+    result["removal_percent"] = removal_percent
+    result["passed"] = removal_percent > 90.0
+
+    return result
+
 def classify_analysis_rows(preview_rows, method_data):
 
     calibration_count = int(
@@ -3460,16 +3545,24 @@ def classify_analysis_rows(preview_rows, method_data):
              role = "ICV"
 
         elif (
-             sample_id_upper == "BK"
-             or sample_id_upper.startswith("BK-")
-             ):
-             role = "BK"
+            sample_id_upper == "BK"
+            or sample_id_upper.startswith("BK-")
+            or (
+                sample_id_upper.startswith("BK")
+                and sample_id_upper[2:].isdigit()
+            )
+        ):
+            role = "BK"
 
         elif (
-             sample_id_upper == "QC"
-             or sample_id_upper.startswith("QC-")
-             ):
-             role = "QC"
+            sample_id_upper == "QC"
+            or sample_id_upper.startswith("QC-")
+            or (
+                sample_id_upper.startswith("QC")
+                and sample_id_upper[2:].isdigit()
+            )
+        ):
+            role = "QC"
 
         elif sample_id_upper.startswith("MDL-"):
              role = "MDL"
@@ -3481,10 +3574,38 @@ def classify_analysis_rows(preview_rows, method_data):
              role = "CCBK"
 
         elif (
-             sample_id_upper == "CCV"
-             or sample_id_upper.startswith("CCV-")
-             ):
-             role = "CCV"
+            sample_id_upper == "CCV"
+            or sample_id_upper.startswith("CCV-")
+            or (
+                sample_id_upper.startswith("CCV")
+                and sample_id_upper[3:].isdigit()
+            )
+        ):
+            role = "CCV"
+
+        elif (
+            sample_id_upper.endswith("MSD")
+            and detect_formal_sample_category(
+                sample_id_upper[:-3]
+            ) is not None
+        ):
+            role = "MSD"
+
+        elif (
+            sample_id_upper.endswith("DUP")
+            and detect_formal_sample_category(
+                sample_id_upper[:-3]
+            ) is not None
+        ):
+            role = "DUP"
+
+        elif (
+            sample_id_upper.endswith("MS")
+            and detect_formal_sample_category(
+                sample_id_upper[:-2]
+            ) is not None
+        ):
+            role = "MS"
 
         elif (
              sample_id_upper == "DUP"
@@ -4956,6 +5077,8 @@ def analysis_w43401():
     preview_rows = []
     calibration_rows = []
     sample_qaqc_rows = []
+    toc_tic_rows = []   
+    toc_tic_result = None     
     excluded_rows = []
     included_batches = []
     qaqc_3a_results = []
@@ -5032,6 +5155,14 @@ def analysis_w43401():
                 sample_qaqc_rows=saved_state.get(
                     "sample_qaqc_rows",
                     []
+                ),
+
+                toc_tic_rows=saved_state.get(
+                    "toc_tic_rows", []
+                ),
+
+                toc_tic_result=saved_state.get(
+                    "toc_tic_result"
                 ),
 
                sample_data_saved=saved_state.get(
@@ -5161,6 +5292,11 @@ def analysis_w43401():
                                row.get("sample_id", "") or ""
                              ).strip().upper() != "WASH"
                        ]
+
+                    preview_rows, toc_tic_rows = (
+                        separate_toc_tic_rows(preview_rows)
+                    )
+                    
                 elif import_type == "PE900_PDF":
                     preview_rows = parse_pe900_pdf(
                         temp_path
@@ -5694,6 +5830,11 @@ def analysis_w43401():
                 "皆未取得有效波長。"
             )
 
+    toc_tic_result = calculate_toc_tic_result(
+        toc_tic_rows,
+        calibration_result
+    )
+
     if (
         request.method == "POST"
         and preview_rows
@@ -5713,6 +5854,10 @@ def analysis_w43401():
 
                 "sample_qaqc_rows":
                     sample_qaqc_rows,
+
+                "toc_tic_rows": toc_tic_rows,
+
+                "toc_tic_result": toc_tic_result,
 
                 "sample_data_saved":
                  False,    
@@ -5742,7 +5887,8 @@ def analysis_w43401():
                     uploaded_filename,
 
                 "formal_analysis_id":
-                   formal_analysis_id
+                   formal_analysis_id,
+                   
                     
             }
         )
@@ -5766,8 +5912,13 @@ def analysis_w43401():
         preview_rows=preview_rows,
         calibration_rows=calibration_rows,
         sample_qaqc_rows=sample_qaqc_rows,
+        toc_tic_rows=toc_tic_rows,
+        toc_tic_result=toc_tic_result,    
         sample_data_saved=False,
         import_error=import_error,
+        error_message=request.args.get(
+            "error_message"
+        ),
         uploaded_filename=uploaded_filename,
         method_data=method_data,
         control_data=control_data,
@@ -5981,11 +6132,11 @@ def update_w434_calibration():
 
     if not analysis_state:
 
-        return (
+        return redirect_metal_analysis_error(
             "尚未找到 "
             + current_method_code
-            + " 分析資料。",
-            400
+            + " 分析資料，請重新匯入 PDF。",
+            current_method_code
         )
 
     preview_rows = analysis_state.get(
@@ -6158,11 +6309,17 @@ def update_w434_calibration():
     # ========================================
 
     try:
+        previous_calibration = (
+            analysis_state.get("calibration_result") or {}
+        )
 
-        calibration_result = (
-            calculate_calibration(
-                preview_rows
-            )
+        reagent_blank = float(
+            previous_calibration.get("reagent_blank", 0.0)
+        )
+
+        calibration_result = calculate_calibration(
+            preview_rows,
+            reagent_blank=reagent_blank
         )
 
     except ValueError as ex:
@@ -6281,6 +6438,20 @@ def update_w434_calibration():
     analysis_state[
         "calibration_result"
     ] = calibration_result
+
+    toc_tic_rows = analysis_state.get(
+        "toc_tic_rows",
+        []
+    )
+
+    analysis_state["toc_tic_result"] = (
+        calculate_toc_tic_result(
+            toc_tic_rows,
+            calibration_result
+        )
+    )
+
+    analysis_state["toc_tic_rows"] = toc_tic_rows
 
     analysis_state[
         "sample_qaqc_rows"
@@ -7778,6 +7949,35 @@ def method_settings_import():
                             rows,
                             start=2
                         ):
+                            decimal_fields = (
+                               "UI_CALIBRATION_X_DECIMALS",
+                               "UI_SIGNAL_DECIMALS",
+                               "UI_CONCENTRATION_DECIMALS",
+                               "UI_CALIBRATION_BACKCALC_DECIMALS",
+                               "PDF_CALIBRATION_X_DECIMALS",
+                               "PDF_SIGNAL_DECIMALS",
+                               "PDF_CONCENTRATION_DECIMALS",
+                               "PDF_CALIBRATION_BACKCALC_DECIMALS",
+                            )
+
+                            for field_name in decimal_fields:
+                               decimal_text = str(
+                               row.get(field_name, "") or ""
+                                ).strip()
+
+                               # 留空時，沿用原本顯示位數
+                               if not decimal_text:
+                                  continue
+
+                               if (
+                                     not decimal_text.isascii()
+                                     or not decimal_text.isdecimal()
+                                     or not 0 <= int(decimal_text) <= 10
+                                  ):
+                                     validation_errors.append(
+                                     f"第 {row_index} 列：{field_name} "
+                                     "必須為 0～10 的整數，或留空。"
+                                   )
 
                             exam_no = row.get(
                                 "EXAMNO",

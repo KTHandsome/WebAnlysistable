@@ -193,9 +193,27 @@ function loadInterpretationStateFromPage() {
              return;
          }
 
+        const reagentBlankElement =
+            document.getElementById(
+                "calibration-reagent-blank"
+            );
+
+        const reagentBlank = reagentBlankElement
+            ? Number(reagentBlankElement.value)
+            : 0;
+
+        if (
+            !Number.isFinite(reagentBlank)
+            || reagentBlank < 0
+        ) {
+            resultCell.textContent = "-";
+            return;
+        }
+
         const backCalculatedConcentration =
             (
                 signal
+                - reagentBlank
                 - calibrationState.intercept
             )
             / calibrationState.slope;
@@ -309,15 +327,18 @@ function loadInterpretationStateFromPage() {
             }
         );
 
-    interpretationCell.textContent =
-        interpretation;
-  }
-}
+    interpretationCell.textContent = interpretation;
 
+    const remarkInput = row.querySelector(
+        'input[name^="remark_"]'
+    );
 
+    if (remarkInput) {
+        remarkInput.value = interpretation;
+    }
 
-     
-
+  }  
+}    
 
     function recalculateAllSampleRows() {
 
@@ -679,6 +700,20 @@ function bindSampleRowMoveEvents() {
 
 function getCalibrationPointsFromPage() {
 
+    const reagentBlankElement =
+        document.getElementById("calibration-reagent-blank");
+
+    const reagentBlank = reagentBlankElement
+        ? Number(reagentBlankElement.value)
+        : 0;
+
+    if (
+        !Number.isFinite(reagentBlank)
+        || reagentBlank < 0
+    ) {
+        return null;
+    }
+    
     const rows =
         document.querySelectorAll(
             ".calibration-row"
@@ -718,7 +753,7 @@ function getCalibrationPointsFromPage() {
             {
                 row: row,
                 x: x,
-                y: y
+                y: y - reagentBlank
             }
         );
     }

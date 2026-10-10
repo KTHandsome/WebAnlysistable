@@ -1,3 +1,19 @@
+{% set sample_signal_decimals_text =
+    (method_data.get("UI_SIGNAL_DECIMALS", "") or "")|trim
+    if method_data else ""
+%}
+
+{% set sample_concentration_decimals_text =
+    (method_data.get("UI_CONCENTRATION_DECIMALS", "") or "")|trim
+    if method_data else ""
+%}
+
+{% set sample_concentration_decimals =
+    sample_concentration_decimals_text|int
+    if sample_concentration_decimals_text != ""
+    else 6
+%}
+
 {% set sample_volume_default_value =
     sample_volume_default
     if sample_volume_default is defined
@@ -157,7 +173,11 @@
     <h3 style="margin-top: 0;
         color: #03646d;
     ">
-        2. 樣品及 QA/QC 計算
+        {% if method_data and method_data.METHOD_CODE|upper == "W532" %}
+            2-2. 樣品及 QA/QC 計算
+        {% else %}
+            2. 樣品及 QA/QC 計算
+        {% endif %}
     </h3>
 <style>
     .move-arrow-button {
@@ -317,7 +337,7 @@
                     <th style="
                         border: 1px solid #ccc;
                         padding: 9px;
-                        width: 140px;
+                        width: 150px;
                     ">
                         樣品編號
                     </th>
@@ -327,7 +347,11 @@
                         padding: 9px;
                         width: 75px;
                     ">
-                        取樣體積<br>(mL)
+                        {% if method_data and method_data.METHOD_CODE|upper == "W532" %}
+                          樣品體積<br>(mL)
+                        {% else %}
+                          取樣體積<br>(mL)
+                        {% endif %}
                     </th>
 
                     <th style="
@@ -343,7 +367,11 @@
                         padding: 9px;
                         width: 85px;
                     ">
-                        最終定量體積<br>(mL)
+                        {% if method_data and method_data.METHOD_CODE|upper == "W532" %}
+                           取樣體積<br>(mL)
+                        {% else %}
+                           最終定量體積<br>(mL)
+                        {% endif %}
                     </th>
 
                     <th style="
@@ -543,6 +571,7 @@
                                 padding: 5px 6px;
                                 border: 1px solid #bbb;
                                 border-radius: 4px;
+                                font-size: 11px;
                             "
                         >
 
@@ -638,7 +667,7 @@
                             step="any"
                             class="sample-signal-input"
                             name="sample_signal_{{ loop.index0 }}"
-                            value="{{ row.signal }}"
+                            value="{{ ('%.' ~ (sample_signal_decimals_text|int) ~ 'f')|format(row.signal) if sample_signal_decimals_text != '' else row.signal }}"
                             style="
                                 width: 100%;
                                 box-sizing: border-box;
@@ -686,16 +715,7 @@
                          font-weight: 600;
                          "
                         >
-                     {% if row.measured_concentration is defined
-                     and row.measured_concentration is not none %}
-                     {% if method_data and method_data.METHOD_CODE|upper == "W532" %}
-    {{ "%.3f"|format(row.measured_concentration) }}
-{% else %}
-    {{ "%.6f"|format(row.measured_concentration) }}
-{% endif %}
-                     {% else %}
-                      -
-                     {% endif %}
+                     {{ ("%." ~ sample_concentration_decimals ~ "f")|format(row.measured_concentration) }}
                     </td>
 
 
@@ -709,15 +729,7 @@
                                  color: #2563a6;
                                  font-weight: 700;
                                  ">
-                        {% if row.calculated_concentration is not none %}
-                        {% if method_data and method_data.METHOD_CODE|upper == "W532" %}
-    {{ "%.3f"|format(row.calculated_concentration) }}
-{% else %}
-    {{ "%.6f"|format(row.calculated_concentration) }}
-{% endif %}
-                        {% else %}
-                        -
-                        {% endif %}
+                        {{ ("%." ~ sample_concentration_decimals ~ "f")|format(row.calculated_concentration) }}
                     </td>
 
                     <td

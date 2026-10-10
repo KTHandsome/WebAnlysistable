@@ -883,7 +883,7 @@ def build_qaqc_check_results(
 
         ms_row = None
         msd_row = None
-        original_sample_row = None
+        ms_original_row = None
         msd_original_row = None
 
         for index, row in enumerate(
