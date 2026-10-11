@@ -26,6 +26,12 @@ from parsers.ra7000_parser import (
     parse_ra7000_pdf
 )
 
+from parsers.icp5800_parser import parse_icp5800_pdf
+
+from uuid import uuid4
+
+from analysis.icp_workflow import build_sample_candidate_groups
+
 from calculations.w43401 import (
     calculate_calibration,
     calculate_sample_concentration
@@ -374,6 +380,190 @@ def home():
         url_for("basic_info")
     )
 
+def get_method_analysis_mode(method_code):
+    method_code = str(
+        method_code or ""
+    ).strip().upper()
+
+    if not method_code:
+        return "SINGLE"
+
+    method_file = os.path.join(
+        app.root_path,
+        "data",
+        "Phyon_Method_Settings.csv"
+    )
+
+    if not os.path.exists(method_file):
+        raise ValueError("尚未匯入方法設定資料。")
+
+    modes = set()
+
+    with open(
+        method_file,
+        "r",
+        encoding="utf-8-sig",
+        newline=""
+    ) as f:
+        for row in csv.DictReader(f):
+            if str(
+                row.get("ACTIVE", "") or ""
+            ).strip().upper() != "Y":
+                continue
+
+            if str(
+                row.get("METHOD_CODE", "") or ""
+            ).strip().upper() != method_code:
+                continue
+
+            mode = str(
+                row.get("ANALYSIS_MODE", "") or ""
+            ).strip().upper() or "SINGLE"
+
+            if mode not in {"SINGLE", "MULTI_ANALYTE"}:
+                raise ValueError(
+                    method_code + " 的分析模式設定不正確。"
+                )
+
+            modes.add(mode)
+
+    if not modes:
+        raise ValueError(
+            "查無方法 " + method_code + " 的有效設定。"
+        )
+
+    if len(modes) > 1:
+        raise ValueError(
+            method_code + " 的 ANALYSIS_MODE 設定不一致。"
+        )
+
+    return modes.pop()
+
+def get_instrument_import_type(form_data):
+    method_code = str(
+        form_data.get("method_code", "") or ""
+    ).strip().upper()
+
+    instrument_id = str(
+        form_data.get("instrument_id", "") or ""
+    ).strip().upper()
+
+    relation_file = os.path.join(
+        app.root_path,
+        "data",
+        "Phyon_Method_Instrument.csv"
+    )
+
+    if not os.path.exists(relation_file):
+        raise ValueError("尚未匯入方法－儀器關聯資料。")
+
+    matches = []
+
+    with open(
+        relation_file,
+        "r",
+        encoding="utf-8-sig",
+        newline=""
+    ) as f:
+        for row in csv.DictReader(f):
+            if (
+                str(row.get("METHOD_CODE", "") or "")
+                .strip().upper() == method_code
+                and str(row.get("LABPARTID", "") or "")
+                .strip().upper() == instrument_id
+            ):
+                matches.append(row)
+
+    if len(matches) != 1:
+        raise ValueError(
+            "方法－儀器關聯必須有一筆符合的設定。"
+        )
+
+    import_type = str(
+        matches[0].get("IMPORT_TYPE", "") or ""
+    ).strip().upper()
+
+    if not import_type:
+        raise ValueError(
+            "此方法與儀器尚未設定 IMPORT_TYPE。"
+        )
+
+    return import_type
+
+def load_basic_info_data(form_data):
+    method_code = str(
+        form_data.get("method_code", "") or ""
+    ).strip().upper()
+
+    try:
+        analysis_mode = get_method_analysis_mode(
+            method_code
+        )
+    except ValueError as exc:
+        return {}, None, str(exc)
+
+    if analysis_mode == "SINGLE":
+        return load_control_and_method_data(form_data)
+
+    method_file = os.path.join(
+        app.root_path,
+        "data",
+        "Phyon_Method_Settings.csv"
+    )
+
+    # 基本資料階段只取方法共用設定，
+    common_fields = (
+        "DATA_ENTRY_MODE",
+    )
+
+    method_rows = []
+
+    with open(
+        method_file,
+        "r",
+        encoding="utf-8-sig",
+        newline=""
+    ) as f:
+        for row in csv.DictReader(f):
+            if str(
+                row.get("ACTIVE", "") or ""
+            ).strip().upper() != "Y":
+                continue
+
+            if str(
+                row.get("METHOD_CODE", "") or ""
+            ).strip().upper() == method_code:
+                method_rows.append(row)
+
+    method_data = {
+        "METHOD_CODE": method_code,
+        "ANALYSIS_MODE": "MULTI_ANALYTE",
+    }
+
+    for field in common_fields:
+        values = {
+            str(row.get(field, "") or "").strip().upper()
+            for row in method_rows
+        }
+
+        if len(values) != 1:
+            return (
+                {},
+                None,
+                method_code + " 的 " + field + " 設定不一致。"
+            )
+
+        method_data[field] = values.pop()
+
+    try:
+        method_data["IMPORT_TYPE"] = (
+            get_instrument_import_type(form_data)
+        )
+    except ValueError as exc:
+        return {}, None, str(exc)
+
+    return {}, method_data, None
+
 def load_control_and_method_data(form_data):
 
     control_data = {}
@@ -534,16 +724,6 @@ def load_control_and_method_data(form_data):
             + ctrl_year
             + " 年管制資料。"
         )
-
-    print("DEBUG control lookup:", {
-        "category": category,
-        "exam_name": exam_name,
-        "method_code": method_code,
-        "selected_exam_no": selected_exam_no,
-        "method_category": method_data.get("CATEGORY_CODE"),
-        "method_exam_no": method_exam_no,
-        "effective_exam_no": effective_exam_no,
-    })
 
     base_matches = []
 
@@ -2523,6 +2703,50 @@ def resume_analysis_record(
         )
     )
 
+def load_method_analysis_modes():
+    method_file = os.path.join(
+        app.root_path,
+        "data",
+        "Phyon_Method_Settings.csv"
+    )
+
+    if not os.path.exists(method_file):
+        return {}
+
+    method_modes = {}
+
+    with open(
+        method_file,
+        "r",
+        encoding="utf-8-sig",
+        newline=""
+    ) as f:
+        for row in csv.DictReader(f):
+            if str(
+                row.get("ACTIVE", "") or ""
+            ).strip().upper() != "Y":
+                continue
+
+            method_code = str(
+                row.get("METHOD_CODE", "") or ""
+            ).strip().upper()
+
+            mode = str(
+                row.get("ANALYSIS_MODE", "") or ""
+            ).strip().upper() or "SINGLE"
+
+            if method_code:
+                method_modes.setdefault(
+                    method_code, set()
+                ).add(mode)
+
+    return {
+        method_code: next(iter(modes))
+        for method_code, modes in method_modes.items()
+        if len(modes) == 1
+        and modes <= {"SINGLE", "MULTI_ANALYTE"}
+    }
+
 @app.route("/basic-info", methods=["GET", "POST"])
 @login_required
 def basic_info():
@@ -2680,7 +2904,7 @@ def basic_info():
                 control_data,
                 method_data,
                 error_message
-            ) = load_control_and_method_data(
+            ) = load_basic_info_data(
                 form_data
             )
 
@@ -2694,6 +2918,19 @@ def basic_info():
                 error_message = (
                     "請選擇儀器後繼續。"
                 )
+
+        if (
+            next_action == "import_icp"
+            and method_data
+            and not error_message
+            and method_data.get("ANALYSIS_MODE")
+            == "MULTI_ANALYTE"
+            and form_data.get("instrument_id")
+        ):
+            return redirect(
+                url_for("analysis_icp_import")
+            )
+
         if (
             next_action == "manual_entry"
             and method_data
@@ -2774,6 +3011,242 @@ def basic_info():
         error_message=error_message,
         form_data=form_data,
         instrument_options=instrument_options,
+        method_analysis_modes=load_method_analysis_modes(),
+        active_page="analysis_basic"
+    )
+
+@app.route(
+    "/analysis/icp/import",
+    methods=["GET", "POST"]
+)
+@login_required
+def analysis_icp_import():
+    form_data = session.get("basic_info_form") or {}
+
+    if not form_data.get("instrument_id"):
+        return redirect(url_for("basic_info"))
+
+    _, method_data, error_message = (
+        load_basic_info_data(form_data)
+    )
+
+    if (
+        error_message
+        or not method_data
+        or method_data.get("ANALYSIS_MODE")
+        != "MULTI_ANALYTE"
+    ):
+        return redirect(url_for("basic_info"))
+
+    upload_error = None
+    upload_message = None
+
+    preview_rows = []
+    parsed_row_count = 0
+
+    channel_options = []
+    selected_channel = request.args.get(
+        "channel", ""
+    ).strip()
+    selected_role = request.args.get(
+        "role", ""
+    ).strip().upper()
+    filtered_row_count = 0
+
+    candidate_groups = []
+
+    if request.method == "GET":
+        work_key = session.get("icp_work_key")
+
+        saved_work = (
+            load_analysis_state(work_key)
+            if work_key else None
+        )
+
+        if (
+            saved_work
+            and saved_work.get("form_data") == form_data
+            and saved_work.get("import_type")
+            == method_data.get("IMPORT_TYPE")
+        ):
+            saved_rows = saved_work["parsed_data"]["rows"]
+            candidate_groups = build_sample_candidate_groups(
+                saved_rows
+            )
+            parsed_row_count = len(saved_rows)
+
+            channels = sorted({
+                (row["element"], row["wavelength"])
+                for row in saved_rows
+            })
+
+            channel_options = [
+                {
+                    "value": element + "|" + wavelength,
+                    "label": element + "／" + wavelength + " nm",
+                }
+                for element, wavelength in channels
+            ]
+
+            filtered_rows = saved_rows
+
+            if selected_channel:
+                filtered_rows = [
+                    row for row in filtered_rows
+                    if (
+                        row["element"] + "|" + row["wavelength"]
+                    ) == selected_channel
+                ]
+
+            if selected_role:
+                filtered_rows = [
+                    row for row in filtered_rows
+                    if row.get("role") == selected_role
+                ]
+
+            if selected_channel:
+                candidate_groups = [
+                    group for group in candidate_groups
+                    if (
+                        group["element"]
+                        + "|"
+                        + group["wavelength"]
+                    ) == selected_channel
+                ]
+
+            filtered_row_count = len(filtered_rows)
+            preview_rows = filtered_rows[:400]
+            upload_message = saved_work["upload_message"]
+
+        elif work_key:
+            session.pop("icp_work_key", None)
+            upload_message = (
+                "原暫存已失效或基本資料已變更，"
+                "請重新上傳 PDF。"
+            )
+
+    if request.method == "POST":
+        uploaded_file = request.files.get("icp_pdf_file")
+
+        if (
+            uploaded_file is None
+            or not uploaded_file.filename
+        ):
+            upload_error = "請選擇 ICP PDF 檔案。"
+
+        elif not uploaded_file.filename.lower().endswith(
+            ".pdf"
+        ):
+            upload_error = "只能上傳 PDF 檔案。"
+
+        else:
+            header = uploaded_file.stream.read(1024)
+            uploaded_file.stream.seek(0)
+
+            if b"%PDF-" not in header:
+                upload_error = "檔案內容不是可辨識的 PDF。"
+            else:
+                import_type = method_data.get(
+                    "IMPORT_TYPE", ""
+                )
+
+                if import_type != "ICP5800_PDF":
+                    upload_error = (
+                        "目前僅完成 ICP5800 解析程序；"
+                        "ICP5110 解析程序尚未建置。"
+                    )
+                else:
+                    try:
+                        parsed_data = parse_icp5800_pdf(
+                            uploaded_file.stream
+                        )
+
+                        rows = parsed_data["rows"]
+
+                        parsed_row_count = len(rows)
+                        preview_rows = rows[:400]
+
+                        elements = sorted({
+                            row["element"]
+                            for row in rows
+                        })
+
+                        channels = {
+                            (
+                                row["element"],
+                                row["wavelength"]
+                            )
+                            for row in rows
+                        }
+
+                        upload_message = (
+                            "PDF 解析成功："
+                            + str(parsed_data["page_count"])
+                            + " 頁、"
+                            + str(len(rows))
+                            + " 筆量測資料、"
+                            + str(len(elements))
+                            + " 個金屬、"
+                            + str(len(channels))
+                            + " 組金屬／波長。金屬："
+                            + "、".join(elements)
+                            + "。尚未進行 LIMS 篩選或儲存。"
+                        )
+
+                        work_key = (
+                            "ICP_IMPORT_" + uuid4().hex
+                        )
+
+                        save_analysis_state(
+                            work_key,
+                            {
+                                "form_data": dict(form_data),
+                                "import_type": import_type,
+                                "source_filename": (
+                                    uploaded_file.filename
+                                ),
+                                "parsed_data": parsed_data,
+                                "upload_message": (
+                                    upload_message.replace(
+                                        "尚未進行 LIMS 篩選或儲存。",
+                                        "已暫存解析結果，"
+                                        "尚未進行 LIMS 篩選或正式儲存。"
+                                    )
+                                ),
+                            }
+                        )
+
+                        session["icp_work_key"] = work_key
+
+                        return redirect(
+                            url_for("analysis_icp_import")
+                        )
+
+                    except ValueError as exc:
+                        upload_error = str(exc)
+
+                    except Exception:
+                        app.logger.exception(
+                            "ICP5800 PDF 解析失敗"
+                        )
+                        upload_error = (
+                            "PDF 讀取失敗，"
+                            "請查看伺服器錯誤紀錄。"
+                        )
+
+    return render_template(
+        "methods/icp_import.html",
+        form_data=form_data,
+        method_data=method_data,
+        upload_error=upload_error,
+        upload_message=upload_message,
+        preview_rows=preview_rows,
+        parsed_row_count=parsed_row_count,
+        channel_options=channel_options,
+        selected_channel=selected_channel,
+        selected_role=selected_role,
+        filtered_row_count=filtered_row_count,
+        candidate_groups=candidate_groups,        
         active_page="analysis_basic"
     )
 
@@ -8075,6 +8548,21 @@ def method_settings_import():
                                 "ACTIVE",
                                 ""
                             ).strip().upper()
+
+                            analysis_mode = str(
+                                row.get("ANALYSIS_MODE", "")
+                                or "SINGLE"
+                            ).strip().upper() or "SINGLE"
+
+                            if analysis_mode not in {
+                                "SINGLE",
+                                "MULTI_ANALYTE",
+                            }:
+                                validation_errors.append(
+                                    f"第 {row_index} 列："
+                                    "ANALYSIS_MODE 必須為 "
+                                    "SINGLE 或 MULTI_ANALYTE。"
+                                )
 
                             # EXAMNO
                             if not exam_no:

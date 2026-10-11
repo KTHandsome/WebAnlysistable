@@ -555,7 +555,9 @@
     and method_data.IMPORT_TYPE|upper in [
         "PE900_PDF",
         "RA7000A_PDF",
-        "TOC_PDF"
+        "TOC_PDF",
+        "ICP5110_PDF",
+        "ICP5800_PDF"
     ]
 %}
 
@@ -850,7 +852,17 @@
 
 {% block script %}
 
+<script id="method-analysis-modes" type="application/json">
+    {{ method_analysis_modes | tojson }}
+</script>
+
 <script>
+    const methodAnalysisModes = JSON.parse(
+        document.getElementById(
+            "method-analysis-modes"
+        ).textContent
+    );
+    
     function updateDataEntryMode() {
 
         const selected = document.querySelector(
@@ -914,9 +926,22 @@
             return;
         }
 
+        const method =
+            methodCode.value.trim().toUpperCase();
+
+        const isMultiAnalyte =
+            methodAnalysisModes[method] === "MULTI_ANALYTE";
+
         const canQuery =
-            examName.value.trim() !== ""
-            && methodCode.value.trim() !== "";
+            method !== ""
+            && (
+                isMultiAnalyte
+                || examName.value.trim() !== ""
+            );
+
+        examName.placeholder = isMultiAnalyte
+            ? "匯入後依 LIMS 委測項目自動取得"
+            : "";
 
         queryButton.disabled = !canQuery;
     }
@@ -1113,7 +1138,11 @@ function submitBasicInfoForImport() {
     const method =
         methodCode.value.trim().toUpperCase();
 
-    if (method === "W330") {
+    if (methodAnalysisModes[method] === "MULTI_ANALYTE") {
+
+        nextAction.value = "import_icp";
+
+    } else if (method === "W330") {
 
         nextAction.value = "import_w330";
 
