@@ -58,6 +58,102 @@ def build_sample_candidate_groups(rows):
 
     return list(groups.values())
 
+def build_icp_candidate_selections(
+    candidate_groups,
+    saved_selections=None
+):
+    """
+    建立 ICP 候選量測選取狀態。
+
+    1 筆候選：自動選取。
+    2 筆以上：沒有人工選擇時保持待選。
+    已儲存選擇：確認序號仍存在後才還原。
+    """
+
+    saved_selections = saved_selections or {}
+    results = []
+
+    for group in candidate_groups:
+
+        keepid = str(
+            group.get("keepid") or ""
+        ).strip().upper()
+
+        element = str(
+            group.get("element") or ""
+        ).strip()
+
+        wavelength = str(
+            group.get("wavelength") or ""
+        ).strip()
+
+        variant = str(
+            group.get("analyte_variant")
+            or "TOTAL_OR_UNSPECIFIED"
+        ).strip().upper()
+
+        pdf_tag = str(
+            group.get("pdf_sample_tag") or ""
+        ).strip().upper()
+
+        selection_key = "|".join([
+            keepid,
+            element,
+            wavelength,
+            variant,
+            pdf_tag
+        ])
+
+        candidates = group.get("candidates") or []
+
+        selected_sequence = None
+        selection_status = "PENDING_SELECTION"
+
+        if len(candidates) == 1:
+
+            selected_sequence = candidates[0].get(
+                "sequence"
+            )
+
+            selection_status = "AUTO_SELECTED"
+
+        elif len(candidates) > 1:
+
+            saved = saved_selections.get(
+                selection_key
+            )
+
+            if isinstance(saved, dict):
+
+                saved_sequence = saved.get(
+                    "sequence"
+                )
+
+                for candidate in candidates:
+
+                    if str(
+                        candidate.get("sequence")
+                    ) == str(saved_sequence):
+
+                        selected_sequence = (
+                            candidate.get("sequence")
+                        )
+
+                        selection_status = (
+                            "USER_SELECTED"
+                        )
+
+                        break
+
+        results.append({
+            **group,
+            "selection_key": selection_key,
+            "selected_sequence": selected_sequence,
+            "selection_status": selection_status,
+        })
+
+    return results
+
 def load_icp_analyte_map(csv_path):
     """
     載入 ICP 適用測項對照表。

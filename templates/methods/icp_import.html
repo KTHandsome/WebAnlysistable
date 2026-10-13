@@ -183,17 +183,19 @@
          aria-labelledby="icp-tab-candidates" tabindex="0" hidden>
     <h2 class="eacs-card-title">樣品候選量測分組</h2>
 
+    <form
+    id="icp-candidate-batch-form"
+    method="post"
+    action="{{ url_for('save_icp_candidate_selection') }}"
+    ></form> 
+
     <p>
         依原始量測頁籤的金屬／波長篩選，不受角色篩選影響。
         僅列出適用的一般樣品量測，尚未選定正式結果。
     </p>
 
     <div class="icp-table-scroll" tabindex="0" aria-label="候選量測表格">
-        <table class="icp-preview-table" style="
-            width: 100%;
-            border-collapse: collapse;
-            white-space: nowrap;
-        ">
+        <table class="icp-preview-table icp-candidate-table">
             <thead>
                 <tr>
                     <th>樣品編號</th>
@@ -202,7 +204,9 @@
                     <th>PDF 標記</th>
                     <th>波長（nm）</th>
                     <th>候選筆數</th>
-                    <th>候選量測：序號／名稱／倍數</th>
+                    <th>候選倍數）</th>
+                    <th>選取狀態</th>
+                    <th>選取倍數</th>
                 </tr>
             </thead>
             <tbody>
@@ -223,20 +227,85 @@
                     </td>
                     <td>{{ group.wavelength }}</td>
                     <td>{{ group.candidates | length }}</td>
-                    <td style="text-align: left;">
-                        {% for candidate in group.candidates %}
-                        <div>
-                            {{ candidate.sequence }} ／
-                            {{ candidate.sample_label }} ／
-                            {{ candidate.dilution_factor }} 倍
-                        </div>
-                        {% endfor %}
+                    <td class="icp-candidate-values">
+                            {% for candidate in group.candidates %}
+                            <div title="{{ candidate.sample_label }}">
+                                 {{ candidate.dilution_factor }} 倍
+                            </div>
+                            {% endfor %}
                     </td>
+                    <!-- 候選量測選取狀態 -->
+                    <td>
+                        {% if group.selection_status == "AUTO_SELECTED" %}
+                        <span class="icp-selection-auto">自動預選</span>
+
+                        {% elif group.selection_status == "USER_SELECTED" %}
+                        <span class="icp-selection-user">已人工選取</span>
+
+                        {% else %}
+                        <span class="icp-selection-pending">待選擇</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- 候選量測：選取倍數 -->
+<td>
+    {% if group.candidates | length == 1 %}
+
+        <!-- 單筆候選：系統自動預選 -->
+        {{ group.candidates[0].dilution_factor }} 倍
+
+    {% elif group.candidates | length > 1 %}
+
+        <!-- 多筆候選：必須由使用者選擇 -->
+        <select
+                 class="icp-candidate-select"
+                 form="icp-candidate-batch-form"
+                 name="selections[{{ group.selection_key }}]"
+                 aria-label="{{ group.keepid }} {{ group.element }} {{ group.wavelength }} 選取倍數"
+            >
+            <option value=""
+                {% if group.selected_sequence is none %}selected{% endif %}>
+                尚未選擇
+            </option>
+
+            {% for candidate in group.candidates %}
+            <option
+                value="{{ candidate.sequence }}"
+                {% if candidate.sequence == group.selected_sequence %}selected{% endif %}
+            >
+                {{ candidate.dilution_factor }} 倍
+                {% if group.candidates
+                    | selectattr('dilution_factor', 'equalto', candidate.dilution_factor)
+                    | list
+                    | length > 1 %}
+                    （{{ candidate.measured_at or candidate.sequence }}）
+                {% endif %}
+            </option>
+            {% endfor %}
+        </select>
+
+    {% else %}
+        —
+    {% endif %}
+</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+
+    {% if candidate_groups %}
+<div class="icp-batch-actions">
+    <button
+        type="submit"
+        form="icp-candidate-batch-form"
+        class="eacs-button eacs-button-primary"
+    >
+        儲存全部選擇
+    </button>
+</div>
+{% endif %}
+    
     {% if not candidate_groups %}
     <p>目前金屬／波長篩選下沒有適用的一般樣品候選量測。</p>
     {% endif %}
@@ -577,6 +646,103 @@
 .icp-batch-actions button {
     white-space: nowrap;
     padding: 8px 18px;
+}
+
+/* ICP 候選量測選取狀態 */
+.icp-selection-auto {
+    color: #176b36;
+    font-weight: 600;
+}
+
+.icp-selection-user {
+    color: #1d4ed8;
+    font-weight: 600;
+}
+
+.icp-selection-pending {
+    color: #a16207;
+    font-weight: 600;
+}
+
+/* ========================================
+   ICP 候選量測表格：緊湊版面
+   ======================================== */
+
+.icp-candidate-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 12.5px;
+}
+
+.icp-candidate-table th,
+.icp-candidate-table td {
+    padding: 5px 6px;
+    line-height: 1.4;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.icp-candidate-table th:nth-child(1) {
+    width: 13%;
+}
+
+.icp-candidate-table th:nth-child(2) {
+    width: 5%;
+}
+
+.icp-candidate-table th:nth-child(3) {
+    width: 8%;
+}
+
+.icp-candidate-table th:nth-child(4) {
+    width: 7%;
+}
+
+.icp-candidate-table th:nth-child(5) {
+    width: 10%;
+}
+
+.icp-candidate-table th:nth-child(6) {
+    width: 8%;
+}
+
+.icp-candidate-table th:nth-child(7) {
+    width: 20%;
+}
+
+.icp-candidate-table th:nth-child(8) {
+    width: 12%;
+}
+
+.icp-candidate-table th:nth-child(9) {
+    width: 17%;
+}
+
+.icp-candidate-values {
+    text-align: left;
+}
+
+.icp-candidate-values div {
+    white-space: nowrap;
+}
+
+/* ICP 候選量測倍數選擇 */
+.icp-candidate-select {
+    width: 100%;
+    max-width: 145px;
+    min-width: 90px;
+    padding: 4px 6px;
+    font-size: 12.5px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    background: #fff;
+    color: #1e293b;
+}
+
+.icp-candidate-select:focus {
+    outline: 2px solid #2563eb;
+    outline-offset: 1px;
 }
 
 </style>
