@@ -96,6 +96,50 @@ def parse_dilution_label(sample_label):
 
     return result
 
+def parse_sample_variant(base_label):
+    """
+    解析一般樣品與溶解態樣品標記。
+
+    例如：
+    G12013026001
+    G12013026001(D-Fe)
+    G12013026001(D-Mn)
+
+    不修改儀器實際量測元素。
+    """
+    label = str(base_label or "").strip()
+
+    result = {
+        "base_label": label,
+        "pdf_sample_tag": "",
+        "analyte_variant": "TOTAL_OR_UNSPECIFIED",
+        "variant_element": "",
+        "variant_warning": "",
+    }
+
+    match = re.fullmatch(
+        r"([A-Z]\d{11})\s*\(\s*D-(Fe|Mn)\s*\)",
+        label,
+        re.IGNORECASE
+    )
+
+    if match:
+        element = match.group(2).capitalize()
+
+        result.update({
+            "base_label": match.group(1).upper(),
+            "pdf_sample_tag": "D-" + element.upper(),
+            "analyte_variant": "DISSOLVED",
+            "variant_element": element,
+        })
+
+    elif re.search(r"\(\s*D-", label, re.IGNORECASE):
+        result["variant_warning"] = (
+            "溶解態樣品標記格式需確認"
+        )
+
+    return result
+
 def classify_icp_label(base_label):
     label = str(base_label or "").strip()
     upper_label = label.upper()
@@ -218,12 +262,22 @@ def parse_icp5800_pdf(pdf_source):
 
                 row.update(
                     parse_dilution_label(
-                        row["sample_label"]
+                    row["sample_label"]
                     )
                 )
 
-                row["role"] = classify_icp_label(
+                # 解析溶解態標記，保留原始 sample_label
+                row.update(
+                    parse_sample_variant(
                     row["base_label"]
+                    )
+                )
+
+                if row["variant_warning"] and not row["label_warning"]:
+                   row["label_warning"] = row["variant_warning"]
+
+                row["role"] = classify_icp_label(
+                   row["base_label"]
                 )
 
                 row["lims_keepid"] = (
@@ -234,10 +288,25 @@ def parse_icp5800_pdf(pdf_source):
                 )
 
                 if row["label_warning"]:
-                    row["element_applicability"] = "REVIEW"
-                    row["element_applicability_note"] = (
-                        "稀釋標記需確認"
+                   row["element_applicability"] = "REVIEW"
+                   row["element_applicability_note"] = (
+                   row["label_warning"]
+                )
+
+                elif (
+                   row["variant_element"]
+                   and row["element"] != row["variant_element"]
+                ):
+                   row["element_applicability"] = "NOT_TARGET"
+                   row["element_applicability_note"] = (
+                      "非溶解態標記指定金屬"
                     )
+
+                elif row["analyte_variant"] == "DISSOLVED":
+                     row["element_applicability"] = "APPLICABLE"
+                     row["element_applicability_note"] = (
+                         "溶解態指定金屬"
+                    )  
 
                 elif (
                     row["dilution_elements"]

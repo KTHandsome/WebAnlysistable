@@ -382,7 +382,61 @@ label {
     </form>
 
 </div>
+
+
+<!-- ========================================
+     ICP 適用測項 CSV 匯入
+     ======================================== -->
+<div class="card">
+
+    <div class="card-title">
+        匯入 ICP 適用測項 CSV
+    </div>
+
+    {% if icp_analyte_success_message %}
+    <div class="message success">
+        {{ icp_analyte_success_message }}
+    </div>
+    {% endif %}
+
+    {% if icp_analyte_error_message %}
+    <div class="message error">
+        {{ icp_analyte_error_message }}
+    </div>
+    {% endif %}
+
+    <form
+        method="post"
+        action="/icp-analyte-import"
+        enctype="multipart/form-data"
+    >
+
+        <div class="form-row">
+
+            <label for="icp_analyte_csv_file">
+                CSV 檔案
+            </label>
+
+            <input
+                type="file"
+                id="icp_analyte_csv_file"
+                name="icp_analyte_csv_file"
+                accept=".csv"
+                required
+            >
+
+        </div>
+
+        <div class="button-row">
+            <button type="submit">
+                    匯入 ICP 適用測項
+            </button>
+        </div>
+
+    </form>
+
 </div>
 
+</div>
 
 {% endblock %}

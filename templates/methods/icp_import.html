@@ -49,6 +49,19 @@
                 aria-controls="icp-panel-raw" aria-selected="true" tabindex="0">原始量測</button>
         <button type="button" id="icp-tab-candidates" class="icp-tab" role="tab"
                 aria-controls="icp-panel-candidates" aria-selected="false" tabindex="-1">候選量測</button>
+
+        <button
+                type="button"
+                id="icp-tab-lims"
+                class="icp-tab"
+                role="tab"
+                aria-controls="icp-panel-lims"
+                aria-selected="false"
+                tabindex="-1"
+                      >
+                LIMS 委測配對
+        </button> 
+
     </nav>
     <div class="icp-panels">
 <section id="icp-panel-raw" class="eacs-card icp-panel" role="tabpanel"
@@ -185,6 +198,8 @@
                 <tr>
                     <th>樣品編號</th>
                     <th>金屬</th>
+                    <th>樣品型態</th>
+                    <th>PDF 標記</th>
                     <th>波長（nm）</th>
                     <th>候選筆數</th>
                     <th>候選量測：序號／名稱／倍數</th>
@@ -195,6 +210,17 @@
                 <tr>
                     <td>{{ group.keepid }}</td>
                     <td>{{ group.element }}</td>
+                    <td>
+                        {% if group.analyte_variant == "DISSOLVED" %}
+                         溶解態
+                        {% else %}
+                         一般
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {{ group.pdf_sample_tag or "—" }}
+                    </td>
                     <td>{{ group.wavelength }}</td>
                     <td>{{ group.candidates | length }}</td>
                     <td style="text-align: left;">
@@ -214,6 +240,283 @@
     {% if not candidate_groups %}
     <p>目前金屬／波長篩選下沒有適用的一般樣品候選量測。</p>
     {% endif %}
+</section>
+<section
+    id="icp-panel-lims"
+    class="eacs-card icp-panel"
+    role="tabpanel"
+    aria-labelledby="icp-tab-lims"
+    tabindex="0"
+    hidden
+>
+    <h2 class="eacs-card-title">LIMS 委測配對</h2>
+
+<!-- ICP PDF 與 LIMS 正式委測配對結果 -->
+<h3 style="margin-top: 16px;">
+    ICP PDF 與 LIMS 配對結果
+</h3>
+
+<form
+    id="icp-lims-batch-form"
+    method="post"
+    action="{{ url_for('save_icp_lims_decision') }}"
+></form>
+
+<p>
+    依樣品編號、金屬及樣品型態進行配對。
+    跨方法項目仍須由使用者確認。
+    此表尚未選定正式分析結果。
+</p>
+
+{% if icp_lims_matches %}
+
+<div class="icp-table-scroll"
+     tabindex="0"
+     aria-label="ICP LIMS 配對結果">
+
+    <table class="icp-preview-table"
+           style="width: 100%; border-collapse: collapse; white-space: nowrap;">
+
+        <thead>
+            <tr>
+                <th>樣品編號</th>
+                <th>金屬</th>
+                <th>樣品型態</th>
+                <th>EXAMNO</th>
+                <th>LIMS 測項名稱</th>
+                <th>LIMS 方法</th>
+                <th>候選組數</th>
+                <th>配對狀態</th>
+                <th>系統預設</th>
+                <th>使用者決定</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for item in icp_lims_matches %}
+            <tr>
+                <td>{{ item.keepid }}</td>
+                <td>{{ item.element }}</td>
+
+                <td>
+                    {% if item.analyte_variant == "DISSOLVED" %}
+                        溶解態
+                    {% else %}
+                        一般
+                    {% endif %}
+                </td>
+
+                <td>{{ item.examno or "—" }}</td>
+                <td>{{ item.examname or "—" }}</td>
+                <td>{{ item.lims_method or "—" }}</td>
+                <td>{{ item.candidate_group_count }}</td>
+
+                <td>
+                    {% if item.status == "METHOD_MATCHED" %}
+                        方法一致
+
+                    {% elif item.status == "CROSS_METHOD_REVIEW" %}
+                        跨方法待確認
+
+                    {% elif item.status == "NO_PDF_MEASUREMENT" %}
+                        無對應量測
+
+                    {% elif item.status == "NOT_COMMISSIONED" %}
+                        未找到對應委測
+
+                    {% else %}
+                        待確認
+                    {% endif %}
+                </td>
+                <td>
+                    {% if item.user_decision == "ACCEPT" %}
+                    <span style="color: #176b36; font-weight: 600;">
+                    採用
+                    </span>
+
+                   {% elif item.user_decision == "PENDING" %}
+                   <span style="color: #a16207; font-weight: 600;">
+                   待確認
+                   </span>
+
+                   {% elif item.user_decision == "REJECT" %}
+                   <span style="color: #64748b;">
+                   不採用
+                   </span>
+
+                  {% else %}
+                   —
+                  {% endif %}
+                </td>
+                <td>
+                    {% if item.examno and item.status in [
+                     "METHOD_MATCHED",
+                     "CROSS_METHOD_REVIEW"
+                    ] %}
+
+                    <select
+                         form="icp-lims-batch-form"
+                         name="decisions[{{ item.keepid }}|{{ item.examno }}]"
+                         class="icp-decision-select"
+                    >
+                      {% if item.status == "METHOD_MATCHED" %}
+                      <option value="ACCEPT"
+                            {% if item.user_decision == "ACCEPT" %}selected{% endif %}>
+                             採用
+                      </option>
+                      {% endif %}
+
+                     <option value="PENDING"
+                            {% if item.user_decision == "PENDING" %}selected{% endif %}>
+                            待確認
+                     </option>
+
+                     <option value="REJECT"
+                            {% if item.user_decision == "REJECT" %}selected{% endif %}>
+                            不採用
+                     </option>
+                   </select> 
+
+                         {% else %}
+
+                          <span style="color: #64748b;">
+                              不採用（不可變更）
+                          </span>
+
+                         {% endif %}
+                 </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+
+    </table>
+</div>
+
+{% elif lims_lookup_error %}
+
+<p style="color: #b42318;">
+    LIMS 配對資料尚未完成，請確認查詢狀態。
+</p>
+
+{% else %}
+
+<p>目前沒有可顯示的 ICP 配對結果。</p>
+
+{% endif %}
+
+<div class="icp-lims-filter">
+    <label for="icp_lims_display_mode">
+        顯示範圍
+    </label>
+
+    <select id="icp_lims_display_mode">
+        <option value="matched">
+            僅顯示 ICP 適用測項
+        </option>
+        <option value="all">
+            顯示全部 LIMS 委測
+        </option>
+    </select>
+</div>
+
+<div class="icp-batch-actions">
+    <button
+        type="submit"
+        form="icp-lims-batch-form"
+        class="eacs-button eacs-button-primary"
+    >
+        儲存全部決定
+    </button>
+</div>
+
+    <p>
+        依 ICP PDF 的樣品編號查詢 LIMS 正式委測項目。
+        此階段僅顯示委測資料，尚未進行金屬名稱配對、
+        方法適用性確認或正式結果選擇。
+    </p>
+
+    {% if lims_lookup_error %}
+    <p style="color: #b42318;">
+        {{ lims_lookup_error }}
+    </p>
+    {% endif %}
+
+    {% for group in lims_match_groups %}
+
+    <h3 style="margin-top: 20px;">
+        樣品編號：{{ group.keepid }}
+    </h3>
+
+    {% if group.lookup_error | default(false) %}
+
+    <p style="color: #b42318;">
+        LIMS 查詢失敗，尚無法確認委測項目。
+    </p>
+
+    {% elif not group.found %}
+
+    <p style="color: #b42318;">
+        查無 LIMS 委測資料，請確認樣品編號。
+    </p>
+
+    {% else %}
+
+    <p>
+        LIMS 委測項目：{{ group.analysis_rows | length }} 筆
+    </p>
+
+    <div
+        class="icp-table-scroll"
+        tabindex="0"
+        aria-label="LIMS 委測資料表格"
+    >
+        <table class="icp-preview-table"
+               style="width: 100%; border-collapse: collapse; white-space: nowrap;">
+
+            <thead>
+                <tr>
+                    <th>樣品編號</th>
+                    <th>檢測類別</th>
+                    <th>EXAMNO</th>
+                    <th>委測名稱</th>
+                    <th>測項別名</th>
+                    <th>LIMS 方法</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for item in group.analysis_rows %}
+                <tr
+                     class="icp-lims-row"
+                     data-icp-matched="{{
+                     'yes' if item.examno in (
+                     group.matched_rows
+                     | map(attribute='examno')
+                     | list
+                     ) else 'no'
+                     }}"
+                >
+                    <td>{{ group.keepid }}</td>
+                    <td>{{ item.examtype }}</td>
+                    <td>{{ item.examno }}</td>
+                    <td>{{ item.examname }}</td>
+                    <td>{{ item.exalias }}</td>
+                    <td>{{ item.em_num }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+
+        </table>
+    </div>
+
+    {% endif %}
+
+    {% endfor %}
+
+    {% if not lims_match_groups %}
+    <p>目前沒有可供 LIMS 查詢的樣品候選資料。</p>
+    {% endif %}
+
 </section>
     </div>
 </div>
@@ -257,7 +560,27 @@
         .icp-tabs { flex-direction: row; }
         .icp-tab { flex: 1; text-align: center; }
     }
+
+/* ICP 委測批次選擇 */
+.icp-decision-select {
+    min-width: 100px;
+    padding: 5px 8px;
+    font-size: 14px;
+}
+
+.icp-batch-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 4px;
+}
+
+.icp-batch-actions button {
+    white-space: nowrap;
+    padding: 8px 18px;
+}
+
 </style>
+
 <script>
 (function () {
     const tablist = document.querySelector('.icp-tabs');
@@ -271,7 +594,16 @@
             document.getElementById(item.getAttribute('aria-controls')).hidden = !selected;
         });
         const url = new URL(window.location.href);
-        url.searchParams.set('tab', tab.id === 'icp-tab-candidates' ? 'candidates' : 'raw');
+        const tabNames = {
+    'icp-tab-raw': 'raw',
+    'icp-tab-candidates': 'candidates',
+    'icp-tab-lims': 'lims'
+};
+
+url.searchParams.set(
+    'tab',
+    tabNames[tab.id] || 'raw'
+);
         window.history.replaceState(window.history.state, '', url);
         if (moveFocus) tab.focus();
     }
@@ -297,7 +629,46 @@
     if (narrowScreen.addEventListener) narrowScreen.addEventListener('change', updateOrientation);
     else narrowScreen.addListener(updateOrientation);
     const selected = new URL(window.location.href).searchParams.get('tab');
-    activate(tabs[selected === 'candidates' ? 1 : 0], false);
+    const tabIndex = {raw: 0, candidates: 1, lims: 2};
+
+activate(
+    tabs[tabIndex[selected] ?? 0],
+    false
+);
+})();
+</script>
+
+<script>
+(function () {
+
+    const selector = document.getElementById(
+        "icp_lims_display_mode"
+    );
+
+    if (!selector) return;
+
+    function updateLimsDisplay() {
+
+        const showAll = selector.value === "all";
+
+        document.querySelectorAll(
+            ".icp-lims-row"
+        ).forEach(function (row) {
+
+            const matched =
+                row.dataset.icpMatched === "yes";
+
+            row.hidden = !(showAll || matched);
+        });
+    }
+
+    selector.addEventListener(
+        "change",
+        updateLimsDisplay
+    );
+
+    updateLimsDisplay();
+
 })();
 </script>
 

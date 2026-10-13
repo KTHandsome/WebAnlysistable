@@ -30,7 +30,16 @@ from parsers.icp5800_parser import parse_icp5800_pdf
 
 from uuid import uuid4
 
-from analysis.icp_workflow import build_sample_candidate_groups
+from analysis.icp_workflow import (
+    build_sample_candidate_groups,
+    load_icp_analyte_map,
+    match_lims_icp_analytes,
+    build_icp_lims_matches,
+)
+
+from services.lims_analysis_service import (
+    get_lims_sample_analysis
+)
 
 from calculations.w43401 import (
     calculate_calibration,
@@ -54,7 +63,13 @@ from analysis.analysis_workflow import (
 from analysis.analysis_state import (
     save_analysis_state,
     load_analysis_state,
-    clear_analysis_state
+    clear_analysis_state,
+    update_analysis_state
+)
+
+from analysis.icp_state_repository import (
+    save_icp_work_state,
+    load_icp_work_state
 )
 
 from reports.w434_pdf import build_w434_pdf
@@ -3053,13 +3068,22 @@ def analysis_icp_import():
     ).strip().upper()
     filtered_row_count = 0
 
+    # 完整候選分組：提供 LIMS 配對使用
+    all_candidate_groups = []
+
+    # 畫面候選分組：可依金屬／波長篩選
     candidate_groups = []
+
+    # ICP LIMS 委測配對資料
+    lims_match_groups = []
+    lims_lookup_error = None
+    icp_lims_matches = []
+
 
     if request.method == "GET":
         work_key = session.get("icp_work_key")
-
         saved_work = (
-            load_analysis_state(work_key)
+            load_icp_work_state(work_key)
             if work_key else None
         )
 
@@ -3070,9 +3094,11 @@ def analysis_icp_import():
             == method_data.get("IMPORT_TYPE")
         ):
             saved_rows = saved_work["parsed_data"]["rows"]
-            candidate_groups = build_sample_candidate_groups(
+            all_candidate_groups = build_sample_candidate_groups(
                 saved_rows
             )
+
+            candidate_groups = all_candidate_groups
             parsed_row_count = len(saved_rows)
 
             channels = sorted({
@@ -3197,7 +3223,7 @@ def analysis_icp_import():
                             "ICP_IMPORT_" + uuid4().hex
                         )
 
-                        save_analysis_state(
+                        save_icp_work_state(
                             work_key,
                             {
                                 "form_data": dict(form_data),
@@ -3234,6 +3260,137 @@ def analysis_icp_import():
                             "請查看伺服器錯誤紀錄。"
                         )
 
+    # ICP 適用測項對照表
+    icp_analyte_map = {}
+
+    try:
+        icp_map_path = os.path.join(
+            app.root_path,
+            "data",
+            "Phyon_ICP_Analyte_Map.csv"
+        )
+
+        if all_candidate_groups:
+           icp_analyte_map = load_icp_analyte_map(
+           icp_map_path
+        )
+
+    except Exception:
+        app.logger.exception(
+            "ICP 適用測項對照表讀取失敗"
+        )
+
+        lims_lookup_error = (
+            "ICP 適用測項對照表無法讀取，"
+            "目前無法確認測項配對。"
+        )
+
+    # ========================================
+    # ICP LIMS 委測項目查詢
+    # 不影響原始 PDF 與候選量測資料
+    # ========================================
+    keepids = sorted({
+    str(group.get("keepid") or "").strip()
+    for group in all_candidate_groups
+    if str(group.get("keepid") or "").strip()
+       })   
+
+    for keepid in keepids:
+        try:
+            lims_rows = get_lims_sample_analysis(keepid)
+
+            matched_result = match_lims_icp_analytes(
+                lims_rows,
+                icp_analyte_map
+            )
+
+            lims_match_groups.append({
+                "keepid": keepid,
+                "found": bool(lims_rows),
+                "analysis_rows": lims_rows,
+                "matched_rows": matched_result["matched_rows"],
+                "unmatched_rows": matched_result["unmatched_rows"],
+            })
+
+        except Exception:
+            app.logger.exception(
+                "ICP LIMS 委測查詢失敗：KEEPID=%s",
+                keepid
+            )
+
+            lims_lookup_error = (
+                "部分樣品的 LIMS 委測資料查詢失敗，"
+                "請確認資料庫連線。"
+            )
+
+            lims_match_groups.append({
+                "keepid": keepid,
+                "found": False,
+                "analysis_rows": [],
+                "lookup_error": True,
+            })
+
+    # ========================================
+    # ICP PDF 與 LIMS 委測項目配對
+    # ========================================
+    if all_candidate_groups and not lims_lookup_error:
+
+        icp_lims_matches = build_icp_lims_matches(
+        all_candidate_groups,
+        lims_match_groups,
+        form_data.get("method_code", "")
+    )
+
+        # ========================================
+        # 還原使用者已暫存的委測決定
+        # ========================================
+        work_key = session.get("icp_work_key")
+
+        saved_work = (
+            load_icp_work_state(work_key)
+            if work_key else None
+        )
+
+        saved_decisions = (
+            saved_work.get("lims_decisions") or {}
+            if saved_work
+            else {}
+        )
+
+        for item in icp_lims_matches:
+
+            decision_key = "{}|{}".format(
+                str(item.get("keepid") or "").strip().upper(),
+                str(item.get("examno") or "").strip().upper()
+            )
+
+            saved = saved_decisions.get(decision_key)
+
+            if not saved:
+                continue
+
+            saved_decision = str(
+                saved.get("decision") or ""
+            ).strip().upper()
+
+            # 重新驗證目前的配對狀態
+            status = item.get("status")
+
+            if status == "METHOD_MATCHED":
+                allowed = {"ACCEPT", "REJECT", "PENDING"}
+
+            elif status == "CROSS_METHOD_REVIEW":
+                allowed = {"REJECT", "PENDING"}
+
+            else:
+                allowed = {"REJECT"}
+
+            if saved_decision in allowed:
+                item["user_decision"] = saved_decision
+                item["user_reason"] = str(
+                    saved.get("reason") or ""
+                )
+
     return render_template(
         "methods/icp_import.html",
         form_data=form_data,
@@ -3246,8 +3403,330 @@ def analysis_icp_import():
         selected_channel=selected_channel,
         selected_role=selected_role,
         filtered_row_count=filtered_row_count,
-        candidate_groups=candidate_groups,        
+        candidate_groups=candidate_groups,
+        lims_match_groups=lims_match_groups,
+        lims_lookup_error=lims_lookup_error,
+        icp_lims_matches=icp_lims_matches,
         active_page="analysis_basic"
+    )
+
+# ========================================
+# ICP LIMS 委測項目使用者決定
+# ========================================
+@app.route(
+    "/analysis/icp/lims-decision",
+    methods=["POST"]
+)
+@login_required
+def save_icp_lims_decision():
+
+    work_key = session.get("icp_work_key")
+    saved_work = (
+        load_icp_work_state(work_key)
+        if work_key else None
+    )
+
+    if not saved_work:
+        return "ICP 暫存資料不存在，請重新匯入 PDF。", 400
+
+    form_data = session.get("basic_info_form") or {}
+
+    _, method_data, error_message = load_basic_info_data(
+        form_data
+    )
+
+    if (
+        error_message
+        or not method_data
+        or method_data.get("ANALYSIS_MODE") != "MULTI_ANALYTE"
+        or saved_work.get("form_data") != form_data
+        or saved_work.get("import_type")
+        != method_data.get("IMPORT_TYPE")
+    ):
+        return "分析基本資料已變更，請重新確認。", 400
+
+    # ========================================
+    # 1. 讀取批次提交的使用者決定
+    #
+    # 前端欄位格式：
+    # decisions[KEEPID|EXAMNO] = ACCEPT / PENDING / REJECT
+    # ========================================
+    submitted = {}
+
+    for field_name, field_value in request.form.items():
+
+        if not (
+            field_name.startswith("decisions[")
+            and field_name.endswith("]")
+        ):
+            continue
+
+        decision_key = field_name[
+            len("decisions["):-1
+        ].strip().upper()
+
+        parts = decision_key.split("|")
+
+        if len(parts) != 2:
+            return "委測項目識別格式不正確。", 400
+
+        keepid, examno = parts
+
+        if not keepid or not examno:
+            return "委測項目識別不得為空白。", 400
+
+        decision = str(
+            field_value or ""
+        ).strip().upper()
+
+        if decision not in (
+            "ACCEPT",
+            "PENDING",
+            "REJECT"
+        ):
+            return "使用者決定不合法。", 400
+
+        submitted[decision_key] = decision
+
+    if not submitted:
+        return "沒有收到任何委測項目決定。", 400
+
+    # ========================================
+    # 2. 重新建立完整 PDF 候選資料
+    # 不受目前畫面篩選條件影響
+    # ========================================
+    parsed_data = saved_work.get("parsed_data") or {}
+    parsed_rows = parsed_data.get("rows") or []
+
+    all_candidate_groups = build_sample_candidate_groups(
+        parsed_rows
+    )
+
+    if not all_candidate_groups:
+        return "目前沒有可供配對的 ICP 候選資料。", 400
+
+    all_keepids = sorted({
+        str(group.get("keepid") or "").strip().upper()
+        for group in all_candidate_groups
+        if group.get("keepid")
+    })
+
+    # ========================================
+    # 3. 重新查詢 LIMS 委測項目
+    # ========================================
+    try:
+        analyte_map = load_icp_analyte_map(
+            os.path.join(
+                app.root_path,
+                "data",
+                "Phyon_ICP_Analyte_Map.csv"
+            )
+        )
+
+        lims_match_groups = []
+
+        for keepid in all_keepids:
+
+            lims_rows = get_lims_sample_analysis(
+                keepid
+            )
+
+            if not lims_rows:
+                return (
+                    "LIMS 查無樣品 {} 的委測資料，"
+                    "本次未儲存任何決定。".format(keepid),
+                    400
+                )
+
+            matched_result = match_lims_icp_analytes(
+                lims_rows,
+                analyte_map
+            )
+
+            lims_match_groups.append({
+                "keepid": keepid,
+                "matched_rows": (
+                    matched_result["matched_rows"]
+                ),
+            })
+
+        matches = build_icp_lims_matches(
+            all_candidate_groups,
+            lims_match_groups,
+            form_data.get("method_code", "")
+        )
+
+    except Exception:
+        app.logger.exception(
+            "ICP 批次委測決定驗證失敗"
+        )
+        return (
+            "無法重新驗證 ICP PDF 與 LIMS 委測資料。",
+            503
+        )
+
+    # ========================================
+    # 4. 建立後端可信任的配對索引
+    # ========================================
+    valid_matches = {}
+
+    for item in matches:
+
+        keepid = str(
+            item.get("keepid") or ""
+        ).strip().upper()
+
+        examno = str(
+            item.get("examno") or ""
+        ).strip().upper()
+
+        if not examno:
+            continue
+
+        key = "{}|{}".format(
+            keepid, examno
+        )
+
+        if key in valid_matches:
+            return (
+                "發現重複的 LIMS 委測識別，"
+                "本次未儲存任何決定。",
+                400
+            )
+
+        valid_matches[key] = item
+
+    # ========================================
+    # 5. 驗證所有提交資料
+    # 任一筆不合法，整批拒絕
+    # ========================================
+    for decision_key, decision in submitted.items():
+
+        target = valid_matches.get(
+            decision_key
+        )
+
+        if target is None:
+            return (
+                "委測項目 {} 不存在於目前配對資料，"
+                "本次未儲存任何決定。".format(
+                    decision_key
+                ),
+                400
+            )
+
+        status = target.get("status")
+
+        if status == "METHOD_MATCHED":
+            allowed = {
+                "ACCEPT",
+                "PENDING",
+                "REJECT"
+            }
+
+        elif status == "CROSS_METHOD_REVIEW":
+            allowed = {
+                "PENDING",
+                "REJECT"
+            }
+
+        else:
+            allowed = {
+                "REJECT"
+            }
+
+        if decision not in allowed:
+            return (
+                "委測項目 {} 的決定不符合配對限制，"
+                "本次未儲存任何決定。".format(
+                    decision_key
+                ),
+                400
+            )
+
+    # ========================================
+    # 6. 驗證舊有暫存決定
+    # 防止未提交的舊狀態繞過限制
+    # ========================================
+    old_decisions = (
+        saved_work.get("lims_decisions") or {}
+    )
+
+    if not isinstance(old_decisions, dict):
+        return "既有委測決定資料格式異常。", 400
+
+    new_decisions = {}
+
+    for key, value in old_decisions.items():
+
+        if key not in valid_matches:
+            continue
+
+        if not isinstance(value, dict):
+            continue
+
+        decision = str(
+            value.get("decision") or ""
+        ).strip().upper()
+
+        status = valid_matches[key].get("status")
+
+        if status == "METHOD_MATCHED":
+            allowed = {"ACCEPT", "PENDING", "REJECT"}
+        elif status == "CROSS_METHOD_REVIEW":
+            allowed = {"PENDING", "REJECT"}
+        else:
+            allowed = {"REJECT"}
+
+        if decision in allowed:
+            new_decisions[key] = {
+                "decision": decision,
+                "reason": "",
+            }
+
+    # ========================================
+    # 7. 套用本次所有使用者決定
+    # ========================================
+    for key, decision in submitted.items():
+
+        new_decisions[key] = {
+            "decision": decision,
+            "reason": "",
+        }
+
+    # ========================================
+    # 8. 通過驗證後一次寫入 SQLite
+    # ========================================
+
+    # 從原有工作狀態建立新資料，
+    # 不直接修改原本的 parsed_data。
+    updated_work = dict(saved_work)
+
+    updated_work["lims_decisions"] = new_decisions
+
+    try:
+        saved_ok = save_icp_work_state(
+            work_key,
+            updated_work
+        )
+
+    except Exception:
+        app.logger.exception(
+            "ICP LIMS 批次決定寫入 SQLite 失敗"
+        )
+        return (
+            "ICP 批次決定儲存失敗，請稍後重試。",
+            500
+        )
+
+    if not saved_ok:
+        return "ICP 批次決定儲存失敗。", 500
+
+    return redirect(
+        url_for(
+            "analysis_icp_import",
+            tab="lims"
+        )
     )
 
 @app.route(
@@ -9852,6 +10331,261 @@ def method_instrument_import():
         instrument_error_message=None,
         method_instrument_success_message=method_instrument_success_message,
         method_instrument_error_message=method_instrument_error_message,
+        active_page="control"
+    )
+
+# ========================================
+# ICP 適用測項 CSV 匯入
+# ========================================
+@app.route("/icp-analyte-import", methods=["POST"])
+@login_required
+def icp_analyte_import():
+
+    import shutil
+    import tempfile
+    from datetime import datetime
+
+    success_message = None
+    error_message = None
+
+    uploaded_file = request.files.get("icp_analyte_csv_file")
+
+    try:
+        if uploaded_file is None or not uploaded_file.filename:
+            raise ValueError("請選擇 ICP 適用測項 CSV。")
+
+        if not uploaded_file.filename.lower().endswith(".csv"):
+            raise ValueError("只能匯入 CSV 檔案。")
+
+        file_bytes = uploaded_file.read(2 * 1024 * 1024 + 1)
+
+        if len(file_bytes) > 2 * 1024 * 1024:
+            raise ValueError("CSV 檔案不可超過 2 MB。")
+
+        try:
+            csv_text = file_bytes.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            raise ValueError("CSV 必須使用 UTF-8 編碼。")
+
+        reader = csv.DictReader(io.StringIO(csv_text))
+
+        required_columns = {
+            "EXAMNAME",
+            "ELEMENT",
+            "ANALYTE_VARIANT",
+            "ACTIVE",
+            "REMARK",
+        }
+
+        actual_columns = set(reader.fieldnames or [])
+
+        if not required_columns.issubset(actual_columns):
+            missing = required_columns - actual_columns
+            raise ValueError(
+                "CSV 缺少欄位：" + ", ".join(sorted(missing))
+            )
+
+        if None in actual_columns:
+            raise ValueError("CSV 標題欄位不可空白。")
+
+        if len(reader.fieldnames) != len(actual_columns):
+            raise ValueError("CSV 標題欄位不可重複。")
+
+        rows = list(reader)
+
+        if not rows:
+            raise ValueError("CSV 沒有任何測項資料。")
+
+        valid_elements = {
+            "Al", "Sb", "As", "Ba", "Be", "B",
+            "Cd", "Ca", "Cr", "Co", "Cu",
+            "Ga", "In", "Fe", "Pb", "Li",
+            "Mg", "Mn", "Hg", "Mo", "Ni",
+            "P", "K", "Se", "Ag", "Na",
+            "Sr", "Tl", "Sn", "Ti", "V",
+            "Y", "Zn"
+        }
+
+        valid_variants = {
+            "TOTAL_OR_UNSPECIFIED",
+            "DISSOLVED",
+        }
+
+        seen_names = set()
+        validation_errors = []
+
+        for row_number, row in enumerate(rows, start=2):
+
+            if None in row:
+                validation_errors.append(
+                    "第 {} 列：欄位數量超出 CSV 標題。".format(
+                        row_number
+                    )
+                )
+                continue
+
+            examname = str(
+                row.get("EXAMNAME") or ""
+            ).strip()
+
+            element = str(
+                row.get("ELEMENT") or ""
+            ).strip()
+
+            variant = str(
+                row.get("ANALYTE_VARIANT") or ""
+            ).strip().upper()
+
+            active = str(
+                row.get("ACTIVE") or ""
+            ).strip().upper()
+
+            if not examname:
+                validation_errors.append(
+                    "第 {} 列：EXAMNAME 不可空白。".format(
+                        row_number
+                    )
+                )
+
+            elif examname in seen_names:
+                validation_errors.append(
+                    "第 {} 列：測項名稱重複：{}".format(
+                        row_number, examname
+                    )
+                )
+
+            else:
+                seen_names.add(examname)
+
+            if element not in valid_elements:
+                validation_errors.append(
+                    "第 {} 列：無效元素代碼：{}".format(
+                        row_number, element
+                    )
+                )
+
+            if variant not in valid_variants:
+                validation_errors.append(
+                    "第 {} 列：無效測項類型：{}".format(
+                        row_number, variant
+                    )
+                )
+
+            if active not in ("Y", "N"):
+                validation_errors.append(
+                    "第 {} 列：ACTIVE 必須為 Y 或 N。".format(
+                        row_number
+                    )
+                )
+
+            if len(validation_errors) >= 20:
+                break
+
+        if validation_errors:
+            raise ValueError(
+                "CSV 驗證失敗："
+                + "；".join(validation_errors)
+            )
+
+        # 驗證完成後，才處理正式設定檔
+        data_folder = os.path.join(
+            app.root_path, "data"
+        )
+
+        os.makedirs(data_folder, exist_ok=True)
+
+        save_path = os.path.join(
+            data_folder,
+            "Phyon_ICP_Analyte_Map.csv"
+        )
+
+        backup_folder = os.path.join(
+            data_folder,
+            "backups",
+            "icp_analyte"
+        )
+
+        os.makedirs(
+            backup_folder, exist_ok=True
+        )
+
+        temp_path = None
+
+        try:
+            # 先建立同目錄暫存檔
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                suffix=".csv",
+                prefix=".icp_analyte_",
+                dir=data_folder,
+                delete=False
+            ) as temp_file:
+
+                temp_path = temp_file.name
+                temp_file.write(file_bytes)
+
+            # 正式檔案已存在時，先備份
+            if os.path.exists(save_path):
+
+                timestamp = datetime.now().strftime(
+                    "%Y%m%d_%H%M%S_%f"
+                )
+
+                backup_path = os.path.join(
+                    backup_folder,
+                    "Phyon_ICP_Analyte_Map_{}.csv".format(
+                        timestamp
+                    )
+                )
+
+                shutil.copy2(
+                    save_path,
+                    backup_path
+                )
+
+            # 同一檔案系統內原子替換
+            os.replace(
+                temp_path,
+                save_path
+            )
+
+            temp_path = None
+
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                os.remove(temp_path)
+
+        success_message = (
+            "ICP 適用測項匯入成功，共 {} 筆。"
+            .format(len(rows))
+        )
+
+    except ValueError as exc:
+        error_message = str(exc)
+
+    except Exception:
+        app.logger.exception(
+            "ICP 適用測項 CSV 匯入失敗"
+        )
+        error_message = (
+            "ICP 適用測項匯入失敗，"
+            "請查看伺服器錯誤紀錄。"
+        )
+
+    return render_template(
+        "control_import.html",
+        success_message=None,
+        error_message=None,
+        method_success_message=None,
+        method_error_message=None,
+        report_success_message=None,
+        report_error_message=None,
+        instrument_success_message=None,
+        instrument_error_message=None,
+        method_instrument_success_message=None,
+        method_instrument_error_message=None,
+        icp_analyte_success_message=success_message,
+        icp_analyte_error_message=error_message,
         active_page="control"
     )
 
