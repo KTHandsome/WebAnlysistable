@@ -23,10 +23,6 @@
     <p class="icp-upload-notice" style="color: #b42318;">{{ upload_error }}</p>
     {% endif %}
 
-    {% if upload_message %}
-    <p class="icp-upload-notice" style="color: #176b36;">{{ upload_message }}</p>
-    {% endif %}
-
     <div class="icp-summary-actions">
         <form method="post"
               action="{{ url_for('analysis_icp_import') }}"
@@ -37,10 +33,101 @@
                    accept=".pdf,application/pdf" required>
             <button type="submit" class="eacs-button eacs-button-primary">上傳 PDF</button>
         </form>
-        <a href="{{ url_for('basic_info') }}"
-           class="eacs-button eacs-button-primary">返回基本資料</a>
     </div>
 </div>
+
+<!-- ========================================
+     ICP 已暫存工作清單
+     ======================================== -->
+{% if icp_saved_works %}
+
+<details class="eacs-card icp-saved-work-card">
+
+    <summary class="icp-saved-work-summary">
+
+    <span class="icp-saved-work-title">
+        <span class="icp-saved-work-icon" aria-hidden="true">
+            &#128193;
+        </span>
+
+        <span>已暫存 ICP 工作</span>
+
+        <span class="icp-saved-work-count">
+            共 {{ icp_saved_works | length }} 筆
+        </span>
+    </span>
+
+    <span class="icp-saved-work-toggle">
+        <span class="icp-toggle-open">展開</span>
+        <span class="icp-toggle-close">收合</span>
+        <span class="icp-toggle-arrow" aria-hidden="true"></span>
+    </span>
+
+</summary>
+    <div
+        class="icp-table-scroll"
+        tabindex="0"
+        aria-label="已暫存 ICP 工作清單"
+    >
+        <table class="icp-preview-table icp-saved-work-table">
+
+            <thead>
+                <tr>
+                    <th>PDF 檔案</th>
+                    <th>分析方法</th>
+                    <th>建立時間</th>
+                    <th>最後更新</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for work in icp_saved_works %}
+                <tr>
+
+                    <td>{{ work.source_filename }}</td>
+
+                    <td>{{ work.method_code }}</td>
+
+                    <td>
+                        {{ work.created_at.strftime('%Y/%m/%d %H:%M') if work.created_at else '—' }}
+                    </td>
+
+                    <td>
+                        {{ work.updated_at.strftime('%Y/%m/%d %H:%M') if work.updated_at else '—' }}
+                    </td>
+
+                    <td>
+                        <form
+                            method="post"
+                            action="{{ url_for('open_icp_saved_work') }}"
+                            class="icp-open-work-form"
+                        >
+                            <input
+                                type="hidden"
+                                name="work_key"
+                                value="{{ work.work_key }}"
+                            >
+
+                            <button
+                                type="submit"
+                                class="eacs-button eacs-button-primary"
+                            >
+                                開啟工作
+                            </button>
+                        </form>
+                    </td>
+
+                </tr>
+                {% endfor %}
+            </tbody>
+
+        </table>
+    </div>
+
+</details>
+
+{% endif %}
 
 {% if parsed_row_count %}
 <div class="icp-workspace">
@@ -743,6 +830,158 @@
 .icp-candidate-select:focus {
     outline: 2px solid #2563eb;
     outline-offset: 1px;
+}
+
+/* ========================================
+   ICP 已暫存工作清單
+   ======================================== */
+
+.icp-saved-work-card {
+    margin-top: 12px;
+    margin-bottom: 12px;
+}
+
+.icp-saved-work-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+}
+
+.icp-saved-work-table th,
+.icp-saved-work-table td {
+    padding: 6px 8px;
+    vertical-align: middle;
+}
+
+.icp-saved-work-table th:nth-child(1) {
+    width: 34%;
+}
+
+.icp-saved-work-table th:nth-child(2) {
+    width: 12%;
+}
+
+.icp-saved-work-table th:nth-child(3),
+.icp-saved-work-table th:nth-child(4) {
+    width: 20%;
+}
+
+.icp-saved-work-table th:nth-child(5) {
+    width: 14%;
+}
+
+.icp-open-work-form {
+    margin: 0;
+}
+
+.icp-open-work-form button {
+    padding: 5px 12px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+/* ========================================
+   ICP 已暫存工作：專業簡約收合式
+   ======================================== */
+
+.icp-saved-work-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+
+    color: #24476f;
+    background: #edf3fa;
+    border: 1px solid #c8d7e8;
+    border-radius: 7px;
+
+    font-size: 16px;
+    font-weight: 600;
+
+    list-style: none;
+}
+
+.icp-saved-work-summary::-webkit-details-marker {
+    display: none;
+}
+
+.icp-saved-work-title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+}
+
+.icp-saved-work-icon {
+    font-size: 17px;
+    line-height: 1;
+}
+
+.icp-saved-work-count {
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 400;
+    white-space: nowrap;
+}
+
+.icp-saved-work-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #45688f;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.icp-toggle-arrow {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform 0.15s ease;
+}
+
+.icp-toggle-close {
+    display: none;
+}
+
+/* 滑鼠移入 */
+.icp-saved-work-summary:hover {
+    background: #e2edfa;
+    border-color: #a7bfdd;
+}
+
+/* 鍵盤操作提示 */
+.icp-saved-work-summary:focus-visible {
+    outline: 2px solid #315f9c;
+    outline-offset: 2px;
+}
+
+/* 展開狀態 */
+.icp-saved-work-card[open] .icp-saved-work-summary {
+    background: #e2edfa;
+    border-color: #a7bfdd;
+}
+
+.icp-saved-work-card[open] .icp-toggle-open {
+    display: none;
+}
+
+.icp-saved-work-card[open] .icp-toggle-close {
+    display: inline;
+}
+
+.icp-saved-work-card[open] .icp-toggle-arrow {
+    transform: rotate(225deg);
+}
+
+.icp-saved-work-card[open] .icp-table-scroll {
+    margin-top: 14px;
 }
 
 </style>

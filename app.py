@@ -70,7 +70,8 @@ from analysis.analysis_state import (
 
 from analysis.icp_state_repository import (
     save_icp_work_state,
-    load_icp_work_state
+    load_icp_work_state,
+    list_icp_work_states
 )
 
 from reports.w434_pdf import build_w434_pdf
@@ -3069,17 +3070,19 @@ def analysis_icp_import():
     ).strip().upper()
     filtered_row_count = 0
 
-    # 完整候選分組：提供 LIMS 配對使用
     all_candidate_groups = []
-
-    # 畫面候選分組：可依金屬／波長篩選
     candidate_groups = []
-
-    # ICP LIMS 委測配對資料
     lims_match_groups = []
     lims_lookup_error = None
     icp_lims_matches = []
 
+    # ========================================
+    # ICP 已暫存工作清單
+    # 僅查詢工作基本資訊，不載入 PDF JSON
+    # ========================================
+    icp_saved_works = list_icp_work_states(
+        method_code=form_data.get("method_code", "")
+    )
 
     if request.method == "GET":
         work_key = session.get("icp_work_key")
@@ -3411,6 +3414,7 @@ def analysis_icp_import():
 
     return render_template(
         "methods/icp_import.html",
+        icp_saved_works=icp_saved_works,
         form_data=form_data,
         method_data=method_data,
         upload_error=upload_error,
@@ -3911,6 +3915,53 @@ def save_icp_candidate_selection():
             "ICP 候選倍數批次儲存失敗"
         )
         return "候選倍數儲存失敗。", 500
+
+    return redirect(
+        url_for(
+            "analysis_icp_import",
+            tab="candidates"
+        )
+    )
+
+# ========================================
+# ICP：開啟已暫存工作
+# ========================================
+@app.route(
+    "/analysis/icp/open-work",
+    methods=["POST"]
+)
+@login_required
+def open_icp_saved_work():
+
+    work_key = str(
+        request.form.get("work_key") or ""
+    ).strip()
+
+    if not work_key.startswith("ICP_IMPORT_"):
+        return "ICP 工作識別格式不正確。", 400
+
+    saved_work = load_icp_work_state(work_key)
+
+    if not saved_work:
+        return "找不到指定的 ICP 工作。", 404
+
+    saved_form_data = saved_work.get("form_data")
+
+    if not isinstance(saved_form_data, dict):
+        return "ICP 工作基本資料格式不正確。", 400
+
+    if not (
+        (saved_work.get("parsed_data") or {}).get("rows")
+    ):
+        return "ICP 工作缺少 PDF 解析資料。", 400
+
+    # 恢復這份工作原本的分析基本資料，
+    # 避免被目前畫面的其他分析方法影響。
+    session["basic_info_form"] = dict(
+        saved_form_data
+    )
+
+    session["icp_work_key"] = work_key
 
     return redirect(
         url_for(

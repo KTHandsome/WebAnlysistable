@@ -1,9 +1,33 @@
 
 import json
-
+from datetime import datetime, timezone, timedelta
 from database import SessionLocal
 from models import IcpImportWorkState
 
+# ========================================
+# SQLite UTC 時間轉換台灣時間
+# ========================================
+TAIWAN_TIMEZONE = timezone(
+    timedelta(hours=8)
+)
+
+
+def icp_utc_to_taiwan(value):
+
+    if value is None:
+        return None
+
+    # SQLite 讀出的 DateTime 通常沒有時區資訊，
+    # 依目前已確認的 SQLite CURRENT_TIMESTAMP，
+    # 視為 UTC 時間。
+    if value.tzinfo is None:
+        value = value.replace(
+            tzinfo=timezone.utc
+        )
+
+    return value.astimezone(
+        TAIWAN_TIMEZONE
+    )
 
 # ========================================
 # 儲存 ICP 工作狀態
@@ -128,4 +152,49 @@ def delete_icp_work_state(work_key):
 
     finally:
         db.close()
-        
+
+# ========================================
+# 查詢已暫存 ICP 工作清單
+# 不載入完整 PDF 解析 JSON
+# ========================================
+def list_icp_work_states(method_code=None):
+
+    db = SessionLocal()
+
+    try:
+        query = db.query(
+            IcpImportWorkState.work_key,
+            IcpImportWorkState.method_code,
+            IcpImportWorkState.source_filename,
+            IcpImportWorkState.created_at,
+            IcpImportWorkState.updated_at,
+        )
+
+        if method_code:
+            query = query.filter(
+                IcpImportWorkState.method_code
+                == method_code
+            )
+
+        rows = (
+            query
+            .order_by(
+                IcpImportWorkState.updated_at.desc(),
+                IcpImportWorkState.id.desc()
+            )
+            .all()
+        )
+
+        return [
+            {
+                "work_key": row.work_key,
+                "method_code": row.method_code,
+                "source_filename": row.source_filename,
+                "created_at": icp_utc_to_taiwan(row.created_at),
+                "updated_at": icp_utc_to_taiwan(row.updated_at),
+            }
+            for row in rows
+        ]
+
+    finally:
+        db.close()
