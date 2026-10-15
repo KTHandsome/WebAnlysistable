@@ -145,6 +145,9 @@ PERMISSION_VIEW_ANALYSIS_DELETE_HISTORY = (
     "VIEW_ANALYSIS_DELETE_HISTORY"
 )
 
+PERMISSION_MANAGE_PERFORMANCE_CONTROL = (
+    "MANAGE_PERFORMANCE_CONTROL"
+)
 
 # ========================================
 # 使用者權限判定
@@ -214,4 +217,10 @@ def can_view_analysis_delete_history():
 
     return has_permission(
         PERMISSION_VIEW_ANALYSIS_DELETE_HISTORY
+    )
+
+def can_manage_performance_control():
+
+    return has_permission(
+        PERMISSION_MANAGE_PERFORMANCE_CONTROL
     )

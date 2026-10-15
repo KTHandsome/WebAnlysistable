@@ -437,6 +437,172 @@ label {
 
 </div>
 
+<!-- ========================================
+     儀器 Performance 年度管制 CSV 匯入
+     ======================================== -->
+<div class="card">
+
+    <div class="card-title">
+        匯入儀器 Performance 管制 CSV
+    </div>
+
+    {% if performance_success_message %}
+    <div class="message success">
+        {{ performance_success_message }}
+    </div>
+    {% endif %}
+
+    <!-- ========================================
+         Performance CSV 差異摘要
+         ======================================== -->
+
+    {% if performance_diff %}
+
+    <div style="
+        margin-top: 12px;
+        margin-bottom: 16px;
+        padding: 14px;
+        border: 1px solid #d6dce2;
+        border-radius: 8px;
+    ">
+
+        <div style="
+            font-weight: 600;
+            margin-bottom: 10px;
+        ">
+            Performance CSV 差異摘要
+        </div>
+
+        <div style="
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 10px;
+        ">
+
+            <span>
+                正式資料：
+                <strong>{{ performance_diff.official_count }}</strong> 筆
+            </span>
+
+            <span>
+                待更新：
+                <strong>{{ performance_diff.candidate_count }}</strong> 筆
+            </span>
+
+            <span>
+                新增：
+                <strong>{{ performance_diff.added | length }}</strong> 筆
+            </span>
+
+            <span>
+                移除：
+                <strong>{{ performance_diff.removed | length }}</strong> 筆
+            </span>
+
+            <span>
+                修改：
+                <strong>{{ performance_diff.modified | length }}</strong> 筆
+            </span>
+
+            <span>
+                未變更：
+                <strong>{{ performance_diff.unchanged | length }}</strong> 筆
+            </span>
+
+        </div>
+
+        {% if performance_diff.added %}
+        <div style="margin-top: 6px;">
+            <strong>新增項目：</strong>
+            {{ performance_diff.added | join('、') }}
+        </div>
+        {% endif %}
+
+        {% if performance_diff.removed %}
+        <div style="margin-top: 6px;">
+            <strong>移除項目：</strong>
+            {{ performance_diff.removed | join('、') }}
+        </div>
+        {% endif %}
+
+        {% if performance_diff.modified %}
+        <div style="margin-top: 6px;">
+            <strong>修改項目：</strong>
+            {{ performance_diff.modified | join('、') }}
+        </div>
+        {% endif %}
+
+        <div style="
+            margin-top: 10px;
+            font-size: 13px;
+            color: #68737d;
+        ">
+            差異摘要僅供確認，不限制相同管制版本更新。
+        </div>
+
+    </div>
+
+    {% endif %}
+
+    {% if performance_error_message %}
+    <div class="message error">
+        {{ performance_error_message }}
+    </div>
+    {% endif %}
+
+    <form
+        method="post"
+        action="/performance-control-import"
+        enctype="multipart/form-data"
+    >
+
+        <div class="form-row">
+
+            <label for="performance_csv_file">
+                CSV 檔案
+            </label>
+
+            <input
+                type="file"
+                id="performance_csv_file"
+                name="performance_csv_file"
+                accept=".csv"
+                required
+            >
+
+        </div>
+
+        <!-- Performance CSV 操作選擇 -->
+        <div class="button-row">
+
+            <button
+                type="submit"
+                name="performance_action"
+                value="validate"
+            >
+                驗證 CSV
+            </button>
+
+            <button
+                type="submit"
+                name="performance_action"
+                value="publish"
+                style="
+                margin-left: 12px;
+                background-color: #0f7165;
+                "
+                onclick="return confirm('確定正式發布 Performance 管制資料？發布後將同步更新 CSV、JSONL 與 SQLite ACTIVE 批次。');"
+                >
+                正式發布
+            </button>
+
+        </div>
+
+    </form>
+
+</div>
+
 </div>
 
 {% endblock %}

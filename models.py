@@ -9,8 +9,10 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
+    UniqueConstraint,
     func
 )
 
@@ -739,3 +741,241 @@ class AnalysisDeleteHistory(Base):
         nullable=False,
         server_default=func.now()
     )
+
+# ========================================
+# Performance CSV 匯入批次歷程
+# ========================================
+
+class PerformanceImportHistory(Base):
+
+    __tablename__ = "performance_import_history"
+
+    import_id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid4())
+    )
+
+    original_filename: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False
+    )
+
+    stored_filename: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        unique=True
+    )
+
+    sha256: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False
+    )
+
+    record_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False
+    )
+
+    control_versions_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="[]"
+    )
+
+    imported_by: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False
+    )
+
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now()
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="ACTIVE",
+        index=True
+    )
+
+
+# ========================================
+# Performance 儀器管制設定
+# 每筆資料對應一次 CSV 匯入批次
+# ========================================
+
+class InstrumentPerformanceControl(Base):
+
+    __tablename__ = "instrument_performance_control"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "import_id",
+            "control_id",
+            name="uq_performance_import_control"
+        ),
+    )
+
+    # ----------------------------------------
+    # 資料庫識別
+    # ----------------------------------------
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    import_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey(
+            "performance_import_history.import_id"
+        ),
+        nullable=False,
+        index=True
+    )
+
+    # ----------------------------------------
+    # CSV：儀器與管制項目
+    # ----------------------------------------
+
+    control_id: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False
+    )
+
+    instrument_id: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        index=True
+    )
+
+    instrument_model: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False
+    )
+
+    year: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False
+    )
+
+    effective_from: Mapped[date] = mapped_column(
+        Date,
+        nullable=False
+    )
+
+    effective_to: Mapped[date] = mapped_column(
+        Date,
+        nullable=False
+    )
+
+    performance_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False
+    )
+
+    monitor_item: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False
+    )
+
+    # ----------------------------------------
+    # CSV：訊號項目與波長
+    # ----------------------------------------
+
+    numerator_item: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default=""
+    )
+
+    numerator_wavelength_nm: Mapped[Optional[float]] = mapped_column(
+        Numeric(12, 4, asdecimal=False),
+        nullable=True
+    )
+
+    denominator_item: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default=""
+    )
+
+    denominator_wavelength_nm: Mapped[Optional[float]] = mapped_column(
+        Numeric(12, 4, asdecimal=False),
+        nullable=True
+    )
+
+    target_wavelength_nm: Mapped[Optional[float]] = mapped_column(
+        Numeric(12, 4, asdecimal=False),
+        nullable=True
+    )
+
+    # ----------------------------------------
+    # CSV：管制平均值與上下限
+    # 由 LIMS 計算、品保審核後匯入
+    # Phyon 不重新計算 15 次平均與 3SD
+    # ----------------------------------------
+
+    reference_value: Mapped[Optional[float]] = mapped_column(
+        Numeric(20, 8, asdecimal=False),
+        nullable=True
+    )
+
+    lower_limit: Mapped[Optional[float]] = mapped_column(
+        Numeric(20, 8, asdecimal=False),
+        nullable=True
+    )
+
+    upper_limit: Mapped[Optional[float]] = mapped_column(
+        Numeric(20, 8, asdecimal=False),
+        nullable=True
+    )
+
+    unit: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default=""
+    )
+
+    # ----------------------------------------
+    # CSV：管制狀態及其他資訊
+    # ----------------------------------------
+
+    sample_labels: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False
+    )
+
+    frequency: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default=""
+    )
+
+    control_version: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False
+    )
+
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False
+    )
+
+    sop_reference: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default=""
+    )
+
+    notes: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=""
+    )
+
