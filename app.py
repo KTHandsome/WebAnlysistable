@@ -16,6 +16,10 @@ from analysis.sample_category_filter import (
     detect_formal_sample_category
 )
 
+from analysis.performance_classifier import (
+    split_performance_rows
+)
+
 from datetime import datetime, timedelta
 
 from parsers.pe900_parser import parse_pe900_pdf
@@ -6489,6 +6493,16 @@ def analysis_w43401():
                         )
 
                     preview_rows = parse_oi_toc_pdf(temp_path)
+
+                    # ==========================================
+                    # PRM Performance 原始資料分流
+                    # PERFORMANCE / PFM
+                    #
+                    # PRM 不參與檢量線、TIC、樣品及 QA/QC 計算
+                    # ==========================================
+                    prm_rows, preview_rows = (
+                        split_performance_rows(preview_rows)
+                    )
 
                     # 清洗紀錄不參與檢量線及樣品計算
                     preview_rows = [

@@ -388,14 +388,20 @@ def filter_batches_by_exam_no(
                     .upper()
                 )
 
-                # QA/QC 非正式樣品全部保留
-                if role != "SAMPLE":
+                # 共用品管資料直接保留；
+                # 正式樣品及其 DUP/MS/MSD 必須進行類別篩選。
+                if role not in {
+                   "SAMPLE",
+                   "DUP",
+                   "MS",
+                   "MSD"
+                }:
 
-                    filtered_batch_rows.append(
-                        row
-                    )
+                   filtered_batch_rows.append(
+                    row
+                   )
 
-                    continue
+                   continue
 
                 sample_category = (
                     detect_formal_sample_category(
@@ -492,12 +498,18 @@ def filter_batches_by_exam_no(
                     .upper()
                 )
 
-                # QA/QC 資料保留
-                if role != "SAMPLE":
+                # 共用品管資料直接保留；
+                # 正式樣品及其 DUP/MS/MSD 必須進行類別篩選。
+                if role not in {
+                   "SAMPLE",
+                   "DUP",
+                   "MS",
+                   "MSD"
+                }:
 
                     filtered_batch_rows.append(
-                        row
-                    )
+                    row
+                )
 
                     continue
 

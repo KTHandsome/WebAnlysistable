@@ -6,7 +6,7 @@ except ImportError:
     from pypdf import PdfReader
 
 NUMBER = r"[-+]?(?:\d[\d,]*(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?"
-DATE = r"\d{4}/\d{1,2}/\d{1,2}\s+(?:(?:上午|下午)\s*)?\d{1,2}:\d{2}:\d{2}"
+DATE = r"\d{4}/\d{1,2}/\d{1,2}\s+(?:(?:上午|下午)\s*)?\d{1,2}:\d{2}(?::\d{2}|:)?"
 START = re.compile(r"^(\d+)\s+(.+?)\s+(" + DATE + r")\s+(\d+)\s+(" + NUMBER + r")\s+(" + NUMBER + r")\s+(" + NUMBER + r")\s*$")
 REPEAT = re.compile(r"^(" + DATE + r")\s+(\d+)\s+(" + NUMBER + r")\s+(" + NUMBER + r")\s+(" + NUMBER + r")\s*$")
 AVERAGE = re.compile(r"^Avg\s+(" + NUMBER + r")\s+(" + NUMBER + r")\s+(" + NUMBER + r")\s*$", re.I)
