@@ -5,7 +5,8 @@ from flask import (
     redirect,
     url_for,
     session,
-    send_file
+    flash,
+    jsonify
 )
 
 from services.lims_auth_service import (
@@ -108,6 +109,11 @@ from database import (
     DATABASE_TYPE
 )
 
+from services.performance_query_service import (
+    find_active_performance_control,
+    PerformanceControlQueryError,
+)
+
 from models import (
     AnalysisCalibrationPoint,
     AnalysisCalibrationSummary,
@@ -116,7 +122,8 @@ from models import (
     AnalysisRecord,
     AnalysisReviewHistory,
     AnalysisSample,
-    AnalysisWorkState
+    AnalysisWorkState,
+    PerformanceMeasurementHistory
 )
 
 from services.performance_release_service import (
@@ -126,6 +133,14 @@ from services.performance_release_service import (
 
 from services.performance_diff_service import (
     compare_performance_csv
+)
+
+from services.performance_trend_service import (
+    get_performance_trend
+)
+
+from services.performance_history_query_service import (
+    query_performance_history
 )
 
 import os
@@ -1199,6 +1214,68 @@ def load_instrument_options(form_data):
 
     return instrument_options
 
+# ========================================
+# Performance History Query
+# ========================================
+@app.route("/performance-history", methods=["GET"])
+@login_required
+def performance_history():
+
+    filter_names = [
+        "instrument_id",
+        "category",
+        "monitor_item",
+        "status",
+        "analysis_date_start",
+        "analysis_date_end"
+    ]
+
+    filters = {
+        name: request.args.get(name, "").strip()
+        for name in filter_names
+    }
+
+    # 只要使用者送出 GET 查詢參數，就執行查詢。
+    # 即使所有條件留空，也允許查詢全部 PRM 歷程。
+    searched = any(
+        name in request.args
+        for name in filter_names
+    )
+
+    rows = []
+    error_message = ""
+
+    if searched:
+
+        db = SessionLocal()
+
+        try:
+            rows = query_performance_history(
+                db=db,
+                **filters
+            )
+
+        except ValueError as exc:
+            error_message = str(exc)
+
+        finally:
+            db.close()
+
+    print("=== PRM HISTORY WEB DEBUG ===")
+    print("FILTERS:", filters)
+    print("SEARCHED:", searched)
+    print("ROWS:", len(rows))
+    print("ERROR:", error_message)
+
+    return render_template(
+        "performance_history_query.html",
+        active_page="performance_history",
+        filters=filters,
+        searched=searched,
+        rows=rows,
+        error_message=error_message
+    )
+
 @app.route("/analysis-records")
 @login_required
 def analysis_records():
@@ -2119,6 +2196,23 @@ def delete_analysis_record(
             )
             .filter(
                 AnalysisCalibrationSummary.analysis_id
+                == analysis_id
+            )
+            .delete(
+                synchronize_session=False
+            )
+        )
+
+        # ========================================
+        # 刪除所屬儀器性能確校（PRM）歷程
+        # ========================================
+
+        (
+            db.query(
+                PerformanceMeasurementHistory
+            )
+            .filter(
+                PerformanceMeasurementHistory.analysis_id
                 == analysis_id
             )
             .delete(
@@ -6285,6 +6379,8 @@ def analysis_w43401():
         ] = formal_analysis_id
     
     preview_rows = []
+    prm_rows = []    
+    prm_results = []
     calibration_rows = []
     sample_qaqc_rows = []
     toc_tic_rows = []   
@@ -6354,6 +6450,16 @@ def analysis_w43401():
                 ),
                 preview_rows=saved_state.get(
                     "preview_rows",
+                    []
+                ),
+
+                prm_rows=saved_state.get(
+                    "prm_rows",
+                    []
+                ),
+
+                prm_results=saved_state.get(
+                    "prm_results",
                     []
                 ),
 
@@ -6503,6 +6609,150 @@ def analysis_w43401():
                     prm_rows, preview_rows = (
                         split_performance_rows(preview_rows)
                     )
+
+                    # ==========================================
+                    # TOC PRM ACTIVE 管制標準配對與判定
+                    # 不影響一般分析資料處理
+                    # ==========================================
+                    from datetime import datetime
+                    import math
+
+                    prm_results = []
+
+                    category = str(
+                        form_data.get("category", "") or ""
+                    ).strip().upper()
+
+                    instrument_id = str(
+                        form_data.get("instrument_id", "") or ""
+                    ).strip()
+
+                    exam_name = str(
+                        form_data.get("exam_name", "") or ""
+                    ).strip().upper()
+
+                    for prm_row in prm_rows:
+
+                        result = {
+                            "sample_id": prm_row.get("sample_id"),
+                            "analysis_datetime": prm_row.get(
+                                "analysis_datetime"
+                            ),
+                            "signal": prm_row.get("signal"),
+                            "signal_field": prm_row.get("signal_field"),
+                            "status": "UNDETERMINED",
+                            "message": "",
+                            "control": None,
+                        }
+
+                        try:
+                            # 僅處理 TOC 原始 Area Counts
+                            if str(
+                                prm_row.get("analyte", "")
+                            ).strip().upper() != "TOC":
+                                raise ValueError(
+                                    "PRM 測項不是 TOC。"
+                                )
+
+                            if prm_row.get(
+                                "signal_field"
+                            ) != "AREA_COUNTS":
+                                raise ValueError(
+                                    "PRM 訊號不是 AREA_COUNTS。"
+                                )
+
+                            signal = float(
+                                prm_row.get("signal")
+                            )
+
+                            if not math.isfinite(signal):
+                                raise ValueError(
+                                    "PRM Area 不是有效數值。"
+                                )
+
+                            if category not in ("D", "W", "G"):
+                                raise ValueError(
+                                    "Basic Info 檢測類別不是 D/W/G。"
+                                )
+
+                            if not instrument_id:
+                                raise ValueError(
+                                    "Basic Info 尚未選擇儀器。"
+                                )
+
+                            # PDF 日期字串例如：
+                            # 2026/10/13  下午05:12:
+                            raw_datetime = str(
+                                prm_row.get(
+                                    "analysis_datetime", ""
+                                ) or ""
+                            ).strip()
+
+                            date_text = raw_datetime.split()[0]
+
+                            analysis_date = datetime.strptime(
+                                date_text,
+                                "%Y/%m/%d"
+                            ).date()
+
+                            # PRM V2：
+                            # 儀器性能查核不依樣品檢測類別 D/G/W 區分
+                            monitor_item = "TOC"
+
+                            control = find_active_performance_control(
+                                session_factory=SessionLocal,
+                                instrument_id=instrument_id,
+                                monitor_item=monitor_item,
+                                performance_type="CAL_HIGH_SIGNAL",
+                                analysis_date=analysis_date,
+                            )
+
+                            lower_limit = control.get("lower_limit")
+                            upper_limit = control.get("upper_limit")
+
+                            if (
+                                lower_limit is None
+                                or upper_limit is None
+                            ):
+                                raise ValueError(
+                                    "管制標準缺少上下限。"
+                                )
+
+                            lower_limit = float(lower_limit)
+                            upper_limit = float(upper_limit)
+
+                            if not (
+                                math.isfinite(lower_limit)
+                                and math.isfinite(upper_limit)
+                                and lower_limit <= upper_limit
+                            ):
+                                raise ValueError(
+                                    "管制上下限設定異常。"
+                                )
+
+                            passed = (
+                                lower_limit <= signal <= upper_limit
+                            )
+
+                            result["status"] = (
+                                "PASS" if passed else "FAIL"
+                            )
+                            result["control"] = control
+                            result["message"] = (
+                                "符合管制標準"
+                                if passed
+                                else "超出管制標準"
+                            )
+
+                        except (
+                            ValueError,
+                            TypeError,
+                            PerformanceControlQueryError,
+                        ) as ex:
+
+                            result["message"] = str(ex)
+
+                        prm_results.append(result)
 
                     # 清洗紀錄不參與檢量線及樣品計算
                     preview_rows = [
@@ -7066,6 +7316,12 @@ def analysis_w43401():
                 "preview_rows":
                     preview_rows,
 
+                "prm_rows":
+                    prm_rows,
+
+                "prm_results":
+                    prm_results,
+
                 "calibration_rows":
                     calibration_rows,
 
@@ -7130,6 +7386,8 @@ def analysis_w43401():
         current_analysis_url="/analysis/w43401",
         analysis_version="1.00",
         preview_rows=preview_rows,
+        prm_rows=prm_rows,
+        prm_results=prm_results,
         calibration_rows=calibration_rows,
         sample_qaqc_rows=sample_qaqc_rows,
         toc_tic_rows=toc_tic_rows,
@@ -8271,6 +8529,11 @@ def update_analysis_samples():
             []
         ):
 
+            # 已刪除的樣品或 QA/QC
+            # 不參與有效 QA/QC 判定
+            if row.get("is_excluded", False):
+                continue
+
             qaqc_row = row.copy()
 
             for field_name in {
@@ -8362,6 +8625,76 @@ def update_analysis_samples():
         saved="1"
     )
 )
+
+
+# ========================================
+# PRM Performance Trend API
+# ========================================
+@app.route(
+    "/analysis/performance-trend",
+    methods=["GET"]
+)
+@login_required
+def analysis_performance_trend():
+
+    instrument_id = str(
+        request.args.get("instrument_id", "")
+    ).strip()
+
+    monitor_item = str(
+        request.args.get("monitor_item", "")
+    ).strip()
+
+    performance_type = str(
+        request.args.get("performance_type", "")
+    ).strip()
+
+    if not all([
+        instrument_id,
+        monitor_item,
+        performance_type
+    ]):
+        return jsonify({
+            "success": False,
+            "message": "缺少儀器或性能查核項目。"
+        }), 400
+
+    db = SessionLocal()
+
+    try:
+        result = get_performance_trend(
+            db=db,
+            instrument_id=instrument_id,
+            monitor_item=monitor_item,
+            performance_type=performance_type,
+            limit=30
+        )
+
+        return jsonify({
+            "success": True,
+            "data": result
+        })
+
+    except ValueError as exc:
+
+        return jsonify({
+            "success": False,
+            "message": str(exc)
+        }), 400
+
+    except Exception:
+
+        app.logger.exception(
+            "PRM performance trend query failed"
+        )
+
+        return jsonify({
+            "success": False,
+            "message": "查詢 PRM 歷程失敗。"
+        }), 500
+
+    finally:
+        db.close()
 
 @app.route(
     "/analysis/save-record",
@@ -10902,7 +11235,7 @@ def performance_control_import():
         # ========================================
         # Performance 正式發布總開關
         # ========================================
-        ENABLE_PERFORMANCE_WRITE = False
+        ENABLE_PERFORMANCE_WRITE = True
 
         if (
             performance_action == "publish"

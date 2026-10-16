@@ -89,14 +89,10 @@ def parse_oi_toc_pdf(pdf_path):
     A missing Avg raises an error instead of silently discarding a sample.
     """
     reader = PdfReader(pdf_path)
-    print("DEBUG OI first page:")
-    print(repr(reader.pages[0].extract_text()))
     rows = []
     current = None
     for page_no, page in enumerate(reader.pages, 1):
         for line in extract_oi_text_lines(page):
-            if page_no == 1:
-              print("DEBUG OI line:", repr(line))
             line = normalize_oi_line(line.strip())
             match = START.fullmatch(line)
             if match:

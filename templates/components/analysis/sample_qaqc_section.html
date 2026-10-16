@@ -437,41 +437,29 @@
     {% endif %}
 >
 
+
 <td style="
     border: 1px solid #ccc;
     padding: 4px;
     text-align: center;
 ">
-    {% if row.role == "SAMPLE" %}
+    {% if row.role in ["SAMPLE", "QC"] %}
 
-    {% if row.role == "SAMPLE" %}
-
-<input
-    type="checkbox"
-    class="sample-delete-checkbox"
-    name="is_excluded_{{ loop.index0 }}"
-    value="1"
-    {% if row.is_excluded %}
-    checked
-    {% endif %}
-    title="不採用此筆正式結果"
-    style="
-        width: 18px;
-        height: 18px;
-        cursor: pointer;
-    "
->
-
-{% else %}
-
-<span style="
-    color: #aaa;
-    font-size: 12px;
-">
-    -
-</span>
-
-{% endif %}
+    <input
+        type="checkbox"
+        class="sample-delete-checkbox"
+        name="is_excluded_{{ loop.index0 }}"
+        value="1"
+        {% if row.is_excluded %}
+        checked
+        {% endif %}
+        title="刪除此筆檢驗紀錄"
+        style="
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        "
+    >
 
     {% else %}
 
@@ -484,6 +472,7 @@
 
     {% endif %}
 </td>
+
 
     <td style="
         border: 1px solid #ccc;

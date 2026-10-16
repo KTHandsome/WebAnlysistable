@@ -471,7 +471,7 @@ function bindSampleDeleteEvents() {
 
             const confirmed =
                 window.confirm(
-                    "確定刪除此筆樣品結果？"
+                    "確定刪除此筆檢驗紀錄？"
                 );
 
             if (!confirmed) {

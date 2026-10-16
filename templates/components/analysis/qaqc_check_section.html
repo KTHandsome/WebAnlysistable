@@ -654,22 +654,20 @@
             ">
                 {{ batch.precision.reason }}
             </div>
+                {% endif %}
+            </div>
 
-            {% endif %}
+                {% endif %}
 
-        </div>
+                {% if batch.spike_recovery %}
 
-        {% endif %}
-
-        {% if batch.spike_recovery %}
-
-        <div style="
+            <div style="
             margin-top: 8px;
             margin-bottom: 24px;
             border: 1px solid #d6e0e8;
             border-radius: 6px;
             overflow: hidden;
-        ">
+            ">
 
             <div style="
                 padding: 10px 14px;
@@ -876,43 +874,22 @@
 
                         </td>
 
-<td style="
-    border: 1px solid #ccc;
-    padding: 8px;
-    text-align: center;
-">
+                        <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">
 
-    {% if row.lwl is not none and row.uwl is not none %}
+                            {% if row.lwl is not none and row.uwl is not none %}
 
-    <div style="
-        color: #c27c00;
-        font-size: 12px;
-        margin-bottom: 4px;
-    ">
-        警告：
-        {{ "%.1f"|format(row.lwl) }}
-        ～
-        {{ "%.1f"|format(row.uwl) }}%
-    </div>
+                            <div style=" color: #c27c00; font-size: 12px; margin-bottom: 4px;">
+                            警告：{{ "%.1f"|format(row.lwl) }}～{{ "%.1f"|format(row.uwl) }}%
+                            </div>
+                            {% endif %}
 
-    {% endif %}
+                            {% if row.lcl is not none and row.ucl is not none %}
+                            <div style="color: #1f5fa8;font-size: 12px;">
+                            管制：{{ "%.1f"|format(row.lcl) }}～{{ "%.1f"|format(row.ucl) }}%
+                            </div>
+                            {% endif %}
 
-
-    {% if row.lcl is not none and row.ucl is not none %}
-
-    <div style="
-        color: #1f5fa8;
-        font-size: 12px;
-    ">
-        管制：
-        {{ "%.1f"|format(row.lcl) }}
-        ～
-        {{ "%.1f"|format(row.ucl) }}%
-    </div>
-
-    {% endif %}
-
-</td>                        
+                        </td>                        
 
                         <td style="
                             border: 1px solid #ccc;

@@ -979,3 +979,136 @@ class InstrumentPerformanceControl(Base):
         default=""
     )
 
+
+# ========================================
+# PRM 儀器性能查核歷程
+# ========================================
+class PerformanceMeasurementHistory(Base):
+
+    __tablename__ = "performance_measurement_history"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "analysis_id",
+            "prm_sequence_no",
+            name="uq_prm_analysis_sequence"
+        ),
+    )
+
+    # 資料庫識別
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    # 正式分析紀錄關聯
+    analysis_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("analysis_record.analysis_id"),
+        nullable=False,
+        index=True
+    )
+
+    # 同一分析紀錄內的 PRM 序號
+    prm_sequence_no: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False
+    )
+
+    # 儀器與分析資訊
+    instrument_id: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        index=True
+    )
+
+    method_code: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False
+    )
+
+    category: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False
+    )
+
+    monitor_item: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        index=True
+    )
+
+    performance_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False
+    )
+
+    # PRM 原始量測資料
+    sample_id: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False
+    )
+
+    # PRM 歷程以分析日期管理，不保存時分秒
+    analysis_date: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+        index=True
+    )
+
+    measured_value: Mapped[float] = mapped_column(
+        Numeric(20, 8, asdecimal=False),
+        nullable=False
+    )
+
+    signal_field: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False
+    )
+
+    # 當時使用的管制標準版本
+    control_import_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        nullable=True
+    )
+
+    control_id: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True
+    )
+
+    reference_value: Mapped[Optional[float]] = mapped_column(
+        Numeric(20, 8, asdecimal=False),
+        nullable=True
+    )
+
+    lower_limit: Mapped[Optional[float]] = mapped_column(
+        Numeric(20, 8, asdecimal=False),
+        nullable=True
+    )
+
+    upper_limit: Mapped[Optional[float]] = mapped_column(
+        Numeric(20, 8, asdecimal=False),
+        nullable=True
+    )
+
+    unit: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default=""
+    )
+
+    # 管制判定
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False
+    )
+
+    message: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=""
+    )
+
+

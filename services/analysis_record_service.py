@@ -16,6 +16,10 @@ from models import (
     AnalysisWorkState
 )
 
+from services.performance_history_service import (
+    sync_performance_history
+)
+
 # ========================================
 # 共用轉換
 # ========================================
@@ -1631,7 +1635,17 @@ def save_analysis_record(
         work_state.report_data_json = json.dumps(
             report_data,
             ensure_ascii=False
-        )    
+        )
+
+        # ========================================
+        # PRM Performance History
+        # 與正式分析紀錄使用同一個 Transaction
+        # ========================================
+        sync_performance_history(
+            db=db,
+            analysis_record=record,
+            analysis_state=analysis_state
+        )
 
         db.commit()
 

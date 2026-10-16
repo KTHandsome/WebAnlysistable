@@ -1,0 +1,153 @@
+
+
+{% if prm_results | default([]) %}
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        儀器性能查核（Performance）
+    </h2>
+
+    <div style="overflow-x: auto;">
+
+        <table class="table table-bordered table-sm"
+               style="
+                   width: 100%;
+                   min-width: 760px;
+                   text-align: center;
+                   vertical-align: middle;
+                   border-collapse: collapse;
+               ">
+
+            <thead>
+                <tr>
+                    <th style="width: 110px;">趨勢圖</th>
+                    <th>Sample ID</th>
+                    <th>分析日期</th>
+                    <th>實測值</th>
+                    <th>參考值</th>
+                    <th>管制下限</th>
+                    <th>管制上限</th>
+                    <th>判定</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+            {% for item in prm_results %}
+
+                {% set control = item.get('control') or {} %}
+                {% set status = item.get('status', 'UNDETERMINED') %}
+
+                {% set raw_date = item.get('analysis_datetime', '') or '' %}
+                {% set analysis_date = raw_date[:10] %}
+
+
+<tr style="color: #0284C7; font-weight: 600;">
+
+    <td style="text-align: center;">
+
+        {% if status in ['PASS', 'FAIL'] and control %}
+
+            <button
+                   type="button"
+                   class="btn btn-sm btn-outline-primary prm-trend-button"
+                   data-instrument-id="{{ control.get('instrument_id', '') }}"
+                   data-monitor-item="{{ control.get('monitor_item', '') }}"
+                   data-performance-type="{{ control.get('performance_type', '') }}"
+                   title="查看最近 30 筆性能查核趨勢"
+                   >
+                   查看趨勢圖
+           </button>        
+
+        {% else %}
+
+            <span style="color: #94A3B8;">—</span>
+
+        {% endif %}
+
+    </td>
+
+    <td>
+        {{ item.get('sample_id', '') }}
+    </td>
+
+
+                    <td>
+                        {{ analysis_date }}
+                    </td>
+
+                    <td>
+                        <strong>
+                            {% if item.get('signal_field') == 'AREA_COUNTS'
+                                  and item.get('signal') is not none %}
+                                {{ item.get('signal') | int }}
+                            {% else %}
+                                {{ item.get('signal', '—') }}
+                            {% endif %}
+                        </strong>
+                    </td>
+
+                    <td>
+                        {{ control.get('reference_value', '—') }}
+                    </td>
+
+                    <td>
+                        {{ control.get('lower_limit', '—') }}
+                    </td>
+
+                    <td>
+                        {{ control.get('upper_limit', '—') }}
+                    </td>
+
+                    <td>
+                        {% if status == 'PASS' %}
+
+                            <strong style="color: #15803D;">
+                                合格
+                            </strong>
+
+                        {% elif status == 'FAIL' %}
+
+                            <strong style="color: #DC2626;">
+                                超出管制標準
+                            </strong>
+
+                        {% else %}
+
+                            <strong style="color: #B45309;">
+                                無法判定
+                            </strong>
+
+                        {% endif %}
+                    </td>
+
+                </tr>
+
+                {% if status == 'UNDETERMINED' and item.get('message') %}
+
+                <tr>
+                    <td colspan="8"
+                        style="
+                            text-align: center;
+                            color: #B45309;
+                            background-color: #FFF7ED;
+                            padding: 8px;
+                        ">
+                        無法判定原因：
+                        {{ item.get('message') }}
+                    </td>
+                </tr>
+
+                {% endif %}
+
+            {% endfor %}
+
+            </tbody>
+        </table>
+
+    </div>
+
+</div>
+
+{% endif %}

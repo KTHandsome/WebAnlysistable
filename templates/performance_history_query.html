@@ -1,0 +1,191 @@
+﻿{% extends "base.html" %}
+
+{% block title %}
+性能確校查詢 - EACS Web
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">性能確校查詢</h1>
+    <div class="page-subtitle">
+        查詢儀器性能查核歷程與管制結果。
+    </div>
+</div>
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">查詢條件</h2>
+
+    <form method="get"
+          action="{{ url_for('performance_history') }}">
+
+        <div class="eacs-form-grid">
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label">儀器編號</label>
+                <input
+                    type="text"
+                    name="instrument_id"
+                    class="eacs-form-control"
+                    value="{{ filters.instrument_id }}"
+                    placeholder="例如：A0087-02">
+            </div>
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label">檢測類別</label>
+                <select name="category"
+                        class="eacs-form-control">
+                    <option value="">全部</option>
+                    {% for code, name in [
+                        ('D', '飲用水'),
+                        ('W', '水質'),
+                        ('G', '地下水')
+                    ] %}
+                    <option value="{{ code }}"
+                        {% if filters.category == code %}selected{% endif %}>
+                        {{ code }} - {{ name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label">管制項目</label>
+                <input
+                    type="text"
+                    name="monitor_item"
+                    class="eacs-form-control"
+                    value="{{ filters.monitor_item }}"
+                    placeholder="例如：TOC/W">
+            </div>
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label">判定結果</label>
+                <select name="status"
+                        class="eacs-form-control">
+                    <option value="">全部</option>
+                    <option value="PASS"
+                        {% if filters.status == 'PASS' %}selected{% endif %}>
+                        合格
+                    </option>
+                    <option value="FAIL"
+                        {% if filters.status == 'FAIL' %}selected{% endif %}>
+                        超出管制標準
+                    </option>
+                    <option value="UNDETERMINED"
+                        {% if filters.status == 'UNDETERMINED' %}selected{% endif %}>
+                        無法判定
+                    </option>
+                </select>
+            </div>
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label">分析日期起</label>
+                <input type="date"
+                       name="analysis_date_start"
+                       class="eacs-form-control"
+                       value="{{ filters.analysis_date_start }}">
+            </div>
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label">分析日期迄</label>
+                <input type="date"
+                       name="analysis_date_end"
+                       class="eacs-form-control"
+                       value="{{ filters.analysis_date_end }}">
+            </div>
+
+        </div>
+
+        <div style="
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 24px;
+        ">
+            <button type="submit"
+                    class="eacs-button eacs-button-primary">
+                查詢
+            </button>
+
+            <a href="{{ url_for('performance_history') }}"
+               class="eacs-button eacs-button-secondary">
+                清除條件
+            </a>
+        </div>
+
+    </form>
+
+</div>
+
+{% if error_message %}
+<div class="analysis-message analysis-message-danger">
+    {{ error_message }}
+</div>
+{% endif %}
+
+{% if searched %}
+
+<div class="eacs-card">
+
+    <h2 class="eacs-card-title">
+        查詢結果（{{ rows|length }} 筆）
+    </h2>
+
+    <div class="eacs-table-wrap">
+
+        <table class="eacs-table">
+            <thead>
+                <tr>
+                    <th>分析日期</th>
+                    <th>儀器編號</th>
+                    <th>檢測類別</th>
+                    <th>管制項目</th>
+                    <th>實測值</th>
+                    <th>參考值</th>
+                    <th>管制下限</th>
+                    <th>管制上限</th>
+                    <th>判定</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.analysis_date }}</td>
+                    <td>{{ row.instrument_id }}</td>
+                    <td>{{ row.category }}</td>
+                    <td>{{ row.monitor_item }}</td>
+                    <td>{{ row.measured_value }}</td>
+                    <td>{{ row.reference_value if row.reference_value is not none else '—' }}</td>
+                    <td>{{ row.lower_limit if row.lower_limit is not none else '—' }}</td>
+                    <td>{{ row.upper_limit if row.upper_limit is not none else '—' }}</td>
+                    <td>
+                        {% if row.status == 'PASS' %}
+                            <strong style="color: #15803D;">合格</strong>
+                        {% elif row.status == 'FAIL' %}
+                            <strong style="color: #DC2626;">超出管制標準</strong>
+                        {% else %}
+                            <strong style="color: #B45309;">無法判定</strong>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9"
+                        style="text-align: center; padding: 20px;">
+                        查無符合條件的性能查核紀錄。
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+    </div>
+
+</div>
+
+{% endif %}
+
+{% endblock %}

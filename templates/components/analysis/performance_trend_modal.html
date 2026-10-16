@@ -1,0 +1,388 @@
+<!-- ========================================
+     PRM Performance Trend Modal
+     ======================================== -->
+
+<div id="prmTrendModal"
+     class="prm-trend-overlay"
+     hidden>
+
+    <div class="prm-trend-dialog"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="prmTrendTitle">
+
+        <div class="prm-trend-header">
+            <h3 id="prmTrendTitle">儀器性能查核趨勢</h3>
+
+            <button type="button"
+                    id="prmTrendClose"
+                    class="btn btn-sm btn-outline-secondary">
+                關閉
+            </button>
+        </div>
+
+        <div class="prm-trend-body">
+
+            <div id="prmTrendInfo"
+                 class="prm-trend-info"></div>
+
+            <div id="prmTrendMessage"
+                 class="prm-trend-message"
+                 role="status"></div>
+
+            <div class="prm-trend-chart-wrap">
+                <canvas id="prmTrendChart"></canvas>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<style>
+.prm-trend-overlay[hidden] {
+    display: none !important;
+}
+
+.prm-trend-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1055;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.55);
+    padding: 20px;
+}
+
+.prm-trend-dialog {
+    width: min(980px, 100%);
+    max-height: 90vh;
+    overflow-y: auto;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.25);
+}
+
+.prm-trend-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 24px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.prm-trend-header h3 {
+    margin: 0;
+    font-size: 19px;
+}
+
+.prm-trend-body {
+    padding: 20px 24px 26px;
+}
+
+.prm-trend-info {
+    margin-bottom: 12px;
+    font-size: 14px;
+    color: #475569;
+}
+
+.prm-trend-message {
+    margin-bottom: 12px;
+    color: #475569;
+}
+
+.prm-trend-chart-wrap {
+    position: relative;
+    width: 100%;
+    height: 410px;
+}
+
+@media (max-width: 640px) {
+    .prm-trend-body {
+        padding: 14px;
+    }
+
+    .prm-trend-chart-wrap {
+        height: 300px;
+    }
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    let prmTrendChart = null;
+    let activeController = null;
+
+    function getElement(id) {
+        return document.getElementById(id);
+    }
+
+    function closePrmTrend() {
+        const modal = getElement("prmTrendModal");
+
+        if (activeController) {
+            activeController.abort();
+            activeController = null;
+        }
+
+        if (prmTrendChart) {
+            prmTrendChart.destroy();
+            prmTrendChart = null;
+        }
+
+        modal.hidden = true;
+    }
+
+    async function openPrmTrend(button) {
+        const modal = getElement("prmTrendModal");
+        const info = getElement("prmTrendInfo");
+        const message = getElement("prmTrendMessage");
+        const chartWrap = modal.querySelector(
+            ".prm-trend-chart-wrap"
+        );
+
+        const instrumentId = button.dataset.instrumentId || "";
+        const monitorItem = button.dataset.monitorItem || "";
+        const performanceType = button.dataset.performanceType || "";
+
+        if (!instrumentId || !monitorItem || !performanceType) {
+            window.alert("缺少 PRM 趨勢查詢條件。");
+            return;
+        }
+
+        if (prmTrendChart) {
+            prmTrendChart.destroy();
+            prmTrendChart = null;
+        }
+
+        if (activeController) {
+            activeController.abort();
+        }
+
+        const controller = new AbortController();
+        activeController = controller;
+
+        info.textContent =
+            "儀器：" + instrumentId +
+            "　管制項目：" + monitorItem +
+            "　查核類型：" + performanceType;
+
+        message.textContent = "正在讀取最近 30 筆性能查核紀錄…";
+        chartWrap.hidden = true;
+        modal.hidden = false;
+
+        const params = new URLSearchParams({
+            instrument_id: instrumentId,
+            monitor_item: monitorItem,
+            performance_type: performanceType
+        });
+
+        try {
+            const response = await fetch(
+                "/analysis/performance-trend?" + params.toString(),
+                {
+                    credentials: "same-origin",
+                    signal: controller.signal
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error("查詢失敗（HTTP " + response.status + "）");
+            }
+
+            const payload = await response.json();
+
+            if (!payload.success || !payload.data) {
+                throw new Error(
+                    payload.message || "無法取得 PRM 歷程資料。"
+                );
+            }
+
+            const points = payload.data.points || [];
+
+            if (points.length === 0) {
+                message.textContent = "目前沒有可顯示的有效 PRM 歷程。";
+                return;
+            }
+
+            if (typeof Chart === "undefined") {
+                throw new Error(
+                    "圖表套件未載入，請檢查網路連線。"
+                );
+            }
+
+            message.textContent =
+                "最近 " + points.length + " 筆性能查核紀錄";
+            chartWrap.hidden = false;
+
+            // 單筆歷程時增設「非實測」的繪圖位置，讓三條標準線
+            // 能跨越圖表；不額外產生日期或實測紀錄。
+            const isSinglePoint = points.length === 1;
+            const labels = points.map(p => p.analysis_date);
+            if (isSinglePoint) {
+                labels.push("");
+            }
+
+            function seriesFor(field) {
+                const values = points.map(p => p[field]);
+                if (isSinglePoint) {
+                    values.push(values[0]);
+                }
+                return values;
+            }
+
+            const measuredValues = points.map(p => p.measured_value);
+            const measuredRadii = points.map(
+                p => p.status === "FAIL" ? 7 : 5
+            );
+            const measuredColors = points.map(
+                p => p.status === "FAIL" ? "#dc2626" : "#2563eb"
+            );
+            if (isSinglePoint) {
+                measuredValues.push(null);
+                measuredRadii.push(0);
+                measuredColors.push("transparent");
+            }
+
+            const chartData = {
+                labels: labels,
+                datasets: [
+                    {
+                        label: "實測值",
+                        data: measuredValues,
+                        borderColor: "#2563eb",
+                        backgroundColor: "#2563eb",
+                        borderWidth: 2.5,
+                        pointRadius: measuredRadii,
+                        pointBackgroundColor: measuredColors,
+                        tension: 0.15
+                    },
+                    {
+                        label: "管制上限",
+                        data: seriesFor("upper_limit"),
+                        borderColor: "#dc2626",
+                        borderDash: [6, 4],
+                        borderWidth: 1.5,
+                        pointRadius: 0
+                    },
+                    {
+                        label: "參考值",
+                        data: seriesFor("reference_value"),
+                        borderColor: "#16a34a",
+                        borderDash: [4, 4],
+                        borderWidth: 1.5,
+                        pointRadius: 0
+                    },
+                    {
+                        label: "管制下限",
+                        data: seriesFor("lower_limit"),
+                        borderColor: "#ea580c",
+                        borderDash: [6, 4],
+                        borderWidth: 1.5,
+                        pointRadius: 0
+                    }
+                ]
+            };
+
+            prmTrendChart = new Chart(
+                getElement("prmTrendChart"),
+                {
+                    type: "line",
+                    data: chartData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: "index",
+                            intersect: false
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    afterBody: function (items) {
+                                        if (!items.length) {
+                                            return [];
+                                        }
+                                        const index = items[0].dataIndex;
+                                        const p = points[index];
+                                        // 補出的繪圖端點沒有對應的歷程紀錄。
+                                        if (!p) {
+                                            return [];
+                                        }
+                                        return [
+                                            "判定：" + p.status,
+                                            "管制編號：" + (p.control_id || "")
+                                        ];
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: "原始量測訊號"
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: "分析日期"
+                                }
+                            }
+                        }
+                    }
+                }
+            );
+
+        } catch (error) {
+            if (error.name !== "AbortError") {
+                message.textContent = error.message;
+                chartWrap.hidden = true;
+            }
+        } finally {
+            if (activeController === controller) {
+                activeController = null;
+            }
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        const modal = getElement("prmTrendModal");
+        const closeButton = getElement("prmTrendClose");
+
+        if (!modal || !closeButton) {
+            return;
+        }
+
+        document.addEventListener("click", function (event) {
+            const button = event.target.closest(
+                ".prm-trend-button"
+            );
+
+            if (button && !button.disabled) {
+                openPrmTrend(button);
+            }
+        });
+
+        closeButton.addEventListener("click", closePrmTrend);
+
+        modal.addEventListener("click", function (event) {
+            if (event.target === modal) {
+                closePrmTrend();
+            }
+        });
+
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && !modal.hidden) {
+                closePrmTrend();
+            }
+        });
+    });
+})();
+</script>
