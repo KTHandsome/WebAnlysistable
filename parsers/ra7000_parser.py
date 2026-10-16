@@ -328,174 +328,91 @@ def extract_calibration_value(
 
         return None
 
-
-def parse_std_row(
-    line
-):
+def parse_std_row(line):
     """
-    RA-7000A STD TABLE：
+    解析 RA-7000A STD TABLE。
 
-    No.
-    SMP NO.
-    STD ug/L
-    SVOL mL
-    CVOL mL
-    DVOL mL
-    STD ng
-    AREA
-    MEAS ng
-    DEV %
-    MEAS TIME
-    NOTE
+    支援 PDF 數值欄位黏連格式，例如：
+    110.0005.0005.0005.000 0.000 ...
     """
 
-    tokens = line.split()
+    line = " ".join(line.strip().split())
 
-    date_index = (
-        find_date_token_index(
-            tokens
-        )
+    # 先找量測日期時間
+    datetime_match = re.search(
+        r"(\d{4}/\d{2}/\d{2})\s+(\d{2}:\d{2})",
+        line
     )
 
-    if date_index is None:
+    if not datetime_match:
         return None
 
-    # 日期前應有：
-    #
-    # No SMP STD SVOL CVOL DVOL
-    # STD_ng AREA MEAS DEV
-    #
-    prefix = (
-        tokens[:date_index]
+    measure_datetime = (
+        datetime_match.group(1)
+        + " "
+        + datetime_match.group(2)
     )
 
-    if len(prefix) != 10:
+    data_part = line[:datetime_match.start()].strip()
+    note = line[datetime_match.end():].strip()
+
+    # 前面兩個整數為 No. 與 SMP NO.
+    # 本版支援同為一位數的 STD 1~9
+    match = re.match(
+        r"^(\d)(\d)"
+        r"(\d+\.\d{3})"
+        r"(\d+\.\d{3})"
+        r"(\d+\.\d{3})"
+        r"(\d+\.\d{3})"
+        r"\s*"
+        r"(\d+\.\d{3})"
+        r"\s+"
+        r"(\d+\.\d{6})"
+        r"\s+"
+        r"(\d+\.\d{4})"
+        r"\s+"
+        r"(-|\d+\.\d+)$",
+        data_part
+    )
+
+    if not match:
         return None
 
     try:
+        row_no = int(match.group(1))
+        smp_no = int(match.group(2))
+        std_concentration = float(match.group(3))
+        svol = float(match.group(4))
+        cvol = float(match.group(5))
+        dvol = float(match.group(6))
+        std_ng = float(match.group(7))
+        area = float(match.group(8))
+        meas_ng = float(match.group(9))
 
-        row_no = int(
-            prefix[0]
+        dev_text = match.group(10)
+
+        dev_percent = (
+            None
+            if dev_text == "-"
+            else float(dev_text)
         )
-
-        smp_no = int(
-            prefix[1]
-        )
-
-        std_concentration = float(
-            prefix[2]
-        )
-
-        svol = float(
-            prefix[3]
-        )
-
-        cvol = float(
-            prefix[4]
-        )
-
-        dvol = float(
-            prefix[5]
-        )
-
-        std_ng = float(
-            prefix[6]
-        )
-
-        area = float(
-            prefix[7]
-        )
-
-        meas_ng = float(
-            prefix[8]
-        )
-
-        dev_text = (
-            prefix[9]
-        )
-
-        if dev_text == "-":
-
-            dev_percent = None
-
-        else:
-
-            dev_percent = float(
-                dev_text
-            )
 
     except ValueError:
-
         return None
 
-    measure_date = (
-        tokens[date_index]
-    )
-
-    measure_time = ""
-
-    if len(tokens) > (
-        date_index + 1
-    ):
-
-        measure_time = (
-            tokens[
-                date_index + 1
-            ]
-        )
-
-    note = ""
-
-    if len(tokens) > (
-        date_index + 2
-    ):
-
-        note = " ".join(
-            tokens[
-                date_index + 2:
-            ]
-        )
-
     return {
-        "row_no":
-            row_no,
-
-        "smp_no":
-            smp_no,
-
-        "std_concentration":
-            std_concentration,
-
-        "svol":
-            svol,
-
-        "cvol":
-            cvol,
-
-        "dvol":
-            dvol,
-
-        "std_ng":
-            std_ng,
-
-        "area":
-            area,
-
-        "meas_ng":
-            meas_ng,
-
-        "dev_percent":
-            dev_percent,
-
-        "measure_datetime":
-            (
-                measure_date
-                + " "
-                + measure_time
-            ).strip(),
-
-        "note":
-            note
+        "row_no": row_no,
+        "smp_no": smp_no,
+        "std_concentration": std_concentration,
+        "svol": svol,
+        "cvol": cvol,
+        "dvol": dvol,
+        "std_ng": std_ng,
+        "area": area,
+        "meas_ng": meas_ng,
+        "dev_percent": dev_percent,
+        "measure_datetime": measure_datetime,
+        "note": note
     }
 
 def parse_sample_row(
@@ -574,49 +491,51 @@ def parse_sample_row(
     # 前面數字 = No. + SMP NO.
     # ========================================
 
-    prefix_match = re.match(
-        r"^(\d+)(.*)$",
+    expected_row_text = str(expected_row_no)
+
+    # 優先辨識分開的編號：
+    # 1 21 PFM
+    spaced = re.match(
+        r"^(\d+)\s+(\d+)\s+(.+)$",
         data_part
     )
 
-    if not prefix_match:
-        return None
-
-    number_prefix = (
-        prefix_match.group(1)
-    )
-
-    remainder = (
-        prefix_match.group(2)
-        .strip()
-    )
-
-    expected_row_text = str(
-        expected_row_no
-    )
-
-    if not number_prefix.startswith(
-        expected_row_text
+    if (
+        spaced
+        and spaced.group(1) == expected_row_text
     ):
-        return None
+        smp_no_text = spaced.group(2)
+        remainder = spaced.group(3).strip()
 
-    smp_no_text = (
-        number_prefix[
-            len(expected_row_text):
-        ]
-    )
-
-    if not smp_no_text:
-        return None
-
-    try:
-
-        smp_no = int(
-            smp_no_text
+    else:
+        # 相容舊版數字黏連格式：
+        # 121PFM
+        joined = re.match(
+            r"^(\d+)(.*)$",
+            data_part
         )
 
-    except ValueError:
+        if (
+            not joined
+            or not joined.group(1).startswith(
+                expected_row_text
+            )
+        ):
+            return None
 
+        smp_no_text = joined.group(1)[
+            len(expected_row_text):
+        ]
+
+        remainder = joined.group(2).strip()
+
+        if not smp_no_text:
+            return None
+
+    try:
+        smp_no = int(smp_no_text)
+
+    except ValueError:
         return None
 
     # ========================================
@@ -667,7 +586,7 @@ def parse_sample_row(
             r"(\d+\.\d{3})"
             r"\s*"
             r"(\d+\.\d{3})"
-            r"\s+"
+            r"\s*"
             r"(\d+\.\d{6})"
             r"\s+"
             r"(\d+\.\d{4})"

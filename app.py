@@ -5792,6 +5792,11 @@ def analysis_w330():
                          )
                      )
 
+                      # ========================================
+                      # Hg PFM 原始資料暫存
+                      # ========================================
+                      hg_pfm_rows = []
+
                       for raw_row in raw_sample_rows:
 
                         signal = raw_row.get(
@@ -5815,6 +5820,25 @@ def analysis_w330():
                                  sample_id.upper()
                             )
 
+                        # ========================================
+                        # Hg PFM 原始訊號分流
+                        # 不參與樣品濃度及 QA/QC 計算
+                        # ========================================
+
+                        if sample_id_upper in {"PFM", "PERFORMANCE"}:
+
+                           hg_pfm_rows.append({
+                             "sample_id": sample_id,
+                             "analysis_datetime": raw_row.get(
+                             "measure_datetime"
+                              ),
+                             "signal": raw_row.get("area"),
+                             "signal_field": "AREA",
+                             "analyte": "Hg",
+                             "sequence_no": raw_row.get("row_no")
+                              })
+
+                           continue
 
                         # --------------------------------
                         # 共用 QA/QC Role 判斷
@@ -6023,221 +6047,324 @@ def analysis_w330():
                           }
                        ) 
 
-                        # ========================================
-                        # W330 QA/QC 預設添加濃度
-                        # 與 W434 使用相同方法設定
-                        # ========================================
+                      # ========================================
+                      # Hg PFM V2.1 管制標準配對與判定
+                      # 使用 RA-7000A 原始 AREA
+                      # ========================================
 
-                        if method_data and sample_qaqc_rows:
+                      hg_pfm_results = []
 
-                           spike_field_by_role = {
-                           "ICV": "ICV_SPIKE_CONC",
-                           "QC": "QC_SPIKE_CONC",
-                           "CCV": "CCV_SPIKE_CONC",
-                           "MS": "MS_SPIKE_CONC",
-                           "MSD": "MS_SPIKE_CONC"
-                           }
+                      for pfm_row in hg_pfm_rows:
 
-                           for row in sample_qaqc_rows:
+                          result = {
+                                    "sample_id": pfm_row.get("sample_id"),
+                                    "analysis_datetime": pfm_row.get(
+                                    "analysis_datetime"
+                                   ),
+                                    "signal": pfm_row.get("signal"),
+                                    "signal_field": pfm_row.get("signal_field"),
+                                    "status": "UNDETERMINED",
+                                    "message": "",
+                                    "control": None
+                          }
 
-                            role = str(
-                                row.get(
-                                 "role",
-                                  ""
-                                 )
-                                 or ""
-                              ).strip().upper()
+                          try:
+                              from datetime import datetime
+                              import math
 
-                            field_name = (
-                               spike_field_by_role.get(
-                                 role
-                                )
+                              signal = float(pfm_row.get("signal"))
+
+                              if not math.isfinite(signal):
+                                 raise ValueError(
+                                 "Hg PFM AREA 不是有效數值。"
                               )
 
-                            if field_name:
-
-                               row[
-                                 "spike_concentration"
-                                ] = str(
-                             method_data.get(
-                              field_name,
-                             ""
-                              )
-                              or ""
+                              raw_datetime = str(
+                                 pfm_row.get("analysis_datetime") or ""
                               ).strip()
 
-                        # ========================================
-                        # W330 分析批次
-                        # 使用金屬分析共用切批邏輯
-                        # ========================================
+                              analysis_date = datetime.strptime(
+                              raw_datetime,
+                              "%Y/%m/%d %H:%M"
+                              ).date()
 
-                        if sample_qaqc_rows:
+                              instrument_id = str(
+                              form_data.get("instrument_id") or ""
+                              ).strip()
 
-                           (
-                              included_batches,
-                               pre_batch_rows
-                            ) = split_analysis_batches(
-                                sample_qaqc_rows
-                            )  
+                              if not instrument_id:
+                                 raise ValueError(
+                                 "Hg PFM 尚未選擇儀器。"
+                              )
 
-                        qaqc_conc_factor = 1.0
+                              control = find_active_performance_control(
+                                  session_factory=SessionLocal,
+                                  instrument_id=instrument_id,
+                                  monitor_item="Hg",
+                                  performance_type="CAL_HIGH_SIGNAL",
+                                  analysis_date=analysis_date
+                               )
 
-                        if method_data:
+                              lower_limit = float(control["lower_limit"])
+                              upper_limit = float(control["upper_limit"])
+
+                              if not (
+                                 math.isfinite(lower_limit)
+                                 and math.isfinite(upper_limit)
+                                 and lower_limit <= upper_limit
+                              ):
+                                 raise ValueError(
+                                 "Hg PFM 管制上下限設定異常。"
+                              )
+
+                              passed = lower_limit <= signal <= upper_limit
+
+                              result["status"] = (
+                                "PASS" if passed else "FAIL"
+                              )
+
+                              result["control"] = control
+
+                              result["message"] = (
+                              "符合管制標準"
+                                if passed
+                                    else "超出管制標準"
+                                 )
+
+                          except (
+                                 ValueError,
+                                  TypeError,
+                                 KeyError,
+                                 PerformanceControlQueryError
+                          ) as ex:
+
+                            result["message"] = str(ex)
+
+                          hg_pfm_results.append(result)
+
+                      # ========================================
+                      # W330 QA/QC 預設添加濃度
+                      # 與 W434 使用相同方法設定
+                      # ========================================
+
+                      if method_data and sample_qaqc_rows:
+
+                         spike_field_by_role = {
+                         "ICV": "ICV_SPIKE_CONC",
+                         "QC": "QC_SPIKE_CONC",
+                         "CCV": "CCV_SPIKE_CONC",
+                         "MS": "MS_SPIKE_CONC",
+                         "MSD": "MS_SPIKE_CONC"
+                         }
+
+                         for row in sample_qaqc_rows:
+
+                          role = str(
+                              row.get(
+                               "role",
+                                ""
+                               )
+                               or ""
+                            ).strip().upper()
+
+                          field_name = (
+                             spike_field_by_role.get(
+                               role
+                              )
+                            )
+
+                          if field_name:
+
+                             row[
+                               "spike_concentration"
+                              ] = str(
+                           method_data.get(
+                            field_name,
+                           ""
+                            )
+                            or ""
+                            ).strip()
+
+                      # ========================================
+                      # W330 D / W 分析類別過濾
+                      # 沿用 TOC 已驗證的共用批次篩選
+                      # ========================================
+
+                      if sample_qaqc_rows:
+
+                          selected_exam_no = ""
+
+                          if control_data:
+                             selected_exam_no = str(
+                             control_data.get("EXAMNO") or ""
+                          ).strip()
+
+                          if not selected_exam_no and method_data:
+                             selected_exam_no = str(
+                             method_data.get("EXAMNO") or ""
+                          ).strip()
+
+                          if not selected_exam_no:
+                             raise ValueError(
+                             "W330 缺少 EXAMNO，無法確認 D/W 分析類別。"
+                             )
+
+                          (
+                             sample_qaqc_rows,
+                             excluded_rows,
+                             included_batches
+                             ) = filter_batches_by_exam_no(
+                             sample_qaqc_rows,
+                             selected_exam_no
+                             )
+
+                          pre_batch_rows = [] 
+
+                      qaqc_conc_factor = 1.0
+
+                      if method_data:
+
+                         try:
+
+                              qaqc_conc_factor = float(
+                               method_data.get(
+                                "QAQC_CONC_FACTOR",
+                                "1"
+                                )
+                                or "1"
+                               )
+
+                         except (
+                                     TypeError,
+                                       ValueError
+                                   ):
+
+                                 qaqc_conc_factor = 1.0   
+
+                      # ========================================
+                      # W330 QA/QC 計算單位正規化
+                      # 畫面濃度：ug/L
+                      # QA/QC 管制資料：mg/L
+                      # ========================================
+
+                      qaqc_batches = []
+
+                      for batch in included_batches:
+
+                          qaqc_batch = batch.copy()
+
+                          qaqc_rows = []
+
+                          for row in batch.get(
+                            "rows",
+                              []
+                          ):
+
+                           qaqc_row = row.copy()
+
+                           concentration = (
+                             qaqc_row.get(
+                             "calculated_concentration"
+                             )
+                           )
 
                            try:
 
-                                qaqc_conc_factor = float(
-                                 method_data.get(
-                                  "QAQC_CONC_FACTOR",
-                                  "1"
-                                  )
-                                  or "1"
-                                 )
+                                if concentration not in {
+                                    None,
+                                    ""
+                                 }:
+
+                                    qaqc_row[
+                                     "calculated_concentration"
+                                  ] = (
+                                     float(concentration)
+                                    * qaqc_conc_factor
+                                   )
 
                            except (
-                                       TypeError,
-                                         ValueError
-                                     ):
+                                   TypeError,
+                                   ValueError
+                                  ):
 
-                                   qaqc_conc_factor = 1.0   
+                               pass
 
-                        # ========================================
-                        # W330 QA/QC 計算單位正規化
-                        # 畫面濃度：ug/L
-                        # QA/QC 管制資料：mg/L
-                        # ========================================
-
-                        qaqc_batches = []
-
-                        for batch in included_batches:
-
-                            qaqc_batch = batch.copy()
-
-                            qaqc_rows = []
-
-                            for row in batch.get(
-                              "rows",
-                                []
-                            ):
-
-                             qaqc_row = row.copy()
-
-                             concentration = (
-                               qaqc_row.get(
-                               "calculated_concentration"
+                           qaqc_concentration = (
+                              qaqc_row.get(
+                               "qaqc_concentration"
+                                    )
                                )
-                             )
 
-                             try:
+                           try:
 
-                                  if concentration not in {
-                                      None,
-                                      ""
-                                   }:
+                               if qaqc_concentration not in {
+                                       None,
+                                       ""
+                                }:
 
-                                      qaqc_row[
-                                       "calculated_concentration"
-                                    ] = (
-                                       float(concentration)
-                                      * qaqc_conc_factor
-                                     )
+                                   qaqc_row[
+                                      "qaqc_concentration"
+                                      ] = (
+                                       float(
+                                        qaqc_concentration
+                                       )
+                                     * qaqc_conc_factor
+                                       )
 
-                             except (
-                                     TypeError,
-                                     ValueError
-                                    ):
+                           except (
+                                   TypeError,
+                                    ValueError
+                                   ):
 
-                                 pass
+                                       pass                             
 
-                             qaqc_concentration = (
-                                qaqc_row.get(
-                                 "qaqc_concentration"
-                                      )
-                                 )
+                           qaqc_rows.append(
+                              qaqc_row
+                           )
 
-                             try:
+                          qaqc_batch[
+                               "rows"
+                                ] = qaqc_rows
 
-                                 if qaqc_concentration not in {
-                                         None,
-                                         ""
-                                  }:
+                          qaqc_batches.append(
+                                qaqc_batch
+                                ) 
 
-                                     qaqc_row[
-                                        "qaqc_concentration"
-                                        ] = (
-                                         float(
-                                          qaqc_concentration
-                                         )
-                                       * qaqc_conc_factor
-                                         )
+                      # ========================================
+                      # W330 QA/QC 檢核
+                      # ========================================
 
-                             except (
-                                     TypeError,
-                                      ValueError
-                                     ):
+                      qaqc_results = []
 
-                                         pass                             
+                      if (
+                                 qaqc_batches
+                              and control_data
+                      ):
 
-                             qaqc_rows.append(
-                                qaqc_row
-                             )
+                          qaqc_results = (
+                                build_qaqc_check_results(
+                                qaqc_batches,
+                                control_data,
+                                cc_relative_error_limit=20.0,
+                                qdl_value=qdl_value
+                                  )
+                          )                            
 
-                            qaqc_batch[
-                                 "rows"
-                                  ] = qaqc_rows
-
-                            qaqc_batches.append(
-                                  qaqc_batch
-                                  ) 
-
-                        # ========================================
-                        # W330 QA/QC 檢核
-                        # ========================================
-
-                        qaqc_results = []
-
-                        if (
-                                   qaqc_batches
-                                and control_data
-                        ):
-
-                            qaqc_results = (
-                                  build_qaqc_check_results(
-                                  qaqc_batches,
-                                  control_data,
-                                  cc_relative_error_limit=20.0,
-                                  qdl_value=qdl_value
-                                    )
-                            )                            
-
-                            save_analysis_state(
-                                "W330_CURRENT",
-                                 {
-                                     "ra7000_data":
-                                          ra7000_data,
-                                     
-                                     "calibration_rows":
-                                          calibration_rows,
-
-                                     "calibration_result":
-                                          calibration_result,
-
-                                     "sample_qaqc_rows":
-                                          sample_qaqc_rows,
-
-                                     "included_batches":
-                                          included_batches,
-
-                                     "qaqc_results":
-                                          qaqc_results,
-
-                                      "qdl_value":
-                                           qdl_value,
-
-                                      "uploaded_filename":
-                                           uploaded_filename
-                                        }
-                                    )
+                          save_analysis_state(
+                              "W330_CURRENT",
+                               {                                                                         
+                                   "ra7000_data":ra7000_data,
+                                   "prm_rows":hg_pfm_rows,
+                                   "prm_results":hg_pfm_results, 
+                                   "calibration_rows":calibration_rows,
+                                   "calibration_result":calibration_result,
+                                   "sample_qaqc_rows":sample_qaqc_rows,
+                                   "included_batches":included_batches,
+                                   "qaqc_results":qaqc_results,
+                                    "qdl_value":qdl_value,
+                                    "uploaded_filename":uploaded_filename
+                              }
+                          )
                             
 
             except Exception as ex:

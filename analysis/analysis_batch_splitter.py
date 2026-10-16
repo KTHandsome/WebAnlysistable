@@ -300,6 +300,36 @@ def split_analysis_batches(rows):
         pre_batch_rows
     )
 
+def get_row_analysis_category(row, batch_rows):
+    role = str(row.get("role") or "").strip().upper()
+
+    category = detect_formal_sample_category(
+        row.get("sample_id", "")
+    )
+
+    if category is not None:
+        return category
+
+    if role not in {"DUP", "MS", "MSD"}:
+        return category
+
+    # 無類別前綴的 DUP-2 / MS-2 / MSD-2：
+    # 向前找同一批次最近一筆正式樣品
+    for index, candidate in enumerate(batch_rows):
+        if candidate is not row:
+            continue
+
+        for previous in reversed(batch_rows[:index]):
+            if str(previous.get("role") or "").strip().upper() != "SAMPLE":
+                continue
+
+            return detect_formal_sample_category(
+                previous.get("sample_id", "")
+            )
+
+        break
+
+    return None
 
 def filter_batches_by_exam_no(
     rows,
@@ -403,14 +433,7 @@ def filter_batches_by_exam_no(
 
                    continue
 
-                sample_category = (
-                    detect_formal_sample_category(
-                        row.get(
-                            "sample_id",
-                            ""
-                        )
-                    )
-                )
+                sample_category = get_row_analysis_category(row, batch["rows"])
 
                 if sample_category == selected_category:
 
@@ -513,14 +536,7 @@ def filter_batches_by_exam_no(
 
                     continue
 
-                sample_category = (
-                    detect_formal_sample_category(
-                        row.get(
-                            "sample_id",
-                            ""
-                        )
-                    )
-                )
+                sample_category = get_row_analysis_category(row, batch["rows"])
 
                 # 正式樣品必須明確屬於目前分析類別
                 if sample_category == selected_category:
