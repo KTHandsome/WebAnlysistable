@@ -162,6 +162,137 @@ API：
 - 正式環境、不同方法與不同儀器性能模式的完整回歸測試。
 
 
+## 2.8 PFM V2.1 儀器性能確校事件與分析關聯（2026-10-16）
+
+### 2.8.1 核心設計
+
+PFM V2.1 採用「獨立性能確校事件 + 正式分析關聯」架構。
+
+- `PerformanceMeasurementHistory`：保存一次實際儀器性能確校事件。
+- `PerformanceAnalysisLink`：建立性能確校事件與正式分析紀錄的多對多關聯。
+- `AnalysisRecord`：正式保存 D／W／G `category`，供分類查詢與管理。
+- `AnalysisWorkState`：保留表單工作狀態與 PFM 原始解析資料。
+
+同一次性能確校可供不同檢測類別的正式分析紀錄共用，不因 D／W／G 類別分別建立 Event。
+
+PFM Event 不保存 `category` 或 `analysis_id`；類別由關聯的 `AnalysisRecord.category` 取得。
+
+### 2.8.2 PFM Event 識別原則
+
+目前以以下欄位判斷同一次性能確校事件：
+
+- `instrument_id`
+- `monitor_item`
+- `performance_type`
+- `analysis_datetime`
+
+其中 `analysis_datetime` 必須取自 PDF 原始性能確校量測時間，不得使用正式儲存時間代替。
+
+同一天不同時間的性能確校應建立不同 Event。
+
+如果識別欄位相同，但實測值、方法或管制資料不一致，系統應拒絕當作相同事件，避免錯誤共用。
+
+### 2.8.3 分析關聯與刪除規則
+
+`PerformanceAnalysisLink` 使用：
+
+- `performance_id`：對應 PFM Event。
+- `analysis_id`：對應正式分析紀錄。
+- `prm_sequence_no`：對應分析工作狀態內的性能確校序號；保留既有程式命名。
+
+刪除正式分析紀錄時：
+
+1. 刪除該分析紀錄對應的 Link。
+2. 若 Event 仍被其他正式分析紀錄引用，必須保留。
+3. 只有最後一筆 Link 消失後，才可清除該無其他引用的 Event。
+4. 保留正式分析紀錄刪除稽核資料。
+
+未來獨立於正式分析紀錄的設備維護性能確校，需另行設計其保留及生命週期規則。
+
+### 2.8.4 實際驗證資料
+
+測試檔案：`TOC1151013.pdf`
+
+- 儀器：`A0087-02`
+- 管制項目：`TOC`
+- 性能類型：`CAL_HIGH_SIGNAL`
+- PDF 分析時間：`2026-10-13 17:12:00`
+- 實測值：`210635`
+- 參考值：`204718`
+- 管制下限：`190221`
+- 管制上限：`219214`
+- 判定：`PASS`
+
+實際 Flask 正式儲存結果：
+
+- D 類：`AnalysisRecord` ID 3
+- W 類：`AnalysisRecord` ID 4
+- PFM Event：1 筆
+- PFM Link：2 筆
+- 歷程顯示類別：`D、W`
+
+刪除驗證：
+
+- 刪除 D 類後：Event 仍為 1 筆，歷程類別改為 W。
+- 刪除最後的 W 類後：歷程查詢為 0 筆。
+- SQLAlchemy 刪除服務測試：PASS。
+
+### 2.8.5 查詢與趨勢功能
+
+`performance_history_query_service.py`：
+
+- 類別篩選直接使用 `AnalysisRecord.category`。
+- 不再依賴解析 `AnalysisWorkState.form_data_json` 取得類別。
+- 同一 Event 即使有多筆分析關聯，查詢仍僅回傳一筆。
+- 可依儀器、測項、判定結果及 PDF 分析日期範圍篩選。
+- 類別顯示合併所有實際關聯類別，例如 `D、W`。
+
+`performance_trend_service.py`：
+
+- 使用 `analysis_datetime` 排序。
+- 同一實際量測只顯示一個趨勢點。
+- 保留當次實測值、參考值、管制上下限。
+- 單筆量測及無資料查詢均已通過服務測試。
+
+### 2.8.6 已完成測試
+
+| 測試項目 | 結果 |
+|---|---|
+| PFM Event / Link SQLite 模型重建 | PASS |
+| PDF 分析時間解析與錯誤格式檢查 | PASS |
+| 相同 Event 比對及衝突檢查 | PASS |
+| D／W 正式分析儲存 | PASS |
+| D／W 共用 1 Event、2 Links | PASS |
+| 重複同步避免新增 Event | PASS |
+| PFM 獨立歷程查詢 | PASS |
+| D／W／G 類別篩選回歸 | PASS |
+| 日期區間及 PASS／FAIL 篩選 | PASS |
+| 趨勢資料服務測試 | PASS |
+| 刪除部分分析時保留共用 Event | PASS |
+| 刪除最後一筆分析後歷程歸零 | PASS（網頁） |
+| 測試交易 ROLLBACK | PASS |
+
+### 2.8.7 本次修改檔案
+
+- `app.py`
+- `models.py`
+- `services/analysis_record_service.py`
+- `services/performance_history_service.py`
+- `services/performance_history_query_service.py`
+- `services/performance_trend_service.py`
+
+### 2.8.8 待辦與注意事項
+
+- PFM V2.1 尚待正式 Git Commit。
+- 需確認完整資料庫清除結果及刪除稽核紀錄。
+- 實際 Flask 趨勢圖 UI 的 V2.1 回歸仍可補測。
+- 未來不同儀器、不同方法與多次同日量測仍需擴充實測案例。
+- 同一儀器、項目、類型及時間出現不同量測內容時，現行設計採衝突拒絕，未來需評估時間精度與事件識別條件。
+- 生產環境 Firebird 遷移與多人並行一致性尚未驗證。
+- 程式部分識別名稱仍沿用 `prm_*`，後續整理時應避免一次全面改名影響既有流程。
+- SQLite 測試資料可重新建立，但不得將開發環境的刪除重建操作直接套用至正式資料庫。
+
+
 ## 3. 其他暫停／未完成工作（不可遺漏）
 
 | 項目 | 進度／注意事項 |

@@ -8,7 +8,13 @@ The caller manages the SQLAlchemy Session.
 
 from datetime import date
 
-from models import PerformanceMeasurementHistory
+from sqlalchemy import func
+
+from models import (
+    AnalysisRecord,
+    PerformanceMeasurementHistory,
+    PerformanceAnalysisLink
+)
 
 
 def _parse_query_date(value):
@@ -78,6 +84,11 @@ def query_performance_history(
             "查詢筆數必須介於 1 至 200。"
         )
 
+    # ========================================
+    # PFM V2.1 事件查詢
+    # 每次實際量測只回傳一筆
+    # ========================================
+
     query = db.query(
         PerformanceMeasurementHistory
     )
@@ -86,12 +97,6 @@ def query_performance_history(
         query = query.filter(
             PerformanceMeasurementHistory.instrument_id
             == instrument_id
-        )
-
-    if category:
-        query = query.filter(
-            PerformanceMeasurementHistory.category
-            == category
         )
 
     if monitor_item:
@@ -106,39 +111,152 @@ def query_performance_history(
             == status
         )
 
+    # 日期範圍以 PDF 分析時間為準
     if start_date:
         query = query.filter(
-            PerformanceMeasurementHistory.analysis_date
-            >= start_date
+            func.date(
+                PerformanceMeasurementHistory.analysis_datetime
+            ) >= start_date.isoformat()
         )
 
     if end_date:
         query = query.filter(
-            PerformanceMeasurementHistory.analysis_date
-            <= end_date
+            func.date(
+                PerformanceMeasurementHistory.analysis_datetime
+            ) <= end_date.isoformat()
+        )
+
+    # ========================================
+    # PFM V2.1 類別篩選
+    # 由 AnalysisRecord.category 取得
+    # 同一 Event 可關聯多筆正式分析紀錄
+    # ========================================
+
+    if category:
+
+        matching_events = (
+            db.query(
+                PerformanceAnalysisLink.performance_id
+            )
+            .join(
+                AnalysisRecord,
+                AnalysisRecord.analysis_id
+                == PerformanceAnalysisLink.analysis_id
+            )
+            .filter(
+                AnalysisRecord.category == category
+            )
+            .distinct()
+        )
+
+        query = query.filter(
+            PerformanceMeasurementHistory.id.in_(
+                matching_events
+            )
         )
 
     rows = (
         query
         .order_by(
-            PerformanceMeasurementHistory.analysis_date.desc(),
+            PerformanceMeasurementHistory.analysis_datetime.desc(),
             PerformanceMeasurementHistory.id.desc()
         )
         .limit(limit)
         .all()
     )
 
-    return [
-        {
+    # ========================================
+    # 取得查詢結果的所有分析關聯
+    # ========================================
+
+    event_ids = [row.id for row in rows]
+
+    category_map = {}
+    analysis_map = {}
+
+    if event_ids:
+
+        links = (
+            db.query(
+                PerformanceAnalysisLink,
+                AnalysisRecord.category
+            )
+            .join(
+                AnalysisRecord,
+                AnalysisRecord.analysis_id
+                == PerformanceAnalysisLink.analysis_id
+            )
+            .filter(
+                PerformanceAnalysisLink.performance_id.in_(
+                    event_ids
+                )
+            )
+            .order_by(
+                PerformanceAnalysisLink.performance_id,
+                PerformanceAnalysisLink.id
+            )
+            .all()
+        )
+
+        for link, linked_category in links:
+
+            category_map.setdefault(
+                link.performance_id, set()
+            )
+
+            analysis_map.setdefault(
+                link.performance_id, []
+            )
+
+            analysis_map[link.performance_id].append(
+                link.analysis_id
+            )
+
+            linked_category = str(
+                linked_category or ""
+            ).strip().upper()
+
+            if linked_category:
+                category_map[link.performance_id].add(
+                    linked_category
+                )
+
+    # ========================================
+    # 維持既有 HTML 使用的輸出欄位
+    # ========================================
+
+    result = []
+
+    for row in rows:
+
+        categories = sorted(
+            category_map.get(row.id, set())
+        )
+
+        analysis_ids = analysis_map.get(
+            row.id, []
+        )
+
+        result.append({
             "id": row.id,
-            "analysis_id": row.analysis_id,
+            "analysis_id": (
+                analysis_ids[0] if analysis_ids else ""
+            ),
+            "analysis_ids": analysis_ids,
             "analysis_date": (
-                row.analysis_date.isoformat()
-                if row.analysis_date
+                row.analysis_datetime.date().isoformat()
+                if row.analysis_datetime
+                else ""
+            ),
+            "analysis_datetime": (
+                row.analysis_datetime.isoformat(
+                    sep=" ", timespec="seconds"
+                )
+                if row.analysis_datetime
                 else ""
             ),
             "instrument_id": row.instrument_id,
-            "category": row.category,
+            "category": "、".join(categories),
             "method_code": row.method_code,
             "monitor_item": row.monitor_item,
             "performance_type": row.performance_type,
@@ -152,6 +270,6 @@ def query_performance_history(
             "control_id": row.control_id,
             "control_import_id": row.control_import_id,
             "message": row.message
-        }
-        for row in rows
-    ]
+        })
+
+    return result

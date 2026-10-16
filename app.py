@@ -139,6 +139,10 @@ from services.performance_trend_service import (
     get_performance_trend
 )
 
+from services.performance_history_service import (
+    delete_performance_links_for_analysis
+)
+
 from services.performance_history_query_service import (
     query_performance_history
 )
@@ -2204,20 +2208,13 @@ def delete_analysis_record(
         )
 
         # ========================================
-        # 刪除所屬儀器性能確校（PRM）歷程
+        # PFM V2.1：刪除分析關聯
+        # 最後一筆關聯移除時，同步刪除 PFM 事件
         # ========================================
 
-        (
-            db.query(
-                PerformanceMeasurementHistory
-            )
-            .filter(
-                PerformanceMeasurementHistory.analysis_id
-                == analysis_id
-            )
-            .delete(
-                synchronize_session=False
-            )
+        delete_performance_links_for_analysis(
+            db=db,
+            analysis_id=analysis_id
         )
 
         # ========================================

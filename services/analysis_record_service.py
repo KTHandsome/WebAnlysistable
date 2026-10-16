@@ -571,12 +571,8 @@ def save_analysis_record(
                 ).strip(),
 
                 category=str(
-                    form_data.get(
-                        "category",
-                        ""
-                    )
-                    or ""
-                ).strip(),
+                    form_data.get("category") or ""
+                ).strip().upper(),
 
                 exam_no=identity_exam_no,
 
@@ -695,12 +691,8 @@ def save_analysis_record(
         ).strip()
 
         record.category = str(
-            form_data.get(
-                "category",
-                ""
-            )
-            or ""
-        ).strip()
+            form_data.get("category") or ""
+        ).strip().upper()
 
         record.exam_no = str(
             control_data.get(

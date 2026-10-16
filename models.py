@@ -61,6 +61,7 @@ class AnalysisRecord(Base):
         nullable=False
     )
 
+    # 分析類別：D / W / G
     category: Mapped[str] = mapped_column(
         String(10),
         nullable=False
@@ -989,9 +990,11 @@ class PerformanceMeasurementHistory(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "analysis_id",
-            "prm_sequence_no",
-            name="uq_prm_analysis_sequence"
+            "instrument_id",
+            "monitor_item",
+            "performance_type",
+            "analysis_datetime",
+            name="uq_pfm_measurement_event"
         ),
     )
 
@@ -1000,20 +1003,6 @@ class PerformanceMeasurementHistory(Base):
         Integer,
         primary_key=True,
         autoincrement=True
-    )
-
-    # 正式分析紀錄關聯
-    analysis_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("analysis_record.analysis_id"),
-        nullable=False,
-        index=True
-    )
-
-    # 同一分析紀錄內的 PRM 序號
-    prm_sequence_no: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False
     )
 
     # 儀器與分析資訊
@@ -1025,11 +1014,6 @@ class PerformanceMeasurementHistory(Base):
 
     method_code: Mapped[str] = mapped_column(
         String(50),
-        nullable=False
-    )
-
-    category: Mapped[str] = mapped_column(
-        String(10),
         nullable=False
     )
 
@@ -1050,9 +1034,9 @@ class PerformanceMeasurementHistory(Base):
         nullable=False
     )
 
-    # PRM 歷程以分析日期管理，不保存時分秒
-    analysis_date: Mapped[date] = mapped_column(
-        Date,
+    # PFM 實際分析時間，以儀器 PDF 為唯一來源
+    analysis_datetime: Mapped[datetime] = mapped_column(
+        DateTime,
         nullable=False,
         index=True
     )
@@ -1109,6 +1093,55 @@ class PerformanceMeasurementHistory(Base):
         Text,
         nullable=False,
         default=""
+    )
+
+# ========================================
+# PFM V2.1 儀器性能確校與正式分析紀錄關聯
+# ========================================
+class PerformanceAnalysisLink(Base):
+
+    __tablename__ = "performance_analysis_link"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "analysis_id",
+            "prm_sequence_no",
+            name="uq_pfm_link_analysis_sequence"
+        ),
+        UniqueConstraint(
+            "analysis_id",
+            "performance_id",
+            name="uq_pfm_link_analysis_performance"
+        ),
+    )
+
+    # 關聯資料庫主鍵
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    # PFM 量測事件
+    performance_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("performance_measurement_history.id"),
+        nullable=False,
+        index=True
+    )
+
+    # 正式分析紀錄
+    analysis_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("analysis_record.analysis_id"),
+        nullable=False,
+        index=True
+    )
+
+    # 同一分析紀錄中的 PFM 順序
+    prm_sequence_no: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False
     )
 
 

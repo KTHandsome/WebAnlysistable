@@ -68,7 +68,7 @@ def get_performance_trend(
             )
         )
         .order_by(
-            PerformanceMeasurementHistory.analysis_date.desc(),
+            PerformanceMeasurementHistory.analysis_datetime.desc(),
             PerformanceMeasurementHistory.id.desc()
         )
         .limit(limit)
@@ -84,12 +84,19 @@ def get_performance_trend(
 
         points.append({
             "id": row.id,
-            "analysis_id": row.analysis_id,
             "analysis_date": (
-                row.analysis_date.isoformat()
-                if row.analysis_date
+                row.analysis_datetime.date().isoformat()
+                if row.analysis_datetime
                 else ""
-            ),
+                ),
+            "analysis_datetime": (
+                row.analysis_datetime.isoformat(
+                sep=" ",
+                timespec="seconds"
+                )
+                if row.analysis_datetime
+                else ""
+                ),
             "instrument_id": row.instrument_id,
             "monitor_item": row.monitor_item,
             "performance_type": row.performance_type,
