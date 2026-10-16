@@ -33,31 +33,13 @@
             </div>
 
             <div class="eacs-form-field">
-                <label class="eacs-form-label">檢測類別</label>
-                <select name="category"
-                        class="eacs-form-control">
-                    <option value="">全部</option>
-                    {% for code, name in [
-                        ('D', '飲用水'),
-                        ('W', '水質'),
-                        ('G', '地下水')
-                    ] %}
-                    <option value="{{ code }}"
-                        {% if filters.category == code %}selected{% endif %}>
-                        {{ code }} - {{ name }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="eacs-form-field">
                 <label class="eacs-form-label">管制項目</label>
                 <input
                     type="text"
                     name="monitor_item"
                     class="eacs-form-control"
                     value="{{ filters.monitor_item }}"
-                    placeholder="例如：TOC/W">
+                    placeholder="例如：TOC">
             </div>
 
             <div class="eacs-form-field">
@@ -138,6 +120,7 @@
         <table class="eacs-table">
             <thead>
                 <tr>
+                    <th>趨勢圖</th>
                     <th>分析日期</th>
                     <th>儀器編號</th>
                     <th>檢測類別</th>
@@ -153,6 +136,27 @@
             <tbody>
                 {% for row in rows %}
                 <tr>
+                    <td style="text-align: center;">
+
+                        {% if row.status in ['PASS', 'FAIL'] and row.get('performance_type') %}
+
+                        <button
+                               type="button"
+                               class="btn btn-sm btn-outline-primary prm-trend-button"
+                               data-instrument-id="{{ row.instrument_id }}"
+                               data-monitor-item="{{ row.monitor_item }}"
+                               data-performance-type="{{ row.performance_type }}"
+                               title="查看最近 30 筆性能確校趨勢">
+                               查看趨勢圖
+                        </button>
+
+                       {% else %}
+
+                         <span style="color: #94A3B8;">—</span>
+
+                       {% endif %}
+
+                    </td>
                     <td>{{ row.analysis_date }}</td>
                     <td>{{ row.instrument_id }}</td>
                     <td>{{ row.category }}</td>
@@ -173,7 +177,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="9"
+                    <td colspan="10"
                         style="text-align: center; padding: 20px;">
                         查無符合條件的性能查核紀錄。
                     </td>
@@ -187,5 +191,7 @@
 </div>
 
 {% endif %}
+
+{% include "components/analysis/performance_trend_modal.html" %}
 
 {% endblock %}

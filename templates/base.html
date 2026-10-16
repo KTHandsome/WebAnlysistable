@@ -1007,6 +1007,11 @@
         分析紀錄查詢
     </a>
 
+    <a href="{{ url_for('performance_history') }}"
+       class="sidebar-link {% if active_page == 'performance_history' %}active{% endif %}">
+       性能確校查詢
+    </a>
+
 
     {% if current_analysis_name and current_analysis_url %}
 
