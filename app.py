@@ -4884,6 +4884,7 @@ def classify_analysis_rows(preview_rows, method_data):
                 sample_id_upper.startswith("CCV")
                 and sample_id_upper[3:].isdigit()
             )
+            or sample_id_upper == "1CCV1"
         ):
             role = "CCV"
 
