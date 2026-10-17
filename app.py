@@ -9,6 +9,11 @@ from flask import (
     jsonify
 )
 
+from routes.performance_history_routes import (
+    performance_history_bp,
+    register_performance_history_route,
+)
+
 from services.lims_auth_service import (
     validate_lims_user
 )
@@ -1218,67 +1223,19 @@ def load_instrument_options(form_data):
 
     return instrument_options
 
-# ========================================
-# Performance History Query
-# ========================================
-@app.route("/performance-history", methods=["GET"])
-@login_required
-def performance_history():
+register_performance_history_route(login_required)
 
-    filter_names = [
-        "instrument_id",
-        "category",
-        "monitor_item",
-        "status",
-        "analysis_date_start",
-        "analysis_date_end"
-    ]
+app.register_blueprint(performance_history_bp)
 
-    filters = {
-        name: request.args.get(name, "").strip()
-        for name in filter_names
-    }
-
-    # 只要使用者送出 GET 查詢參數，就執行查詢。
-    # 即使所有條件留空，也允許查詢全部 PRM 歷程。
-    searched = any(
-        name in request.args
-        for name in filter_names
-    )
-
-    rows = []
-    error_message = ""
-
-    if searched:
-
-        db = SessionLocal()
-
-        try:
-            rows = query_performance_history(
-                db=db,
-                **filters
-            )
-
-        except ValueError as exc:
-            error_message = str(exc)
-
-        finally:
-            db.close()
-
-    print("=== PRM HISTORY WEB DEBUG ===")
-    print("FILTERS:", filters)
-    print("SEARCHED:", searched)
-    print("ROWS:", len(rows))
-    print("ERROR:", error_message)
-
-    return render_template(
-        "performance_history_query.html",
-        active_page="performance_history",
-        filters=filters,
-        searched=searched,
-        rows=rows,
-        error_message=error_message
-    )
+# 保留舊 endpoint，供現有模板的 url_for() 使用
+app.add_url_rule(
+    "/performance-history",
+    endpoint="performance_history",
+    view_func=app.view_functions[
+        "performance_history_bp.performance_history"
+    ],
+    methods=["GET"],
+)
 
 @app.route("/analysis-records")
 @login_required
