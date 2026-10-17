@@ -725,3 +725,89 @@ def reject_analysis_record(analysis_id):
 
     finally:
         db.close()
+
+@analysis_record_bp.route(
+    "/analysis-records/<analysis_id>/reopen",
+    methods=["POST"],
+)
+@login_required
+def reopen_approved_analysis_record(analysis_id):
+
+    # 只有具有審核權限的人員可以再次退回
+    if not can_review_analysis():
+        return "您沒有分析紀錄審核權限。", 403
+
+    review_comment = request.form.get(
+        "review_comment", ""
+    ).strip()
+
+    if not review_comment:
+        return "再次退回修正時必須填寫原因。", 400
+
+    db = SessionLocal()
+
+    try:
+        record = (
+            db.query(AnalysisRecord)
+            .filter(
+                AnalysisRecord.analysis_id == analysis_id
+            )
+            .first()
+        )
+
+        if record is None:
+            return "查無此分析紀錄。", 404
+
+        if record.status != "APPROVED":
+            return (
+                "只有已審核紀錄可以再次退回修正。",
+                400
+            )
+
+        current_user = get_current_user() or {}
+        previous_status = record.status
+
+        record.status = "REJECTED"
+
+        record.reviewer_user_id = str(
+            current_user.get("user_id", "") or ""
+        ).strip()
+
+        record.reviewer_employee_id = str(
+            current_user.get("employee_id", "") or ""
+        ).strip()
+
+        record.reviewer_name = str(
+            current_user.get("employee_name", "") or ""
+        ).strip()
+
+        record.reviewed_at = datetime.utcnow()
+        record.review_comment = review_comment
+
+        review_history = AnalysisReviewHistory(
+            analysis_id=record.analysis_id,
+            action="REOPEN_AFTER_APPROVAL",
+            from_status=previous_status,
+            to_status="REJECTED",
+            reviewer_user_id=record.reviewer_user_id,
+            reviewer_employee_id=record.reviewer_employee_id,
+            reviewer_name=record.reviewer_name,
+            comment=record.review_comment,
+        )
+
+        db.add(review_history)
+        db.commit()
+
+        return redirect(
+            url_for(
+                "analysis_record_detail",
+                analysis_id=analysis_id,
+            )
+        )
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
