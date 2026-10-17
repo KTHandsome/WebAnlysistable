@@ -5535,7 +5535,7 @@ def analysis_w330():
     load_error = None
     qdl_value = None
     qaqc_results = []
-
+    prm_results = []
     sample_data_saved = False
 
     if form_data:
@@ -5589,6 +5589,11 @@ def analysis_w330():
 
         qaqc_results = saved_state.get(
             "qaqc_results",
+            []
+        )
+
+        prm_results = saved_state.get(
+             "prm_results",
             []
         )
 
@@ -6413,7 +6418,13 @@ def analysis_w330():
     show_calibration_error=False,
     included_batches=included_batches,
     qaqc_3a_results=qaqc_results,
-    )
+    prm_results=(
+    hg_pfm_results
+    if request.method == "POST"
+    and "hg_pfm_results" in locals()
+    else prm_results
+    ),
+)
 
 @app.route("/analysis/w43401", methods=["GET", "POST"])
 @login_required

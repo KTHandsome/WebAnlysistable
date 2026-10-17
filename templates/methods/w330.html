@@ -169,7 +169,14 @@ W330 汞分析 - EACS Web
 
 {% if ra7000_data %}
 
+{# ========================================
+   W330 Hg 儀器性能查核（PFM V2.1）
+   PDF 匯入後，檢量線之前
+   ======================================== #}
 
+{% include "components/analysis/performance_section.html" %}
+
+{% include "components/analysis/performance_trend_modal.html" %}
 
 {% include "components/analysis/calibration_section.html" %}
 

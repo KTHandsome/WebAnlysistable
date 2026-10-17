@@ -8,7 +8,7 @@ Does not modify release history or control records.
 
 from datetime import date, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from models import (
     PerformanceImportHistory,
@@ -83,16 +83,12 @@ def find_active_performance_control(
                 InstrumentPerformanceControl.instrument_id
                 == instrument_id,
 
-                InstrumentPerformanceControl.monitor_item
-                == monitor_item,
+                func.upper(InstrumentPerformanceControl.monitor_item) == monitor_item,
 
                 InstrumentPerformanceControl.performance_type
                 == performance_type,
 
                 InstrumentPerformanceControl.enabled.is_(True),
-
-                InstrumentPerformanceControl.year
-                == analysis_date.year,
 
                 InstrumentPerformanceControl.effective_from
                 <= analysis_date,

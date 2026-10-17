@@ -272,6 +272,8 @@ def prepare_performance_import(
     """
     from models import PerformanceImportHistory, InstrumentPerformanceControl
 
+    from sqlalchemy import func
+
     if not str(imported_by or "").strip():
         raise ValueError("缺少匯入者，拒絕建立 PENDING 批次")
 
@@ -328,10 +330,26 @@ def prepare_performance_import(
                     PerformanceImportHistory.status == "PENDING"
                 )
             ).all())
-            if active_count != 1:
+
+
+            if active_count > 1:
                 raise RuntimeError(
-                    "Performance 資料庫必須恰有一個 ACTIVE 批次，停止準備"
+                 "Performance 資料庫存在多個 ACTIVE 批次，停止準備"
                 )
+
+            if active_count == 0:
+                  history_count = db.scalar(
+                  select(func.count()).select_from(
+                  PerformanceImportHistory
+                   )
+                )
+
+            if history_count != 0:
+               raise RuntimeError(
+                 "Performance 已有發布歷程但沒有 ACTIVE 批次，"
+                   "禁止視為首次發布"
+                ) 
+            
             if pending_count:
                 raise RuntimeError(
                     "已有 PENDING 批次，請先核對或完成前次發布"
@@ -370,10 +388,29 @@ def prepare_performance_import(
                         PerformanceImportHistory.status == "PENDING"
                     )
                 ).all()
-                if len(active_batches) != 1 or pending_batches:
-                    raise RuntimeError(
-                        "Performance 批次狀態已變動，停止準備 PENDING"
+
+                history_count = db.scalar(
+                       select(func.count()).select_from(
+                      PerformanceImportHistory
                     )
+                )
+
+                valid_first_release = (
+                   len(active_batches) == 0
+                   and history_count == 0
+                )
+
+                valid_existing_release = (
+                     len(active_batches) == 1
+                )
+
+                if (
+                    not (valid_first_release or valid_existing_release)
+                    or pending_batches
+                     ):
+                   raise RuntimeError(
+                         "Performance 批次狀態已變動，停止準備 PENDING"
+                )
 
                 history = PerformanceImportHistory(
                     import_id=import_id,
@@ -482,9 +519,42 @@ def activate_pending_performance_import(
                 ).all()
                 current = [x for x in histories if x.status == "ACTIVE"]
                 waiting = [x for x in histories if x.status == "PENDING"]
-                if len(current) != 1 or len(waiting) != 1:
-                    raise RuntimeError("ACTIVE/PENDING 批次數量異常，禁止切換")
-                old_batch, new_batch = current[0], waiting[0]
+
+                if len(waiting) != 1 or len(current) > 1:
+                   raise RuntimeError(
+                         "ACTIVE/PENDING 批次數量異常，禁止切換"
+                )
+
+                # ========================================
+                # Performance 首次發布 / 版本更新
+                # ========================================
+
+                if len(current) == 0:
+
+                    # 首次發布：
+                    # 資料庫只能有目前這一筆 PENDING
+                    history_count = db.scalar(
+                        select(func.count()).select_from(
+                            PerformanceImportHistory
+                        )
+                    )
+
+                    if history_count != 1:
+                        raise RuntimeError(
+                            "Performance 沒有 ACTIVE，"
+                            "但存在其他發布歷程，禁止首次啟用"
+                        )
+
+                    old_batch = None
+
+                else:
+
+                    # 版本更新：
+                    # 必須存在原本的 ACTIVE
+                    old_batch = current[0]
+
+                new_batch = waiting[0]
+                
                 if new_batch.import_id != pending_id:
                     raise RuntimeError("指定的 PENDING import_id 與資料庫不符")
                 if str(new_batch.sha256 or "").lower() != official_hash:
@@ -506,8 +576,12 @@ def activate_pending_performance_import(
                 if actual_count != new_batch.record_count or actual_count < 1:
                     raise RuntimeError("PENDING 管制明細數量異常，禁止切換")
 
-                old_id = old_batch.import_id
-                old_batch.status = "SUPERSEDED"
+                old_id = None
+
+                if old_batch is not None:
+                   old_id = old_batch.import_id
+                   old_batch.status = "SUPERSEDED"
+
                 new_batch.status = "ACTIVE"
                 db.flush()
                 db.commit()

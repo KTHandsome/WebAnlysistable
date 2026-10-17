@@ -40,6 +40,66 @@ class PerformanceReleaseNeedsReview(RuntimeError):
         )
 
 
+def inspect_performance_release_before_publish(
+    save_path,
+    log_path,
+    archive_dir,
+    session_factory,
+):
+    """Determine whether this is a genuine first publication."""
+
+    save_path = Path(save_path)
+    log_path = Path(log_path)
+    archive_dir = Path(archive_dir)
+
+    with session_factory() as db:
+        history_count = db.scalar(
+            select(func.count()).select_from(
+                PerformanceImportHistory
+            )
+        )
+
+        detail_count = db.scalar(
+            select(func.count()).select_from(
+                InstrumentPerformanceControl
+            )
+        )
+
+    is_first_release = (
+        not save_path.exists()
+        and not log_path.exists()
+        and history_count == 0
+        and detail_count == 0
+    )
+
+    if is_first_release:
+        if (
+            Path(str(save_path) + ".publish.lock").exists()
+            or (
+                archive_dir / ".performance_db_import.lock"
+            ).exists()
+        ):
+            raise ValueError(
+                "存在 Performance 未完成作業鎖定檔，"
+                "禁止首次發布。"
+            )
+
+        return {
+            "first_release": True,
+            "sha256": None,
+            "active_import_id": None,
+        }
+
+    result = inspect_performance_release_ready(
+        save_path,
+        log_path,
+        archive_dir,
+        session_factory,
+    )
+
+    result["first_release"] = False
+    return result
+
 def inspect_performance_release_ready(save_path, log_path, archive_dir, session_factory):
     """Read-only consistency check of official CSV, JSONL and ACTIVE DB.
 
@@ -161,8 +221,11 @@ def release_performance_csv_to_database(
             f.flush()
             os.fsync(f.fileno())
 
-        before = inspect_performance_release_ready(
-            save_path, log_path, archive_dir, session_factory
+        before = inspect_performance_release_before_publish(
+             save_path,
+             log_path,
+             archive_dir,
+             session_factory,
         )
         # Parser is syntactic only. Validate instrument registry, overlapping
         # effective dates, permissions etc. in app.py BEFORE calling here.
