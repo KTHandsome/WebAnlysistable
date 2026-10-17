@@ -1244,6 +1244,26 @@ app.add_url_rule(
     methods=["GET"],
 )
 
+# 保留審核通過舊 endpoint
+app.add_url_rule(
+    "/analysis-records/<analysis_id>/approve",
+    endpoint="approve_analysis_record",
+    view_func=app.view_functions[
+        "analysis_record_bp.approve_analysis_record"
+    ],
+    methods=["POST"],
+)
+
+# 保留退回修正舊 endpoint
+app.add_url_rule(
+    "/analysis-records/<analysis_id>/reject",
+    endpoint="reject_analysis_record",
+    view_func=app.view_functions[
+        "analysis_record_bp.reject_analysis_record"
+    ],
+    methods=["POST"],
+)
+
 # 保留分析紀錄明細舊 endpoint
 app.add_url_rule(
     "/analysis-records/<analysis_id>",
@@ -1481,305 +1501,6 @@ def delete_analysis_record(
         return redirect(
             url_for(
                 "analysis_records"
-            )
-        )
-
-    except Exception:
-
-        db.rollback()
-        raise
-
-    finally:
-
-        db.close()
-
-@app.route(
-    "/analysis-records/<analysis_id>/approve",
-    methods=["POST"]
-)
-@login_required
-def approve_analysis_record(
-    analysis_id
-):
-    if not can_review_analysis():
-
-        return (
-            "您沒有分析紀錄審核權限。",
-            403
-        )
-
-    db = SessionLocal()
-
-    try:
-
-        record = (
-            db.query(
-                AnalysisRecord
-            )
-            .filter(
-                AnalysisRecord.analysis_id
-                == analysis_id
-            )
-            .first()
-        )
-
-        if record is None:
-
-            return (
-                "查無此分析紀錄。",
-                404
-            )
-
-        if (
-            record.status
-            != "UNDER_REVIEW"
-        ):
-
-            return (
-                "只有待審核紀錄可以執行審核通過。",
-                400
-            )
-
-        current_user = (
-            get_current_user()
-            or {}
-        )
-
-        previous_status = (
-            record.status
-        )
-
-        record.status = (
-            "APPROVED"
-        )
-
-        record.reviewer_user_id = str(
-            current_user.get(
-                "user_id",
-                ""
-            )
-            or ""
-        ).strip()
-
-        record.reviewer_employee_id = str(
-            current_user.get(
-                "employee_id",
-                ""
-            )
-            or ""
-        ).strip()
-
-        record.reviewer_name = str(
-            current_user.get(
-                "employee_name",
-                ""
-            )
-            or ""
-        ).strip()
-
-        record.reviewed_at = (
-    datetime.utcnow()
-)
-
-        record.review_comment = (
-            request.form.get(
-                "review_comment",
-                ""
-            ).strip()
-        )
-
-        review_history = AnalysisReviewHistory(
-            analysis_id=record.analysis_id,
-
-            action="APPROVE",
-
-            from_status=previous_status,
-
-            to_status="APPROVED",
-
-            reviewer_user_id=(
-                record.reviewer_user_id
-            ),
-
-            reviewer_employee_id=(
-                record.reviewer_employee_id
-            ),
-
-            reviewer_name=(
-                record.reviewer_name
-            ),
-
-            comment=(
-                record.review_comment
-            )
-        )
-
-        db.add(
-            review_history
-        )
-
-        db.commit()
-
-        return redirect(
-            url_for(
-                "analysis_record_detail",
-                analysis_id=analysis_id
-            )
-        )
-
-    except Exception:
-
-        db.rollback()
-        raise
-
-    finally:
-
-        db.close()
-
-
-@app.route(
-    "/analysis-records/<analysis_id>/reject",
-    methods=["POST"]
-)
-@login_required
-def reject_analysis_record(
-    analysis_id
-):
-
-    if not can_review_analysis():
-
-        return (
-            "您沒有分析紀錄審核權限。",
-            403
-        )
-
-    review_comment = (
-        request.form.get(
-            "review_comment",
-            ""
-        ).strip()
-    )
-
-    if not review_comment:
-
-        return (
-            "退回修正時必須填寫退回原因。",
-            400
-        )
-
-    db = SessionLocal()
-
-    try:
-
-        record = (
-            db.query(
-                AnalysisRecord
-            )
-            .filter(
-                AnalysisRecord.analysis_id
-                == analysis_id
-            )
-            .first()
-        )
-
-        if record is None:
-
-            return (
-                "查無此分析紀錄。",
-                404
-            )
-
-        if (
-            record.status
-            != "UNDER_REVIEW"
-        ):
-
-            return (
-                "只有待審核紀錄可以退回修正。",
-                400
-            )
-
-        current_user = (
-            get_current_user()
-            or {}
-        )
-
-        previous_status = (
-            record.status
-        )
-
-        record.status = (
-            "REJECTED"
-        )
-
-        record.reviewer_user_id = str(
-            current_user.get(
-                "user_id",
-                ""
-            )
-            or ""
-        ).strip()
-
-        record.reviewer_employee_id = str(
-            current_user.get(
-                "employee_id",
-                ""
-            )
-            or ""
-        ).strip()
-
-        record.reviewer_name = str(
-            current_user.get(
-                "employee_name",
-                ""
-            )
-            or ""
-        ).strip()
-
-        record.reviewed_at = (
-    datetime.utcnow()
-)
-
-        record.review_comment = (
-            review_comment
-        )
-
-        review_history = AnalysisReviewHistory(
-            analysis_id=record.analysis_id,
-
-            action="REJECT",
-
-            from_status=previous_status,
-
-            to_status="REJECTED",
-
-            reviewer_user_id=(
-                record.reviewer_user_id
-            ),
-
-            reviewer_employee_id=(
-                record.reviewer_employee_id
-            ),
-
-            reviewer_name=(
-                record.reviewer_name
-            ),
-
-            comment=(
-                record.review_comment
-            )
-        )
-
-        db.add(
-            review_history
-        )       
-
-        db.commit()
-
-        return redirect(
-            url_for(
-                "analysis_record_detail",
-                analysis_id=analysis_id
             )
         )
 
