@@ -35,6 +35,8 @@ from parsers.icp5800_parser import parse_icp5800_pdf
 
 from uuid import uuid4
 
+from routes.control_import_routes import control_import_bp
+
 from analysis.icp_workflow import (
     build_sample_candidate_groups,
     build_icp_candidate_selections,
@@ -1240,6 +1242,8 @@ app.add_url_rule(
 # Analysis Record Blueprint
 app.register_blueprint(analysis_record_bp)
 
+app.register_blueprint(control_import_bp)
+
 # 保留舊 endpoint，相容既有 url_for 呼叫
 app.add_url_rule(
     "/analysis-delete-history",
@@ -1344,6 +1348,19 @@ app.add_url_rule(
         "analysis_record_bp.delete_analysis_record"
     ],
     methods=["POST"]
+)
+
+# ========================================
+# Control Import Endpoint 相容
+# ========================================
+
+app.add_url_rule(
+    "/control-import",
+    endpoint="control_import",
+    view_func=app.view_functions[
+        "control_import_bp.control_import"
+    ],
+    methods=["GET", "POST"]
 )
 
 def load_method_analysis_modes():
@@ -7649,200 +7666,6 @@ def export_w434_lims():
         ),
         as_attachment=True,
         download_name=download_name
-    )
-
-@app.route("/control-import", methods=["GET", "POST"])
-@login_required
-def control_import():
-
-    success_message = None
-    error_message = None
-
-    if request.method == "POST":
-
-        ctrl_year = request.form.get("ctrl_year", "").strip()
-        uploaded_file = request.files.get("csv_file")
-
-        if not ctrl_year:
-
-            error_message = "請選擇年度。"
-
-        elif uploaded_file is None or uploaded_file.filename == "":
-
-            error_message = "請選擇 CSV 檔案。"
-
-        elif not uploaded_file.filename.lower().endswith(".csv"):
-
-            error_message = "只能匯入 CSV 檔案。"
-
-        else:
-
-            try:
-
-                # 先把上傳檔案讀入記憶體，
-                # 驗證成功後才真正寫入 data 資料夾
-                file_bytes = uploaded_file.read()
-
-                try:
-                    csv_text = file_bytes.decode("utf-8-sig")
-
-                except UnicodeDecodeError:
-                    error_message = "CSV 編碼錯誤，必須使用 UTF-8 格式。"
-                    csv_text = None
-
-                if csv_text is not None:
-
-                    reader = csv.DictReader(
-                        io.StringIO(csv_text)
-                    )
-
-                    # Phyon 管制資料必要欄位
-                    required_columns = {
-                        "CTRL_YEAR",
-                        "CATEGORY_CODE",
-                        "EXAMNO",
-                        "EXAMNAME",
-                        "EXALIAS",
-                        "EM_NUM",
-                        "EM_NO",
-                        "LABPARTID",
-                        "CTRL_UNIT",
-                        "DETECT_LIMITED",
-                        "DC_UWL",
-                        "DC_UCL",
-                        "QC_UWL",
-                        "QC_UCL",
-                        "QC_LWL",
-                        "QC_LCL",
-                        "SPIKE_UWL",
-                        "SPIKE_UCL",
-                        "SPIKE_LWL",
-                        "SPIKE_LCL"
-                    }
-
-                    actual_columns = set(
-                        reader.fieldnames or []
-                    )
-
-                    missing_columns = (
-                        required_columns - actual_columns
-                    )
-
-                    if missing_columns:
-
-                        error_message = (
-                            "CSV 格式不正確，缺少必要欄位："
-                            + ", ".join(
-                                sorted(missing_columns)
-                            )
-                        )
-
-                    else:
-
-                        rows = list(reader)
-
-                        if len(rows) == 0:
-
-                            error_message = (
-                                "CSV 沒有任何管制資料。"
-                            )
-
-                        else:
-
-                            invalid_year_rows = []
-
-                            for index, row in enumerate(
-                                rows,
-                                start=2
-                            ):
-
-                                row_year = (
-                                    row.get(
-                                        "CTRL_YEAR",
-                                        ""
-                                    ).strip()
-                                )
-
-                                if row_year != ctrl_year:
-
-                                    invalid_year_rows.append(
-                                        index
-                                    )
-
-                            if invalid_year_rows:
-
-                                error_message = (
-                                    "CSV 年度與選擇年度不一致。"
-                                    "目前選擇："
-                                    + ctrl_year
-                                    + " 年；錯誤資料列："
-                                    + ", ".join(
-                                        map(
-                                            str,
-                                            invalid_year_rows[:10]
-                                        )
-                                    )
-                                )
-
-                            else:
-
-                                data_folder = os.path.join(
-                                    app.root_path,
-                                    "data"
-                                )
-
-                                os.makedirs(
-                                    data_folder,
-                                    exist_ok=True
-                                )
-
-                                save_name = (
-                                    "Phyon_Control_"
-                                    + ctrl_year
-                                    + ".csv"
-                                )
-
-                                save_path = os.path.join(
-                                    data_folder,
-                                    save_name
-                                )
-
-                                # 驗證成功才正式儲存
-                                with open(
-                                    save_path,
-                                    "wb"
-                                ) as f:
-
-                                    f.write(file_bytes)
-
-                                success_message = (
-                                    ctrl_year
-                                    + " 年管制資料匯入成功，"
-                                    + "共 "
-                                    + str(len(rows))
-                                    + " 筆。"
-                                )
-
-            except Exception as ex:
-
-                error_message = (
-                    "匯入管制資料失敗："
-                    + str(ex)
-                )
-
-    return render_template(
-        "control_import.html",
-        success_message=success_message,
-        error_message=error_message,
-        method_success_message=None,
-        method_error_message=None,
-        report_success_message=None,
-        report_error_message=None,
-        instrument_success_message=None,
-        instrument_error_message=None,
-        method_instrument_success_message=None,
-        method_instrument_error_message=None,
-        active_page="control"
     )
 
 @app.route("/method-settings-import", methods=["POST"])
