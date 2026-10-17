@@ -17,17 +17,11 @@ from routes.performance_history_routes import (
 
 from routes.analysis_record_routes import analysis_record_bp
 
-from services.lims_auth_service import (
-    validate_lims_user
-)
+from services.lims_auth_service import (validate_lims_user)
 
-from analysis.sample_category_filter import (
-    detect_formal_sample_category
-)
+from analysis.sample_category_filter import (detect_formal_sample_category)
 
-from analysis.performance_classifier import (
-    split_performance_rows
-)
+from analysis.performance_classifier import (split_performance_rows)
 
 from datetime import datetime, timedelta
 
@@ -35,9 +29,7 @@ from parsers.pe900_parser import parse_pe900_pdf
 
 from parsers.oi_toc_parser import parse_oi_toc_pdf
 
-from parsers.ra7000_parser import (
-    parse_ra7000_pdf
-)
+from parsers.ra7000_parser import (parse_ra7000_pdf)
 
 from parsers.icp5800_parser import parse_icp5800_pdf
 
@@ -51,23 +43,16 @@ from analysis.icp_workflow import (
     build_icp_lims_matches,
 )
 
-from services.lims_analysis_service import (
-    get_lims_sample_analysis
-)
+from services.lims_analysis_service import (get_lims_sample_analysis)
 
 from calculations.w43401 import (
     calculate_calibration,
     calculate_sample_concentration
 )
 
-from analysis.analysis_batch_splitter import (
-    filter_batches_by_exam_no,
-    split_analysis_batches
-)
+from analysis.analysis_batch_splitter import (filter_batches_by_exam_no, split_analysis_batches)
 
-from analysis.qaqc_calculator import (
-    build_qaqc_check_results
-)
+from analysis.qaqc_calculator import (build_qaqc_check_results)
 
 from analysis.analysis_workflow import (
     recalculate_sample_rows,
@@ -93,13 +78,9 @@ from exports.w434_lims_mapper import (
     build_w434_lims_export_data
 )
 
-from exports.lims_excel_exporter import (
-    build_lims_excel
-)
+from exports.lims_excel_exporter import (build_lims_excel)
 
-from services.analysis_record_service import (
-    save_analysis_record
-)
+from services.analysis_record_service import (save_analysis_record)
 
 from auth_session import (
     can_delete_analysis,
@@ -1283,6 +1264,16 @@ app.add_url_rule(
     methods=["GET"],
 )
 
+# 保留正式分析紀錄 LIMS 匯出舊 endpoint
+app.add_url_rule(
+    "/analysis-records/<analysis_id>/export-lims",
+    endpoint="export_analysis_record_lims",
+    view_func=app.view_functions[
+        "analysis_record_bp.export_analysis_record_lims"
+    ],
+    methods=["GET"],
+)
+
 @app.route("/analysis-records")
 @login_required
 def analysis_records():
@@ -1506,214 +1497,6 @@ def analysis_records():
              ),
               active_page="analysis_records"
          )
-
-    finally:
-
-        db.close()
-
-@app.route(
-    "/analysis-records/<analysis_id>/export-lims"
-)
-@login_required
-def export_analysis_record_lims(
-    analysis_id
-):
-
-    db = SessionLocal()
-
-    try:
-
-        record = (
-            db.query(
-                AnalysisRecord
-            )
-            .filter(
-                AnalysisRecord.analysis_id
-                == analysis_id
-            )
-            .first()
-        )
-
-        if record is None:
-
-            return (
-                "查無此分析紀錄。",
-                404
-            )
-
-        work_state = (
-            db.query(
-                AnalysisWorkState
-            )
-            .filter(
-                AnalysisWorkState.analysis_id
-                == analysis_id
-            )
-            .first()
-        )
-
-        if work_state is None:
-
-            return (
-                "此正式分析紀錄沒有可供匯出的 Snapshot。",
-                400
-            )
-
-        try:
-
-            analysis_state = json.loads(
-                work_state.state_json
-                or "{}"
-            )
-
-            form_data = json.loads(
-                work_state.form_data_json
-                or "{}"
-            )
-
-            control_data = json.loads(
-                work_state.control_data_json
-                or "{}"
-            )
-
-            method_data = json.loads(
-                work_state.method_data_json
-                or "{}"
-            )
-
-        except json.JSONDecodeError:
-
-            return (
-                "正式分析紀錄 Snapshot 格式異常，"
-                "無法重新匯出 LIMS Excel。",
-                500
-            )
-
-        if not analysis_state:
-
-            return (
-                "正式分析紀錄缺少分析結果 Snapshot。",
-                400
-            )
-
-        if not form_data:
-
-            return (
-                "正式分析紀錄缺少基本資料 Snapshot。",
-                400
-            )
-
-        if not control_data:
-
-            return (
-                "正式分析紀錄缺少年度管制 Snapshot。",
-                400
-            )
-
-        if not method_data:
-
-            return (
-                "正式分析紀錄缺少方法設定 Snapshot。",
-                400
-            )
-
-        export_data = (
-            build_w434_lims_export_data(
-                form_data=form_data,
-                control_data=control_data,
-                method_data=method_data,
-                analysis_state=analysis_state,
-                analyst=(
-                    record.analyst_name
-                    or ""
-                )
-            )
-        )
-
-        if not export_data.qc_rows:
-
-            return (
-                "此正式分析紀錄沒有可匯出的 "
-                "LIMS 品管資料。",
-                400
-            )
-
-        if not export_data.analysis_rows:
-
-            return (
-                "此正式分析紀錄沒有可匯出的 "
-                "正式樣品資料。",
-                400
-            )
-
-        template_path = os.path.join(
-            app.root_path,
-            "resources",
-            "lims",
-            "lims匯入表格.xlsx"
-        )
-
-        if not os.path.exists(
-            template_path
-        ):
-
-            return (
-                "找不到 LIMS Excel 範本。",
-                500
-            )
-
-        analysis_method = str(
-            control_data.get(
-                "EM_NO",
-                ""
-            )
-            or ""
-        ).strip()
-
-        analyst_id = str(
-            record.analyst_employee_id
-            or ""
-        ).strip()
-
-        analyst_name = str(
-            record.analyst_name
-            or ""
-        ).strip()
-
-        excel_buffer = build_lims_excel(
-            template_path=template_path,
-            export_data=export_data,
-            analyst_id=analyst_id,
-            analyst_name=analyst_name,
-            analysis_method=analysis_method
-        )
-
-        exam_no = str(
-            control_data.get(
-                "EXAMNO",
-                ""
-            )
-            or ""
-        ).strip()
-
-        if not exam_no:
-
-            exam_no = "LIMS"
-
-        download_name = (
-            exam_no
-            + "_LIMS_Import.xlsx"
-        )
-
-        return send_file(
-            excel_buffer,
-            mimetype=(
-                "application/vnd.openxmlformats-officedocument."
-                "spreadsheetml.sheet"
-            ),
-            as_attachment=True,
-            download_name=download_name
-        )
 
     finally:
 
