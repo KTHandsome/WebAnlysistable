@@ -1237,6 +1237,16 @@ app.add_url_rule(
     methods=["GET"],
 )
 
+# 保留 Performance Trend 舊 endpoint
+app.add_url_rule(
+    "/analysis/performance-trend",
+    endpoint="analysis_performance_trend",
+    view_func=app.view_functions[
+        "performance_history_bp.analysis_performance_trend"
+    ],
+    methods=["GET"],
+)
+
 @app.route("/analysis-records")
 @login_required
 def analysis_records():
@@ -8718,76 +8728,6 @@ def update_analysis_samples():
         saved="1"
     )
 )
-
-
-# ========================================
-# PRM Performance Trend API
-# ========================================
-@app.route(
-    "/analysis/performance-trend",
-    methods=["GET"]
-)
-@login_required
-def analysis_performance_trend():
-
-    instrument_id = str(
-        request.args.get("instrument_id", "")
-    ).strip()
-
-    monitor_item = str(
-        request.args.get("monitor_item", "")
-    ).strip()
-
-    performance_type = str(
-        request.args.get("performance_type", "")
-    ).strip()
-
-    if not all([
-        instrument_id,
-        monitor_item,
-        performance_type
-    ]):
-        return jsonify({
-            "success": False,
-            "message": "缺少儀器或性能查核項目。"
-        }), 400
-
-    db = SessionLocal()
-
-    try:
-        result = get_performance_trend(
-            db=db,
-            instrument_id=instrument_id,
-            monitor_item=monitor_item,
-            performance_type=performance_type,
-            limit=30
-        )
-
-        return jsonify({
-            "success": True,
-            "data": result
-        })
-
-    except ValueError as exc:
-
-        return jsonify({
-            "success": False,
-            "message": str(exc)
-        }), 400
-
-    except Exception:
-
-        app.logger.exception(
-            "PRM performance trend query failed"
-        )
-
-        return jsonify({
-            "success": False,
-            "message": "查詢 PRM 歷程失敗。"
-        }), 500
-
-    finally:
-        db.close()
 
 @app.route(
     "/analysis/save-record",

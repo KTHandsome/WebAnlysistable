@@ -1,13 +1,22 @@
 # -*- coding: utf-8 -*-
 """Performance History Flask routes."""
-
-from flask import Blueprint, request, render_template
+from flask import (
+    Blueprint,
+    request,
+    render_template,
+    jsonify,
+    current_app,
+)
 
 from database import SessionLocal
+
 from services.performance_history_query_service import (
     query_performance_history,
 )
 
+from services.performance_trend_service import (
+    get_performance_trend,
+)
 
 performance_history_bp = Blueprint(
     "performance_history_bp",
@@ -67,3 +76,68 @@ def register_performance_history_route(login_required):
             rows=rows,
             error_message=error_message
         )
+
+    @performance_history_bp.route(
+        "/analysis/performance-trend",
+        methods=["GET"]
+    )
+    @login_required
+    def analysis_performance_trend():
+
+        instrument_id = str(
+            request.args.get("instrument_id", "")
+        ).strip()
+
+        monitor_item = str(
+            request.args.get("monitor_item", "")
+        ).strip()
+
+        performance_type = str(
+            request.args.get("performance_type", "")
+        ).strip()
+
+        if not all([
+            instrument_id,
+            monitor_item,
+            performance_type
+        ]):
+            return jsonify({
+                "success": False,
+                "message": "缺少儀器或性能查核項目。"
+            }), 400
+
+        db = SessionLocal()
+
+        try:
+            result = get_performance_trend(
+                db=db,
+                instrument_id=instrument_id,
+                monitor_item=monitor_item,
+                performance_type=performance_type,
+                limit=30
+            )
+
+            return jsonify({
+                "success": True,
+                "data": result
+            })
+
+        except ValueError as exc:
+            return jsonify({
+                "success": False,
+                "message": str(exc)
+            }), 400
+
+        except Exception:
+            current_app.logger.exception(
+                "PRM performance trend query failed"
+            )
+
+            return jsonify({
+                "success": False,
+                "message": "查詢 PRM 歷程失敗。"
+            }), 500
+
+        finally:
+            db.close()
+        
