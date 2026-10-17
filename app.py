@@ -14,6 +14,8 @@ from routes.performance_history_routes import (
     register_performance_history_route,
 )
 
+from routes.analysis_record_routes import analysis_record_bp
+
 from services.lims_auth_service import (
     validate_lims_user
 )
@@ -1247,6 +1249,19 @@ app.add_url_rule(
     methods=["GET"],
 )
 
+# Analysis Record Blueprint
+app.register_blueprint(analysis_record_bp)
+
+# 保留舊 endpoint，相容既有 url_for 呼叫
+app.add_url_rule(
+    "/analysis-delete-history",
+    endpoint="analysis_delete_history",
+    view_func=app.view_functions[
+        "analysis_record_bp.analysis_delete_history"
+    ],
+    methods=["GET"],
+)
+
 @app.route("/analysis-records")
 @login_required
 def analysis_records():
@@ -1470,44 +1485,6 @@ def analysis_records():
              ),
               active_page="analysis_records"
          )
-
-    finally:
-
-        db.close()
-
-@app.route(
-    "/analysis-delete-history"
-)
-@login_required
-def analysis_delete_history():
-
-    if not can_view_analysis_delete_history():
-
-        return (
-            "您沒有查看分析刪除紀錄的權限。",
-            403
-        )
-
-    db = SessionLocal()
-
-    try:
-
-        records = (
-            db.query(
-                AnalysisDeleteHistory
-            )
-            .order_by(
-                AnalysisDeleteHistory.deleted_at.desc(),
-                AnalysisDeleteHistory.id.desc()
-            )
-            .all()
-        )
-
-        return render_template(
-            "analysis_delete_history.html",
-            records=records,
-            active_page="analysis_records"
-        )
 
     finally:
 
