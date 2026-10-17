@@ -6,6 +6,7 @@ from flask import (
     url_for,
     session,
     flash,
+    send_file,
     jsonify
 )
 
@@ -1262,6 +1263,16 @@ app.add_url_rule(
     methods=["GET"],
 )
 
+# 保留分析紀錄明細舊 endpoint
+app.add_url_rule(
+    "/analysis-records/<analysis_id>",
+    endpoint="analysis_record_detail",
+    view_func=app.view_functions[
+        "analysis_record_bp.analysis_record_detail"
+    ],
+    methods=["GET"],
+)
+
 @app.route("/analysis-records")
 @login_required
 def analysis_records():
@@ -1490,120 +1501,6 @@ def analysis_records():
 
         db.close()
 
-@app.route(
-    "/analysis-records/<analysis_id>"
-)
-@login_required
-def analysis_record_detail(
-    analysis_id
-):
-
-    db = SessionLocal()
-
-    try:
-
-        record = (
-            db.query(
-                AnalysisRecord
-            )
-            .filter(
-                AnalysisRecord.analysis_id
-                == analysis_id
-            )
-            .first()
-        )
-
-        if record is None:
-
-            return (
-                "查無此分析紀錄。",
-                404
-            )
-
-        samples = (
-             db.query(
-                 AnalysisSample
-             )
-            .filter(
-                 AnalysisSample.analysis_id
-              == analysis_id
-            )
-            .order_by(
-                AnalysisSample.display_order,
-                AnalysisSample.id
-              )
-           .all()
-         )
-
-        qaqc_results = (
-            db.query(
-               AnalysisQaqcResult
-            )
-           .filter(
-               AnalysisQaqcResult.analysis_id
-              == analysis_id
-            )
-           .order_by(
-            AnalysisQaqcResult.display_order,
-            AnalysisQaqcResult.id
-            )
-            .all()
-        )
-
-        calibration_summary = (
-            db.query(
-                AnalysisCalibrationSummary
-            )
-            .filter(
-                AnalysisCalibrationSummary.analysis_id
-                == analysis_id
-            )
-            .first()
-        )
-
-        calibration_points = (
-            db.query(
-                AnalysisCalibrationPoint
-            )
-            .filter(
-                AnalysisCalibrationPoint.analysis_id
-                == analysis_id
-            )
-            .order_by(
-                AnalysisCalibrationPoint.display_order,
-                AnalysisCalibrationPoint.id
-            )
-            .all()
-        )
-
-        review_history = (
-            db.query(
-                AnalysisReviewHistory
-            )
-            .filter(
-                AnalysisReviewHistory.analysis_id
-                == analysis_id
-            )
-            .order_by(
-                AnalysisReviewHistory.created_at,
-                AnalysisReviewHistory.id
-            )
-            .all()
-        )
-
-        return render_template(
-            "analysis_record_detail.html",
-            record=record,
-            calibration_summary=calibration_summary,
-            calibration_points=calibration_points,
-            samples=samples,
-            qaqc_results=qaqc_results,
-            review_history=review_history,
-            active_page="analysis_records"
-        )
-    finally:
-
-        db.close()
 
 @app.route(
     "/analysis-records/<analysis_id>/export-pdf"
