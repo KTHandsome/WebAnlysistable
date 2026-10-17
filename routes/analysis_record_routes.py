@@ -13,9 +13,10 @@ from flask import (
     session
 )
 
-from analysis.analysis_state import load_analysis_state
-
-from analysis.analysis_state import save_analysis_state
+from analysis.analysis_state import (
+     load_analysis_state,
+     save_analysis_state
+)
 
 from analysis.analysis_route_helpers import (
     get_analysis_state_key,
@@ -42,6 +43,11 @@ from models import (
     AnalysisCalibrationPoint,
     AnalysisWorkState,
     AnalysisReviewHistory,
+)
+
+
+from services.performance_history_service import (
+    delete_performance_links_for_analysis,
 )
 
 from exports.w434_lims_mapper import (
@@ -1024,3 +1030,84 @@ def resume_analysis_record(analysis_id):
     return redirect(
         url_for(analysis_endpoint, saved="1")
     )
+
+@analysis_record_bp.route(
+    "/analysis-records/<analysis_id>/delete",
+    methods=["POST"]
+)
+@login_required
+def delete_analysis_record(analysis_id):
+
+    if not can_delete_analysis():
+        return "您沒有分析紀錄刪除權限。", 403
+
+    delete_reason = request.form.get(
+        "delete_reason", ""
+    ).strip()
+
+    if not delete_reason:
+        return "刪除分析紀錄時必須填寫刪除原因。", 400
+
+    db = SessionLocal()
+
+    try:
+        record = db.query(AnalysisRecord).filter(
+            AnalysisRecord.analysis_id == analysis_id
+        ).first()
+
+        if record is None:
+            return "查無此分析紀錄。", 404
+
+        current_user = get_current_user() or {}
+
+        delete_history = AnalysisDeleteHistory(
+            analysis_id=record.analysis_id,
+            record_id=record.id,
+            exam_name=record.exam_name,
+            method_code=record.method_code,
+            analyst_name=record.analyst_name,
+            record_status=record.status,
+            deleted_by_user_id=str(
+                current_user.get("user_id", "") or ""
+            ).strip(),
+            deleted_by_employee_id=str(
+                current_user.get("employee_id", "") or ""
+            ).strip(),
+            deleted_by_name=str(
+                current_user.get("employee_name", "") or ""
+            ).strip(),
+            delete_reason=delete_reason
+        )
+
+        db.add(delete_history)
+
+        # 先刪除子表，保留原有順序
+        for model in (
+            AnalysisReviewHistory,
+            AnalysisWorkState,
+            AnalysisQaqcResult,
+            AnalysisSample,
+            AnalysisCalibrationPoint,
+            AnalysisCalibrationSummary,
+        ):
+            db.query(model).filter(
+                model.analysis_id == analysis_id
+            ).delete(synchronize_session=False)
+
+        # PFM V2.1 關聯清理，使用同一個 DB Session
+        delete_performance_links_for_analysis(
+            db=db,
+            analysis_id=analysis_id
+        )
+
+        db.delete(record)
+        db.commit()
+
+        return redirect(url_for("analysis_records"))
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
