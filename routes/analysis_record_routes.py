@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, send_file
+import json
 
 from database import SessionLocal
 
@@ -14,8 +15,11 @@ from models import (
     AnalysisQaqcResult,
     AnalysisCalibrationSummary,
     AnalysisCalibrationPoint,
+    AnalysisWorkState,
     AnalysisReviewHistory,
 )
+
+from reports.w434_pdf import build_w434_pdf
 
 
 analysis_record_bp = Blueprint(
@@ -144,6 +148,137 @@ def analysis_record_detail(analysis_id):
             qaqc_results=qaqc_results,
             review_history=review_history,
             active_page="analysis_records",
+        )
+
+    finally:
+        db.close()
+
+@analysis_record_bp.route(
+    "/analysis-records/<analysis_id>/export-pdf",
+    methods=["GET"],
+)
+@login_required
+def export_analysis_record_pdf(analysis_id):
+
+    db = SessionLocal()
+
+    try:
+        record = (
+            db.query(AnalysisRecord)
+            .filter(
+                AnalysisRecord.analysis_id == analysis_id
+            )
+            .first()
+        )
+
+        if record is None:
+            return "查無此分析紀錄。", 404
+
+        work_state = (
+            db.query(AnalysisWorkState)
+            .filter(
+                AnalysisWorkState.analysis_id == analysis_id
+            )
+            .first()
+        )
+
+        if work_state is None:
+            return (
+                "此正式分析紀錄沒有可供匯出的 Snapshot。",
+                400
+            )
+
+        try:
+            analysis_state = json.loads(
+                work_state.state_json or "{}"
+            )
+
+            form_data = json.loads(
+                work_state.form_data_json or "{}"
+            )
+
+            control_data = json.loads(
+                work_state.control_data_json or "{}"
+            )
+
+            method_data = json.loads(
+                work_state.method_data_json or "{}"
+            )
+
+            report_data = json.loads(
+                work_state.report_data_json or "{}"
+            )
+
+        except json.JSONDecodeError:
+            return (
+                "正式分析紀錄 Snapshot 格式異常，"
+                "無法重新匯出 PDF。",
+                500
+            )
+
+        if not analysis_state:
+            return (
+                "正式分析紀錄缺少分析結果 Snapshot。",
+                400
+            )
+
+        if not form_data:
+            return (
+                "正式分析紀錄缺少基本資料 Snapshot。",
+                400
+            )
+
+        if not control_data:
+            return (
+                "正式分析紀錄缺少年度管制 Snapshot。",
+                400
+            )
+
+        if not method_data:
+            return (
+                "正式分析紀錄缺少方法設定 Snapshot。",
+                400
+            )
+
+        if not report_data:
+            return (
+                "正式分析紀錄缺少報表設定 Snapshot。",
+                400
+            )
+
+        pdf_buffer = build_w434_pdf(
+            report_data,
+            method_data,
+            control_data,
+            form_data,
+            analysis_state
+        )
+
+        analyte_display = str(
+            method_data.get("ANALYTE_DISPLAY", "") or ""
+        ).strip()
+
+        if not analyte_display:
+            analyte_display = (
+                record.exam_name or "Analysis"
+            )
+
+        method_code = str(
+            record.method_code or "Analysis"
+        ).strip()
+
+        download_name = (
+            method_code
+            + "_"
+            + analyte_display
+            + "_Analysis_Record.pdf"
+        )
+
+        return send_file(
+            pdf_buffer,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=download_name
         )
 
     finally:
