@@ -136,6 +136,12 @@ from services.performance_history_query_service import (
     query_performance_history
 )
 
+from analysis.analysis_route_helpers import (
+    get_analysis_state_key,
+    get_analysis_session_key,
+    get_analysis_page_endpoint,
+)
+
 import os
 import csv
 import io
@@ -1314,6 +1320,19 @@ app.add_url_rule(
     methods=["GET"],
 )
 
+# ========================================
+# Analysis Record Resume Endpoint 相容
+# ========================================
+
+app.add_url_rule(
+    "/analysis-records/<analysis_id>/resume",
+    endpoint="resume_analysis_record",
+    view_func=app.view_functions[
+        "analysis_record_bp.resume_analysis_record"
+    ],
+    methods=["POST"]
+)
+
 @app.route(
     "/analysis-records/<analysis_id>/delete",
     methods=["POST"]
@@ -1523,144 +1542,6 @@ def delete_analysis_record(
 
         db.close()
 
-
-@app.route(
-    "/analysis-records/<analysis_id>/resume",
-    methods=["POST"]
-)
-@login_required
-def resume_analysis_record(
-    analysis_id
-):
-
-    db = SessionLocal()
-
-    try:
-
-        record = (
-            db.query(
-                AnalysisRecord
-            )
-            .filter(
-                AnalysisRecord.analysis_id
-                == analysis_id
-            )
-            .first()
-        )
-
-        if record is None:
-
-            return (
-                "查無此分析紀錄。",
-                404
-            )
-
-        if (
-            record.status
-            != "REJECTED"
-        ):
-
-            return (
-                "只有退回修正的分析紀錄"
-                "可以重新進入修正。",
-                400
-            )
-
-        method_code = str(
-            record.method_code or ""
-        ).strip().upper()
-
-        analysis_endpoint = get_analysis_page_endpoint(
-            method_code
-        )
-
-        work_state = (
-            db.query(
-                AnalysisWorkState
-            )
-            .filter(
-                AnalysisWorkState.analysis_id
-                == analysis_id
-            )
-            .first()
-        )
-
-        if work_state is None:
-
-            return (
-                "此分析紀錄沒有可恢復的"
-                "原分析工作資料。",
-                400
-            )
-
-        try:
-
-            analysis_state = json.loads(
-                work_state.state_json
-                or "{}"
-            )
-
-            form_data = json.loads(
-                work_state.form_data_json
-                or "{}"
-            )
-
-        except json.JSONDecodeError:
-
-            return (
-                "原分析工作資料格式異常，"
-                "無法恢復。",
-                500
-            )
-
-        if not analysis_state:
-
-            return (
-                "原分析工作資料內容為空白，"
-                "無法恢復。",
-                400
-            )
-
-        if not form_data:
-
-            return (
-                "原分析基本資料內容為空白，"
-                "無法恢復。",
-                400
-            )
-
-    finally:
-
-        db.close()
-
-    # ========================================
-    # 確保恢復後仍然指向原正式紀錄
-    # 避免重新儲存時產生另一筆 AnalysisRecord
-    # ========================================
-
-    analysis_state[
-        "formal_analysis_id"
-    ] = analysis_id
-
-    form_data["method_code"] = method_code
-
-    save_analysis_state(
-        get_analysis_state_key(method_code),
-        analysis_state
-    )
-
-    session["basic_info_form"] = form_data
-
-    session[
-        get_analysis_session_key(method_code)
-    ] = analysis_id
-
-    return redirect(
-        url_for(
-            analysis_endpoint,
-            saved="1"
-        )
-    )
 
 def load_method_analysis_modes():
     method_file = os.path.join(
@@ -3810,139 +3691,6 @@ def get_method_volume_defaults(
         final_volume
     )
 
-
-def get_analysis_state_key(method_code):
-
-    method_code = str(
-        method_code or ""
-    ).strip().upper()
-
-    if not method_code:
-        raise ValueError(
-            "缺少分析方法代碼，無法建立分析狀態識別碼。"
-        )
-
-    return (
-        method_code
-        + "_CURRENT"
-    )
-
-def get_analysis_session_key(method_code):
-
-    method_code = str(
-        method_code or ""
-    ).strip().lower()
-
-    if not method_code:
-        raise ValueError(
-            "缺少分析方法代碼，無法建立分析 Session 識別碼。"
-        )
-
-    return (
-        method_code
-        + "_formal_analysis_id"
-    )
-
-def get_analysis_page_endpoint(
-    method_code
-):
-
-    method_code = str(
-        method_code or ""
-    ).strip().upper()
-
-    if not method_code:
-
-        raise ValueError(
-            "缺少分析方法代碼，"
-            "無法取得分析頁面。"
-        )
-
-    method_file = os.path.join(
-        app.root_path,
-        "data",
-        "Phyon_Method_Settings.csv"
-    )
-
-    if not os.path.exists(
-        method_file
-    ):
-
-        raise ValueError(
-            "尚未匯入方法設定資料。"
-        )
-
-    method_data = None
-
-    with open(
-        method_file,
-        "r",
-        encoding="utf-8-sig",
-        newline=""
-    ) as f:
-
-        reader = csv.DictReader(
-            f
-        )
-
-        for row in reader:
-
-            row_method_code = str(
-                row.get(
-                    "METHOD_CODE",
-                    ""
-                )
-                or ""
-            ).strip().upper()
-
-            active = str(
-                row.get(
-                    "ACTIVE",
-                    ""
-                )
-                or ""
-            ).strip().upper()
-
-            if (
-                row_method_code
-                == method_code
-                and active == "Y"
-            ):
-
-                method_data = row
-                break
-
-    if method_data is None:
-
-        raise ValueError(
-            "查無分析方法 "
-            + method_code
-            + " 的有效方法設定。"
-        )
-
-    import_type = str(
-        method_data.get(
-            "IMPORT_TYPE",
-            ""
-        )
-        or ""
-    ).strip().upper()
-
-    if import_type == "RA7000A_PDF":
-
-        return "analysis_w330"
-
-    if import_type in {
-        "PE900_PDF",
-        "TOC_PDF"
-    }:
-        return "analysis_w43401"
-
-    raise ValueError(
-        "尚未設定 IMPORT_TYPE "
-        + import_type
-        + " 的分析頁面。"
-    )
 
 def validate_qaqc_export_ready(
     qaqc_results,
