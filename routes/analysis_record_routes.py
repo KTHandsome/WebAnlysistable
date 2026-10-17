@@ -3,14 +3,18 @@ from flask import (
     render_template,
     send_file,
     current_app,
+    request,
 )
 
 import json
+
+import os
 
 from database import SessionLocal
 
 from auth_session import (
     login_required,
+    can_delete_analysis,
     can_view_analysis_delete_history,
 )
 
@@ -40,6 +44,105 @@ analysis_record_bp = Blueprint(
     "analysis_record_bp",
     __name__,
 )
+
+@analysis_record_bp.route(
+    "/analysis-records",
+    methods=["GET"],
+)
+@login_required
+def analysis_records():
+
+    filter_names = [
+        "ctrl_year",
+        "category",
+        "status",
+        "exam_name",
+        "method_code",
+        "instrument_id",
+        "analyst_name",
+        "analysis_date_start",
+        "analysis_date_end",
+    ]
+
+    search_data = {
+        name: request.args.get(name, "").strip()
+        for name in filter_names
+    }
+
+    db = SessionLocal()
+
+    try:
+        query = db.query(AnalysisRecord)
+
+        # 精確比對
+        for field in (
+            "ctrl_year",
+            "category",
+            "status",
+            "instrument_id",
+        ):
+            value = search_data[field]
+
+            if value:
+                query = query.filter(
+                    getattr(AnalysisRecord, field) == value
+                )
+
+        # 部分文字比對
+        for field in (
+            "exam_name",
+            "method_code",
+            "analyst_name",
+        ):
+            value = search_data[field]
+
+            if value:
+                query = query.filter(
+                    getattr(AnalysisRecord, field).contains(value)
+                )
+
+        # 分析日期：查詢期間與分析期間有交集即可
+        start_date = search_data["analysis_date_start"]
+        end_date = search_data["analysis_date_end"]
+
+        if start_date and end_date:
+            query = query.filter(
+                AnalysisRecord.analysis_start_date <= end_date,
+                AnalysisRecord.analysis_end_date >= start_date,
+            )
+
+        elif start_date:
+            query = query.filter(
+                AnalysisRecord.analysis_end_date >= start_date
+            )
+
+        elif end_date:
+            query = query.filter(
+                AnalysisRecord.analysis_start_date <= end_date
+            )
+
+        records = (
+            query
+            .order_by(
+                AnalysisRecord.created_at.desc(),
+                AnalysisRecord.id.desc(),
+            )
+            .all()
+        )
+
+        return render_template(
+            "analysis_records.html",
+            records=records,
+            search_data=search_data,
+            can_delete_analysis=can_delete_analysis(),
+            can_view_delete_history=(
+                can_view_analysis_delete_history()
+            ),
+            active_page="analysis_records",
+        )
+
+    finally:
+        db.close()
 
 
 @analysis_record_bp.route(

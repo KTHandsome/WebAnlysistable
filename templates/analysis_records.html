@@ -39,7 +39,7 @@
             white-space: nowrap;
         "
     >
-        刪除紀錄
+        刪除歷程
     </a>
 
     {% endif %}
@@ -48,8 +48,94 @@
 
 <div class="eacs-card">
 
+    <h2 class="eacs-card-title">查詢條件</h2>
+
+    <form method="get" action="{{ url_for('analysis_records') }}">
+
+        <div class="eacs-form-grid">
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label" for="ctrl_year">管制年度</label>
+                <input type="text" id="ctrl_year" name="ctrl_year"
+                       class="eacs-form-control" inputmode="numeric"
+                       placeholder="例如：2026"
+                       value="{{ search_data.ctrl_year | default('', true) }}">
+            </div>
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label" for="category">檢測類別</label>
+                <input type="text" id="category" name="category"
+                       class="eacs-form-control" placeholder="輸入類別代碼（精確比對）"
+                       value="{{ search_data.category | default('', true) }}">
+            </div>
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label" for="status">紀錄狀態</label>
+                <select id="status" name="status" class="eacs-form-control">
+                    <option value="">全部</option>
+                    <option value="UNDER_REVIEW" {% if search_data.status == 'UNDER_REVIEW' %}selected{% endif %}>待審核</option>
+                    <option value="APPROVED" {% if search_data.status == 'APPROVED' %}selected{% endif %}>已審核</option>
+                    <option value="REJECTED" {% if search_data.status == 'REJECTED' %}selected{% endif %}>退回修正</option>
+                </select>
+            </div>
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label" for="exam_name">測項</label>
+                <input type="text" id="exam_name" name="exam_name"
+                       class="eacs-form-control" placeholder="例如：TOC"
+                       value="{{ search_data.exam_name | default('', true) }}">
+            </div>
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label" for="method_code">方法</label>
+                <input type="text" id="method_code" name="method_code"
+                       class="eacs-form-control" placeholder="例如：W532"
+                       value="{{ search_data.method_code | default('', true) }}">
+            </div>
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label" for="instrument_id">儀器編號</label>
+                <input type="text" id="instrument_id" name="instrument_id"
+                       class="eacs-form-control" placeholder="請輸入儀器編號（精確比對）"
+                       value="{{ search_data.instrument_id | default('', true) }}">
+            </div>
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label" for="analyst_name">分析人員</label>
+                <input type="text" id="analyst_name" name="analyst_name"
+                       class="eacs-form-control" placeholder="輸入姓名部分文字"
+                       value="{{ search_data.analyst_name | default('', true) }}">
+            </div>
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label" for="analysis_date_start">分析日期起</label>
+                <input type="date" id="analysis_date_start" name="analysis_date_start"
+                       class="eacs-form-control"
+                       value="{{ search_data.analysis_date_start | default('', true) }}">
+            </div>
+
+            <div class="eacs-form-field">
+                <label class="eacs-form-label" for="analysis_date_end">分析日期迄</label>
+                <input type="date" id="analysis_date_end" name="analysis_date_end"
+                       class="eacs-form-control"
+                       value="{{ search_data.analysis_date_end | default('', true) }}">
+            </div>
+
+        </div>
+
+        <div style="display: flex; justify-content: center; gap: 12px; margin-top: 24px; flex-wrap: wrap;">
+            <button type="submit" class="eacs-button eacs-button-primary">查詢</button>
+            <a href="{{ url_for('analysis_records') }}" class="eacs-button eacs-button-secondary">清除條件</a>
+        </div>
+
+    </form>
+
+</div>
+
+<div class="eacs-card">
+
     <h2 class="eacs-card-title">
-        儲存正式分析紀錄
+        儲存正式分析紀錄（{{ records | length }} 筆）
     </h2>
 
     {% if records %}
@@ -330,7 +416,7 @@
             color: #6b7280;
         "
     >
-        目前沒有正式分析紀錄。
+        查無符合條件的正式分析紀錄。
     </div>
 
     {% endif %}
