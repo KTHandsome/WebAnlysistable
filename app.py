@@ -1,3 +1,4 @@
+from routes.home_routes import home_bp
 from routes.performance_control_import_routes import performance_control_import_bp
 from routes.icp_analyte_import_routes import icp_analyte_import_bp
 from routes.method_instrument_import_routes import method_instrument_import_bp
@@ -364,17 +365,6 @@ def logout():
         url_for("login")
     )
 
-@app.route("/")
-def home():
-
-    if get_current_user() is None:
-        return redirect(
-            url_for("login")
-        )
-
-    return redirect(
-        url_for("basic_info")
-    )
 
 def get_method_analysis_mode(method_code):
     method_code = str(
@@ -1198,6 +1188,16 @@ app.register_blueprint(method_instrument_import_bp)
 app.register_blueprint(icp_analyte_import_bp)
 
 app.register_blueprint(performance_control_import_bp)
+
+app.register_blueprint(home_bp)
+
+app.add_url_rule(
+    "/",
+    endpoint="home",
+    view_func=app.view_functions["home_bp.home"],
+    methods=["GET"]
+)
+
 
 app.add_url_rule(
     "/performance-control-import",
