@@ -1,3 +1,5 @@
+import os
+
 from flask import (
     Blueprint,
     redirect,
@@ -22,6 +24,25 @@ auth_bp = Blueprint(
     "auth_bp",
     __name__,
 )
+
+
+def is_dev_login_allowed():
+
+    enabled = (
+        os.getenv(
+            "PHYON_ENABLE_DEV_LOGIN",
+            ""
+        ).strip() == "1"
+    )
+
+    is_sqlite = DATABASE_TYPE == "sqlite"
+
+    is_local = request.remote_addr in {
+        "127.0.0.1",
+        "::1",
+    }
+
+    return enabled and is_sqlite and is_local
 
 
 @auth_bp.route("/login",methods=["GET", "POST"])
@@ -139,7 +160,7 @@ def login():
     "login.html",
     error_message=error_message,
     show_dev_login=(
-        DATABASE_TYPE == "sqlite"
+        is_dev_login_allowed()
     )
 )
 
@@ -148,7 +169,7 @@ def login():
 @auth_bp.route("/dev-login",methods=["POST"])
 def dev_login():
 
-    if DATABASE_TYPE != "sqlite":
+    if not is_dev_login_allowed():
         return (
             "正式環境不允許使用測試登入。",
             403
