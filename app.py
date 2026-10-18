@@ -1,3 +1,4 @@
+from routes.method_instrument_import_routes import method_instrument_import_bp
 from routes.instrument_settings_import_routes import instrument_settings_import_bp
 from routes.report_settings_import_routes import report_settings_import_bp
 from routes.method_settings_import_routes import method_settings_import_bp
@@ -1252,6 +1253,18 @@ app.register_blueprint(method_settings_import_bp)
 app.register_blueprint(report_settings_import_bp)
 
 app.register_blueprint(instrument_settings_import_bp)
+
+app.register_blueprint(method_instrument_import_bp)
+
+app.add_url_rule(
+    "/method-instrument-import",
+    endpoint="method_instrument_import",
+    view_func=app.view_functions[
+        "method_instrument_import_bp.method_instrument_import"
+    ],
+    methods=["POST"]
+)
+
 
 app.add_url_rule(
     "/instrument-settings-import",
@@ -7710,230 +7723,6 @@ def export_w434_lims():
 
 
 
-@app.route("/method-instrument-import", methods=["POST"])
-@login_required
-def method_instrument_import():
-
-    uploaded_file = request.files.get(
-        "method_instrument_csv_file"
-    )
-
-    method_instrument_success_message = None
-    method_instrument_error_message = None
-
-    if (
-        uploaded_file is None
-        or uploaded_file.filename == ""
-    ):
-
-        method_instrument_error_message = (
-            "請選擇方法－儀器關聯 CSV 檔案。"
-        )
-
-    elif not uploaded_file.filename.lower().endswith(
-        ".csv"
-    ):
-
-        method_instrument_error_message = (
-            "只能匯入 CSV 檔案。"
-        )
-
-    else:
-
-        try:
-
-            file_bytes = uploaded_file.read()
-
-            try:
-
-                csv_text = file_bytes.decode(
-                    "utf-8-sig"
-                )
-
-            except UnicodeDecodeError:
-
-                csv_text = None
-
-                method_instrument_error_message = (
-                    "CSV 編碼錯誤，必須使用 UTF-8 格式。"
-                )
-
-            if csv_text is not None:
-
-                reader = csv.DictReader(
-                    io.StringIO(csv_text)
-                )
-
-                required_columns = {
-                    "METHOD_CODE",
-                    "LABPARTID"
-                }
-
-                actual_columns = set(
-                    reader.fieldnames or []
-                )
-
-                missing_columns = (
-                    required_columns
-                    - actual_columns
-                )
-
-                if missing_columns:
-
-                    method_instrument_error_message = (
-                        "方法－儀器關聯 CSV 格式不正確，缺少欄位："
-                        + ", ".join(
-                            sorted(
-                                missing_columns
-                            )
-                        )
-                    )
-
-                else:
-
-                    rows = list(reader)
-
-                    if len(rows) == 0:
-
-                        method_instrument_error_message = (
-                            "方法－儀器關聯 CSV 沒有任何資料。"
-                        )
-
-                    else:
-
-                        validation_errors = []
-                        relation_keys = set()
-
-                        for row_index, row in enumerate(
-                            rows,
-                            start=2
-                        ):
-
-                            method_code = (
-                                row.get(
-                                    "METHOD_CODE",
-                                    ""
-                                )
-                                .strip()
-                            )
-
-                            labpartid = (
-                                row.get(
-                                    "LABPARTID",
-                                    ""
-                                )
-                                .strip()
-                            )
-
-                            if not method_code:
-
-                                validation_errors.append(
-                                    "第 "
-                                    + str(row_index)
-                                    + " 列：METHOD_CODE 不可空白。"
-                                )
-
-                            if not labpartid:
-
-                                validation_errors.append(
-                                    "第 "
-                                    + str(row_index)
-                                    + " 列：LABPARTID 不可空白。"
-                                )
-
-                            if (
-                                method_code
-                                and labpartid
-                            ):
-
-                                relation_key = (
-                                    method_code.upper(),
-                                    labpartid.upper()
-                                )
-
-                                if (
-                                    relation_key
-                                    in relation_keys
-                                ):
-
-                                    validation_errors.append(
-                                        "第 "
-                                        + str(row_index)
-                                        + " 列：METHOD_CODE + LABPARTID 重複："
-                                        + method_code
-                                        + " / "
-                                        + labpartid
-                                    )
-
-                                else:
-
-                                    relation_keys.add(
-                                        relation_key
-                                    )
-
-                        if validation_errors:
-
-                            method_instrument_error_message = (
-                                "方法－儀器關聯 CSV 驗證失敗："
-                                + "<br>"
-                                + "<br>".join(
-                                    validation_errors[:20]
-                                )
-                            )
-
-                        else:
-
-                            data_folder = os.path.join(
-                                app.root_path,
-                                "data"
-                            )
-
-                            os.makedirs(
-                                data_folder,
-                                exist_ok=True
-                            )
-
-                            save_path = os.path.join(
-                                data_folder,
-                                "Phyon_Method_Instrument.csv"
-                            )
-
-                            with open(
-                                save_path,
-                                "wb"
-                            ) as f:
-
-                                f.write(
-                                    file_bytes
-                                )
-
-                            method_instrument_success_message = (
-                                "方法－儀器關聯匯入成功，共 "
-                                + str(len(rows))
-                                + " 筆。"
-                            )
-
-        except Exception as ex:
-
-            method_instrument_error_message = (
-                "方法－儀器關聯匯入失敗："
-                + str(ex)
-            )
-
-    return render_template(
-        "control_import.html",
-        success_message=None,
-        error_message=None,
-        method_success_message=None,
-        method_error_message=None,
-        report_success_message=None,
-        report_error_message=None,
-        instrument_success_message=None,
-        instrument_error_message=None,
-        method_instrument_success_message=method_instrument_success_message,
-        method_instrument_error_message=method_instrument_error_message,
-        active_page="control"
-    )
 
 # ========================================
 # ICP 適用測項 CSV 匯入
