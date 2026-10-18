@@ -14,6 +14,9 @@ from analysis.analysis_state import (
 )
 
 
+from auth_session import login_required
+
+
 w434_wavelength_bp = Blueprint(
     "w434_wavelength_bp",
     __name__,
@@ -25,6 +28,7 @@ w434_wavelength_bp = Blueprint(
     methods=["POST"]
 )
 
+@login_required
 def confirm_w434_wavelength():
 
     choice = request.form.get(
