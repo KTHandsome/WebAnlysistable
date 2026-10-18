@@ -1,3 +1,7 @@
+from routes.icp_candidate_selection_routes import (
+    icp_candidate_selection_bp,
+)
+
 from routes.w434_wavelength_routes import w434_wavelength_bp
 from routes.batch_remarks_routes import batch_remarks_bp
 from routes.icp_saved_work_routes import icp_saved_work_bp
@@ -985,6 +989,21 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(icp_saved_work_bp)
 
 app.register_blueprint(batch_remarks_bp)
+
+app.extensions[
+    "phyon_load_basic_info_data"
+] = load_basic_info_data
+
+app.register_blueprint(icp_candidate_selection_bp)
+
+app.add_url_rule(
+    "/analysis/icp/candidate-selection",
+    endpoint="save_icp_candidate_selection",
+    view_func=app.view_functions[
+        "icp_candidate_selection_bp.save_icp_candidate_selection"
+    ],
+    methods=["POST"]
+)
 
 app.register_blueprint(w434_wavelength_bp)
 
@@ -2261,174 +2280,6 @@ def save_icp_lims_decision():
 # ========================================
 # ICP 候選量測：整批儲存選取結果
 # ========================================
-@app.route(
-    "/analysis/icp/candidate-selection",
-    methods=["POST"]
-)
-@login_required
-def save_icp_candidate_selection():
-
-    work_key = session.get("icp_work_key")
-
-    saved_work = (
-        load_icp_work_state(work_key)
-        if work_key else None
-    )
-
-    if not saved_work:
-        return "ICP 工作不存在，請重新開啟。", 400
-
-    form_data = session.get("basic_info_form") or {}
-
-    _, method_data, error_message = load_basic_info_data(
-        form_data
-    )
-
-    if (
-        error_message
-        or not method_data
-        or method_data.get("ANALYSIS_MODE") != "MULTI_ANALYTE"
-        or saved_work.get("form_data") != form_data
-        or saved_work.get("import_type")
-        != method_data.get("IMPORT_TYPE")
-    ):
-        return "分析基本資料已變更，請重新確認。", 400
-
-    # 1. 從已保存的 PDF 重新建立完整候選分組
-    parsed_rows = (
-        (saved_work.get("parsed_data") or {}).get("rows")
-        or []
-    )
-
-    groups = build_icp_candidate_selections(
-        build_sample_candidate_groups(parsed_rows)
-    )
-
-    if not groups:
-        return "沒有可選取的候選量測。", 400
-
-    valid_groups = {}
-
-    for group in groups:
-        key = group["selection_key"]
-
-        if key in valid_groups:
-            return "候選量測分組識別重複。", 400
-
-        valid_groups[key] = group
-
-    # 2. 讀取本次提交的選取結果
-    submitted = {}
-
-    for field_name in request.form.keys():
-
-        if not (
-            field_name.startswith("selections[")
-            and field_name.endswith("]")
-        ):
-            continue
-
-        # 防止同一欄位名稱重複提交
-        values = request.form.getlist(field_name)
-
-        if len(values) != 1:
-            return "候選量測欄位重複。", 400
-
-        key = field_name[len("selections["):-1]
-
-        group = valid_groups.get(key)
-
-        if group is None:
-            return "候選量測群組不存在。", 400
-
-        candidates = group.get("candidates") or []
-
-        if len(candidates) <= 1:
-            return "單筆候選不需要人工選取。", 400
-
-        value = str(values[0] or "").strip()
-
-        if not value:
-            # 空白代表維持尚未選擇或清除舊選擇
-            submitted[key] = None
-            continue
-
-        matches = [
-            candidate
-            for candidate in candidates
-            if str(candidate.get("sequence")) == value
-        ]
-
-        if len(matches) != 1:
-            return "選取的候選量測不存在或不唯一。", 400
-
-        submitted[key] = matches[0]["sequence"]
-
-    if not submitted:
-        return "沒有收到候選量測選取資料。", 400
-
-    # 3. 保留其他未顯示群組的有效選擇
-    old_selections = (
-        saved_work.get("candidate_selections") or {}
-    )
-
-    if not isinstance(old_selections, dict):
-        return "原有候選選取資料格式錯誤。", 400
-
-    new_selections = {}
-
-    for key, value in old_selections.items():
-
-        group = valid_groups.get(key)
-
-        if group is None or not isinstance(value, dict):
-            continue
-
-        candidates = group.get("candidates") or []
-
-        if len(candidates) <= 1:
-            continue
-
-        sequence = value.get("sequence")
-
-        if sum(
-            str(candidate.get("sequence")) == str(sequence)
-            for candidate in candidates
-        ) == 1:
-            new_selections[key] = {
-                "sequence": sequence
-            }
-
-    # 4. 套用本次選擇
-    for key, sequence in submitted.items():
-
-        if sequence is None:
-            new_selections.pop(key, None)
-        else:
-            new_selections[key] = {
-                "sequence": sequence
-            }
-
-    # 5. 通過全部驗證後一次寫入 SQLite
-    updated_work = dict(saved_work)
-
-    updated_work["candidate_selections"] = new_selections
-
-    try:
-        save_icp_work_state(work_key, updated_work)
-
-    except Exception:
-        app.logger.exception(
-            "ICP 候選倍數批次儲存失敗"
-        )
-        return "候選倍數儲存失敗。", 500
-
-    return redirect(
-        url_for(
-            "analysis_icp_import",
-            tab="candidates"
-        )
-    )
 
 # ========================================
 # ICP：開啟已暫存工作
