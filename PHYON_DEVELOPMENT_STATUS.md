@@ -1,0 +1,367 @@
+﻿# Phyon Development Status
+
+> Phyon Web 檢驗分析系統開發狀態、共用模組索引與新增檢測方法開發指南。
+
+## 1. 專案基本資訊
+
+| 項目 | 說明 |
+|---|---|
+| 專案 | Phyon Web |
+| 開發環境 | Windows / PowerShell |
+| 專案目錄 | `C:\PhyonWeb` |
+| Python | 3.8.10 |
+| Flask | 3.0.3 |
+| 資料庫 | SQLite / SQLAlchemy |
+| SQLite | `instance/phyon.db` |
+| 外部系統 | LIMS / Firebird ODBC |
+| Git Repository | `KTHandsome/WebAnlysistable` |
+| 開發分支 | `main` |
+| 文件建立基準 | Stage 29，Commit `6343bf4` |
+| 下一階段 | Stage 30：Basic Info Shared Service |
+
+本文件記錄已確認的程式架構與開發規則。
+
+函式參數、資料表欄位及完整呼叫契約，仍以實際原始碼和回歸測試為準。
+
+---
+
+## 2. 開發歷程：Stage 1～29
+
+### 2.1 Stage 1～18：分析紀錄、性能管制及 Blueprint 模組化
+
+此期間逐步完成或調整下列功能：
+
+- TOC、W330 相關樣品分類與性能管制處理。
+- PRM / PFM 性能管制資料匯入、發布、歷程與查詢。
+- 分析紀錄查詢、明細、PDF、LIMS 匯出。
+- 分析紀錄審核、退回、重新開啟、續編與刪除。
+- 年度管制、方法、報表及儀器設定的匯入路由。
+- ICP 測項與儀器關聯匯入路由。
+
+主要 Git 歷程依提交順序包含：
+
+| Commit | 開發內容 |
+|---|---|
+| `4b74c80` | TOC PRM 分類與樣品類別過濾 |
+| `dc57790` | PRM V2 管制、歷程、查詢與刪除完整性 |
+| `0de6907` | PRM V2 查詢 UI 與開發交接 |
+| `11d66ca` | TOC 1CCV1 樣品分類修正 |
+| `4f2d294` | PFM V2.1 共用事件與分析連結 |
+| `416726b` | W330 Hg 批次篩選與 PFM 修正 |
+| `e8157ad` | 初始 PFM 發布與 W330 歷程 |
+| `58aeab0` | 性能管制歷程 Blueprint |
+| `eb24b84` | 性能管制趨勢 API Blueprint |
+| `2296c11` | 分析刪除歷程 Blueprint |
+| `b6c4843` | 分析紀錄明細及 W434 PDF 修正 |
+| `d27e2db` | 分析紀錄 PDF 匯出 Blueprint |
+| `16ef5ab` | 分析紀錄 LIMS 匯出 Blueprint |
+| `6ce3a42` | 分析紀錄查詢 Blueprint |
+| `5fe80c5` | 分析紀錄審核 Blueprint |
+| `e79ce71` | 分析紀錄重新開啟與權限 |
+| `d60211c` | 分析紀錄續編與衝突檢查 |
+| `384a9ac` | 分析紀錄刪除 Blueprint |
+| `bba6121` | 年度管制資料匯入 Blueprint |
+| `d68ef15` | 方法設定匯入及驗證流程 |
+| `68bd7a1` | 報表設定匯入 Blueprint |
+| `fe94d9a` | 儀器設定匯入 Blueprint |
+| `d463080` | 方法與儀器關聯匯入 Blueprint |
+| `2a0cf05` | 性能管制匯入 Blueprint |
+
+注意：此表是 Git 歷程索引，不代表每筆 Commit 均對應一個 Stage。
+Stage 1～18 的精確編號與提交對照尚待核對。
+
+### 2.2 Stage 19～29：核心路由與共用服務整理
+
+| Stage | Commit | 主要成果 |
+|---|---|---|
+| 19 | `dc1051a` | Home Blueprint |
+| 20 | `3f32e07` | Authentication Blueprint |
+| 21 | `b3f3a5c` | 清理重複登入邏輯 |
+| 22 | — | 架構及依賴盤點，無獨立 Commit 記錄 |
+| 23 | `2669996` | ICP 已儲存工作路由 |
+| 24 | `176e471` | Batch Remarks Blueprint |
+| 25 | `eaf3613` | W434 波長確認 Blueprint |
+| 26 | `7c36745` | W434 波長確認登入保護 |
+| 27 | `cc1c5b5` | 開發登入安全管制 |
+| 28 | `115c900` | ICP 候選測項選擇 Blueprint |
+| 29 | `6343bf4` | Method Control Shared Service |
+
+#### Stage 27：開發登入安全規則
+
+開發登入需明確啟用：
+
+`PHYON_ENABLE_DEV_LOGIN=1`
+
+並受 SQLite 與本機 loopback 來源限制。
+
+不得因開發便利而移除正式登入與權限保護。
+
+#### Stage 28：ICP 候選選擇
+
+模組：
+
+`routes/icp_candidate_selection_routes.py`
+
+主要函式：
+
+`save_icp_candidate_selection()`
+
+仍保留舊 Endpoint 相容性。
+
+目前透過 Flask Application Extensions 取得 Basic Info 載入依賴。
+
+#### Stage 29：方法設定與年度管制共用服務
+
+新增：
+
+`services/method_control_service.py`
+
+主要函式：
+
+`load_control_and_method_data(form_data)`
+
+`app.py` 已改成匯入此 Service。
+
+抽離前後使用 14 種 Mock 情境比較，回傳資料、錯誤訊息與 CSV 存取路徑一致。
+
+Flask 68 個路由可載入，主要分析 Endpoint 檢查通過。
+
+---
+
+## 3. Blueprint Registry
+
+| 模組 | 主要功能 |
+|---|---|
+| `routes/home_routes.py` | 系統首頁 |
+| `routes/auth_routes.py` | 登入、登出與開發登入管制 |
+| `routes/analysis_record_routes.py` | 分析紀錄查詢、明細、審核、續編、刪除及匯出 |
+| `routes/control_import_routes.py` | 年度管制資料匯入 |
+| `routes/method_settings_import_routes.py` | 分析方法設定匯入 |
+| `routes/report_settings_import_routes.py` | 報表設定匯入 |
+| `routes/instrument_settings_import_routes.py` | 儀器設定匯入 |
+| `routes/method_instrument_import_routes.py` | 方法與儀器關聯匯入 |
+| `routes/icp_analyte_import_routes.py` | ICP 測項匯入 |
+| `routes/performance_control_import_routes.py` | 性能管制資料匯入 |
+| `routes/performance_history_routes.py` | 性能管制歷程 |
+| `routes/icp_saved_work_routes.py` | 開啟已儲存 ICP 工作 |
+| `routes/icp_candidate_selection_routes.py` | ICP 候選測項選擇 |
+| `routes/batch_remarks_routes.py` | 批次備註更新 |
+| `routes/w434_wavelength_routes.py` | W434 波長確認 |
+
+新增 Route 前，先確認是否已有相對應 Blueprint。
+
+不得僅因新增檢測方法，就重複建立通用分析紀錄或權限路由。
+
+---
+
+## 4. Shared Service Registry
+
+### 4.1 分析與 LIMS
+
+| 模組 | 主要函式 | 用途 |
+|---|---|---|
+| `services/method_control_service.py` | `load_control_and_method_data` | 方法設定及年度管制配對 |
+| `services/analysis_record_service.py` | `save_analysis_record` | 分析紀錄儲存 |
+| `services/lims_analysis_service.py` | `get_analysis_connection_string`, `get_lims_sample_analysis` | LIMS 分析資料存取 |
+| `services/lims_auth_service.py` | `validate_lims_user` | LIMS 身分驗證 |
+
+### 4.2 性能管制
+
+| 模組 | 主要函式或功能 |
+|---|---|
+| `performance_import_service.py` | CSV 解析、匯入及待發布資料啟用 |
+| `performance_publish_service.py` | 發布紀錄、SHA256 與發布狀態 |
+| `performance_release_service.py` | 發布前檢查、資料庫發布與復原診斷 |
+| `performance_query_service.py` | `find_active_performance_control` |
+| `performance_history_service.py` | `sync_performance_history`、分析關聯刪除 |
+| `performance_history_query_service.py` | `query_performance_history` |
+| `performance_trend_service.py` | `get_performance_trend` |
+| `performance_diff_service.py` | `compare_performance_csv` |
+
+其他現有模組：
+
+`services/w330_pdf.py`
+
+該模組的公開函式或類別使用方式，須於實際整合時確認。
+
+上述 Service 清單是功能索引，並非保證所有函式均可直接在新方法中呼叫。
+正式引用前須檢查參數、資料庫交易、權限及使用時機。
+
+---
+
+## 5. Method Control 核心規則
+
+### 5.1 資料來源
+
+方法設定：
+
+`data/Phyon_Method_Settings.csv`
+
+年度管制：
+
+`data/Phyon_Control_<年度>.csv`
+
+### 5.2 函式介面
+
+`load_control_and_method_data(form_data)`
+
+已確認輸入欄位：
+
+- `ctrl_year`
+- `category`
+- `exam_name`
+- `method_code`
+- `instrument_id`
+- `selected_exam_no`
+
+回傳：
+
+`(control_data, method_data, error_message)`
+
+### 5.3 年度管制匹配規則
+
+- 方法設定必須存在且符合啟用狀態。
+- 年度管制檔不存在時，回傳設定錯誤。
+- 年度管制檔存在但測項沒有匹配資料時，允許無管制圖項目進入分析。
+- 已存在適用測項的管制資料，但指定儀器不適用時，必須回傳錯誤。
+- 儀器專屬管制資料優先於共用管制資料。
+- 有多筆符合資料時，使用 `_multiple_matches` 回傳候選。
+- 使用 `selected_exam_no` 精確選取測項代碼。
+- 方法設定類別相同且未手動指定時，優先使用方法設定的 `EXAMNO`。
+- 無有效測項代碼時，依 `EXAMNAME` 或 `EXALIAS` 匹配。
+
+上述規則已於 Stage 29 建立 Mock 回歸基準，不得在模組重構時任意變更。
+
+---
+
+## 6. 新增檢測方法開發指南
+
+新增方法前，先依序檢查：
+
+1. 方法設定 CSV 是否已有對應 `METHOD_CODE`。
+2. 分析模式是否為單測項或多測項。
+3. 儀器資料應使用哪種匯入方式。
+4. 年度管制資料是否存在及適用。
+5. 是否已有可重用的分析資料解析器。
+6. QA/QC、MDL 與性能管制是否有現有實作。
+7. 分析紀錄應如何儲存及續編。
+8. PDF、LIMS 匯出是否可沿用現有流程。
+9. 是否需要新增專用 Blueprint 或分析 Workflow。
+10. 是否已有足夠的 Mock 與實際樣本驗證。
+
+優先研究的模組：
+
+- `services/method_control_service.py`
+- `services/analysis_record_service.py`
+- `services/lims_analysis_service.py`
+- `routes/analysis_record_routes.py`
+- `analysis/` 內既有方法相關 Workflow
+- `parsers/` 內既有儀器資料 Parser
+
+不得僅依模組名稱推定完整呼叫契約，必須先檢查實際程式與資料結構。
+
+---
+
+## 7. app.py 尚待模組化的共用函式
+
+以下為 Stage 29 完成後的盤點結果：
+
+| 函式 | 位置 | 規劃 |
+|---|---|---|
+| `get_method_analysis_mode` | `app.py` | Stage 30 候選 |
+| `get_instrument_import_type` | `app.py` | Stage 30 候選 |
+| `load_basic_info_data` | `app.py` | Stage 30 候選 |
+| `load_report_setting` | `app.py` | 後續評估 |
+| `get_method_volume_defaults` | `app.py` | 後續評估 |
+| `validate_qaqc_export_ready` | `app.py` | 後續評估 |
+
+注意：
+
+`routes/icp_candidate_selection_routes.py` 亦有同名
+`load_basic_info_data` 適配函式。
+
+Stage 30 必須確認相依注入與循環匯入風險，不能直接刪除或混用。
+
+---
+
+## 8. 開發與相容性規則
+
+### 8.1 修改原則
+
+- 每次只進行一個可驗證的小範圍修改。
+- 修改前確認檔案、函式、呼叫位置與相依關係。
+- 共用邏輯先建立 Mock 測試，再搬移。
+- 使用 AST 或等效方式確認非目標程式碼未被修改。
+- 保留原有 Flask Endpoint、HTTP Method 與權限。
+- 不因模組化改寫既有分析公式。
+- 不任意更動 CSV 欄位、SQLite Schema 或 LIMS 關聯。
+- Python 3.8 相容性必須維持。
+- 提交 Git 前執行語法、差異及回歸檢查。
+
+### 8.2 測試安全
+
+測試優先使用：
+
+- 記憶體 Mock CSV
+- 臨時測試資料
+- Mock 資料庫存取
+- AST 唯讀檢查
+
+不得讓測試意外修改正式 SQLite、LIMS 或已發布管制 CSV。
+
+### 8.3 Git 規則
+
+只暫存本次修改的明確檔案。
+
+禁止使用：
+
+`git add .`
+
+正式 CSV、未追蹤備份與測試資料，未經確認不得加入 Commit。
+
+---
+
+## 9. Stage 30 開發計畫
+
+主題：
+
+**Basic Info Shared Service**
+
+預計研究函式：
+
+- `get_method_analysis_mode`
+- `get_instrument_import_type`
+- `load_basic_info_data`
+
+建議順序：
+
+1. 確認目前 Git 與程式狀態。
+2. 盤點函式相依關係及檔案讀取。
+3. 建立搬移前 Mock 回歸測試。
+4. 建立獨立的 Basic Info Service。
+5. 驗證新舊函式回傳一致。
+6. 安全切換 `app.py` 呼叫。
+7. 驗證 ICP Candidate Selection 相依注入。
+8. 驗證 W330、W434 與其他分析入口。
+9. 執行 Git 差異、語法及回歸檢查。
+10. Commit，更新本開發文件。
+
+後續架構應以方便新增檢測方法、減少重複程式碼為優先，
+不以清空 `app.py` 或搬移所有 Route 為唯一目標。
+
+---
+
+## 10. 文件維護規則
+
+每個 Stage 完成並通過回歸測試後，更新：
+
+- 最新 Stage 與 Commit
+- 新增或修改的 Blueprint / Service
+- 共用函式及用途
+- 重要設計決策
+- 相容性風險
+- 下一階段工作
+
+未實際確認的細節須標記「待驗證」。
+
+**未來新增檢測方法前，優先閱讀本文件，再查閱相關模組原始碼。**
