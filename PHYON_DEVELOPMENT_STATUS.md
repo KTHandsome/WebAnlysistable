@@ -683,3 +683,71 @@ Stage 33 ???
 ????????
 
 Stage 32 Commit ?????
+
+---
+
+## 14. Stage 33 - QAQC Export Shared Service
+
+### Module
+
+- File: `services/qaqc_export_service.py`
+- Function: `validate_qaqc_export_ready(qaqc_results, has_control_data=True)`
+- Extracted from `app.py` without changing QAQC business logic.
+- The original function contains 205 lines.
+
+### Validation Rules
+
+- Without control data, QAQC validation allows the operation.
+- With control data but no QAQC results, the operation is blocked.
+- QAQC status must exactly match the original qualified status.
+- ICV, QC and CCV results are checked through batch rows.
+- Duplicate analysis precision is checked when provided.
+- MS and MSD recovery results are checked when provided.
+- A batch containing nonqualified QAQC items requires a batch remark.
+- A batch with nonqualified items and no remark is blocked.
+- A nonqualified batch with a nonempty remark may proceed.
+- Multiple batches are evaluated independently.
+- Original validation messages and line breaks are preserved.
+- Missing optional QAQC detail sections are not newly rejected.
+
+### Existing Callers
+
+- `save_analysis_record_route`
+- `export_w434_pdf`
+- `export_w434_lims`
+
+All three callers retain the original validation calls and
+early-return guards before the main operation.
+
+The save route still converts the export error wording
+to the formal-record storage error wording.
+
+All callers continue to use `bool(control_data)`.
+
+### Regression Tests
+
+- Baseline A: 16 PASS.
+- Baseline B: 7 PASS.
+- Old vs New Regression: 23 PASS.
+- Full returned tuple and error messages match.
+- Original function AST equivalence: PASS.
+- Service compilation and independent import: PASS.
+- Unrelated app.py AST unchanged: PASS.
+- Flask route count: 68 PASS.
+- Three caller AST comparisons against Stage 33 backup: PASS.
+- Qualified QAQC: allowed.
+- Nonqualified QAQC without remark: blocked.
+- Nonqualified QAQC with remark: allowed.
+
+### Scope and Limitations
+
+- No new QAQC completeness requirements were introduced.
+- No validation thresholds or message wording were changed.
+- No CSV, SQLite or LIMS data was modified in tests.
+- End-to-end saving, PDF generation and LIMS export remain untested.
+
+### Git
+
+- Base commit: `2a04bc7`.
+- `app.py`: 3 insertions, 205 deletions.
+- Stage 33 commit pending.
