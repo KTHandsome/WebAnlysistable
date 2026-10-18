@@ -70,26 +70,6 @@ def login():
 
                 else:
 
-                    group_id = str(
-                      user.get(
-                         "group_id",
-                         ""
-                      )
-                      or ""
-                    ).strip().upper()
-
-                    permissions = []
-
-                    if group_id in {
-                       "07",
-                       "ADMIN"
-                    }:
-
-                        permissions = [
-                        "REVIEW_ANALYSIS",
-                        "DELETE_ANALYSIS",
-                        "VIEW_ANALYSIS_DELETE_HISTORY"
-                    ]
                         
                     group_id = str(
                            user.get(
@@ -163,43 +143,6 @@ def login():
     )
 )
 
-    error_message = None
-
-    if request.method == "POST":
-
-        user_id = request.form.get(
-            "user_id",
-            ""
-        ).strip()
-
-        password = request.form.get(
-            "password",
-            ""
-        )
-
-        if not user_id:
-
-            error_message = (
-                "請輸入帳號。"
-            )
-
-        elif not password:
-
-            error_message = (
-                "請輸入密碼。"
-            )
-
-        else:
-
-            error_message = (
-                "目前非公司環境，"
-                "尚未啟用 LIMS 帳號驗證。"
-            )
-
-    return render_template(
-        "login.html",
-        error_message=error_message
-    )
 
 
 @auth_bp.route("/dev-login",methods=["POST"])
