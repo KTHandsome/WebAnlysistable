@@ -338,17 +338,17 @@ def prepare_performance_import(
                 )
 
             if active_count == 0:
-                  history_count = db.scalar(
-                  select(func.count()).select_from(
-                  PerformanceImportHistory
-                   )
+                history_count = db.scalar(
+                    select(func.count()).select_from(
+                        PerformanceImportHistory
+                    )
                 )
 
-            if history_count != 0:
-               raise RuntimeError(
-                 "Performance 已有發布歷程但沒有 ACTIVE 批次，"
-                   "禁止視為首次發布"
-                ) 
+                if history_count != 0:
+                    raise RuntimeError(
+                        "Performance 已有發布歷程但沒有 ACTIVE 批次，"
+                        "禁止視為首次發布"
+                    )
             
             if pending_count:
                 raise RuntimeError(
