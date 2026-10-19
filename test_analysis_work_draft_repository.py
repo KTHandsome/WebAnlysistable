@@ -265,9 +265,33 @@ class TestAnalysisWorkDraftRepository(unittest.TestCase):
 
         return formal_id
 
+    def _create_matching_snapshot(self, formal_id):
+        import json
+        from models import AnalysisWorkState
+
+        draft_state = self.load_a()["state"]
+
+        snapshot_state = dict(draft_state)
+        snapshot_state["formal_analysis_id"] = formal_id
+
+        snapshot = AnalysisWorkState(
+            analysis_id=formal_id,
+            method_code="W434",
+            state_json=json.dumps(
+                snapshot_state,
+                ensure_ascii=False
+            ),
+            form_data_json='{"method_code":"W434"}'
+        )
+
+        self.db.add(snapshot)
+        self.db.commit()
+
+        return snapshot
+
     def test_submit_draft_success(self):
         formal_id = self._create_formal_record()
-
+        self._create_matching_snapshot(formal_id)
         revision = self.repo.submit_draft(
             self.a.work_id,
             "USER001",
@@ -289,7 +313,7 @@ class TestAnalysisWorkDraftRepository(unittest.TestCase):
         formal_id = self._create_formal_record(
             owner="USER002"
         )
-
+        self._create_matching_snapshot(formal_id)
         with self.assertRaises(PermissionError):
             self.repo.submit_draft(
                 self.a.work_id,
@@ -307,9 +331,94 @@ class TestAnalysisWorkDraftRepository(unittest.TestCase):
         self.assertEqual(saved["work_status"], "EDITING")
         self.assertIsNone(saved["formal_analysis_id"])
 
-    def test_submit_stale_revision_denied(self):
+    def test_submit_missing_snapshot_denied(self):
         formal_id = self._create_formal_record()
 
+        with self.assertRaises(ValueError):
+            self.repo.submit_draft(
+                self.a.work_id,
+                "USER001",
+                "W434",
+                expected_revision=0,
+                formal_analysis_id=formal_id
+            )
+
+        self.db.rollback()
+
+        saved = self.load_a()
+        self.assertEqual(saved["work_status"], "EDITING")
+        self.assertEqual(saved["revision"], 0)
+        self.assertIsNone(saved["formal_analysis_id"])
+
+    def test_submit_snapshot_mismatch_denied(self):
+        import json
+        from models import AnalysisWorkState
+
+        formal_id = self._create_formal_record()
+        self._create_matching_snapshot(formal_id)
+
+        snapshot = self.db.query(
+            AnalysisWorkState
+        ).filter(
+            AnalysisWorkState.analysis_id == formal_id
+        ).one()
+
+        snapshot.state_json = json.dumps({
+            "sample_id": "DIFFERENT",
+            "formal_analysis_id": formal_id
+        })
+        self.db.commit()
+
+        with self.assertRaises(ValueError):
+            self.repo.submit_draft(
+                self.a.work_id,
+                "USER001",
+                "W434",
+                expected_revision=0,
+                formal_analysis_id=formal_id
+            )
+
+        self.db.rollback()
+
+        saved = self.load_a()
+        self.assertEqual(saved["work_status"], "EDITING")
+        self.assertEqual(saved["revision"], 0)
+        self.assertIsNone(saved["formal_analysis_id"])
+
+    def test_submit_snapshot_method_mismatch_denied(self):
+        from models import AnalysisWorkState
+
+        formal_id = self._create_formal_record()
+        self._create_matching_snapshot(formal_id)
+
+        snapshot = self.db.query(
+            AnalysisWorkState
+        ).filter(
+            AnalysisWorkState.analysis_id == formal_id
+        ).one()
+
+        snapshot.method_code = "W330"
+        self.db.commit()
+
+        with self.assertRaises(ValueError):
+            self.repo.submit_draft(
+                self.a.work_id,
+                "USER001",
+                "W434",
+                expected_revision=0,
+                formal_analysis_id=formal_id
+            )
+
+        self.db.rollback()
+
+        saved = self.load_a()
+        self.assertEqual(saved["work_status"], "EDITING")
+        self.assertEqual(saved["revision"], 0)
+        self.assertIsNone(saved["formal_analysis_id"])
+
+    def test_submit_stale_revision_denied(self):
+        formal_id = self._create_formal_record()
+        self._create_matching_snapshot(formal_id)
         self.repo.save_draft(
             self.a.work_id,
             "USER001",
@@ -322,6 +431,30 @@ class TestAnalysisWorkDraftRepository(unittest.TestCase):
         from analysis.analysis_work_draft_repository import (
             DraftConflictError,
         )
+
+        # Keep the formal snapshot consistent with
+        # the latest draft so this test isolates
+        # the stale revision conflict.
+        import json
+        from models import AnalysisWorkState
+
+        snapshot = self.db.query(
+            AnalysisWorkState
+        ).filter(
+            AnalysisWorkState.analysis_id == formal_id
+        ).one()
+
+        latest_state = self.load_a()["state"]
+
+        snapshot_state = dict(latest_state)
+        snapshot_state["formal_analysis_id"] = formal_id
+
+        snapshot.state_json = json.dumps(
+            snapshot_state,
+            ensure_ascii=False
+        )
+
+        self.db.commit()
 
         with self.assertRaises(DraftConflictError):
             self.repo.submit_draft(
@@ -381,6 +514,109 @@ class TestAnalysisWorkDraftRepository(unittest.TestCase):
 
         record.status = status
         self.db.commit()
+
+    def test_submit_transaction_rollback(self):
+        import json
+        from models import (
+            AnalysisRecord,
+            AnalysisWorkState,
+        )
+
+        formal_id = self._create_formal_record(
+            status="REJECTED"
+        )
+
+        original_state = self.load_a()["state"]
+
+        original_snapshot = dict(original_state)
+        original_snapshot["formal_analysis_id"] = formal_id
+
+        snapshot = AnalysisWorkState(
+            analysis_id=formal_id,
+            method_code="W434",
+            state_json=json.dumps(
+                original_snapshot,
+                ensure_ascii=False
+            ),
+            form_data_json='{"method_code":"W434"}'
+        )
+
+        self.db.add(snapshot)
+        self.db.commit()
+
+        original_json = snapshot.state_json
+
+        record = self.db.query(AnalysisRecord).filter(
+            AnalysisRecord.analysis_id == formal_id
+        ).one()
+
+        # Simulate changes within one transaction.
+        record.status = "UNDER_REVIEW"
+
+        snapshot.state_json = json.dumps({
+            "sample_id": "INCONSISTENT",
+            "formal_analysis_id": formal_id
+        })
+
+        self.db.flush()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "inconsistent"
+        ):
+            self.repo.submit_draft(
+                self.a.work_id,
+                "USER001",
+                "W434",
+                expected_revision=0,
+                formal_analysis_id=formal_id
+            )
+
+        self.db.rollback()
+        self.db.expire_all()
+
+        saved_record = self.db.query(
+            AnalysisRecord
+        ).filter(
+            AnalysisRecord.analysis_id == formal_id
+        ).one()
+
+        saved_snapshot = self.db.query(
+            AnalysisWorkState
+        ).filter(
+            AnalysisWorkState.analysis_id == formal_id
+        ).one()
+
+        saved_draft = self.load_a()
+
+        self.assertEqual(
+            saved_record.status,
+            "REJECTED"
+        )
+
+        self.assertEqual(
+            saved_snapshot.state_json,
+            original_json
+        )
+
+        self.assertEqual(
+            saved_draft["work_status"],
+            "EDITING"
+        )
+
+        self.assertEqual(
+            saved_draft["revision"],
+            0
+        )
+
+        self.assertIsNone(
+            saved_draft["formal_analysis_id"]
+        )
+
+        self.assertEqual(
+            saved_draft["state"],
+            original_state
+        )
 
     def test_resume_draft_success(self):
         formal_id = self._prepare_submitted_draft()

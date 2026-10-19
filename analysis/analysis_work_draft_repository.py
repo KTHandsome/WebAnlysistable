@@ -306,7 +306,10 @@ class AnalysisWorkDraftRepository:
         expected_revision,
         formal_analysis_id
     ):
-        from models import AnalysisRecord
+        from models import (
+            AnalysisRecord,
+            AnalysisWorkState,
+        )
 
         current = self.load_draft(
             work_id,
@@ -378,6 +381,41 @@ class AnalysisWorkDraftRepository:
             raise ValueError(
                 "Formal analysis method does not match."
             )
+
+        # Verify the saved formal snapshot before submission.
+        snapshot = self.db.query(
+            AnalysisWorkState
+        ).filter(
+            AnalysisWorkState.analysis_id == formal_id
+        ).first()
+
+        if snapshot is None:
+            raise ValueError(
+                "Formal analysis snapshot does not exist."
+            )
+
+        if (
+            str(snapshot.method_code or "").strip().upper()
+            != str(method_code or "").strip().upper()
+        ):
+            raise ValueError(
+                "Formal snapshot method does not match."
+            )
+
+        try:
+            snapshot_state = json.loads(
+                snapshot.state_json or "{}"
+            )
+        except (json.JSONDecodeError, TypeError):
+            raise ValueError(
+                "Formal analysis snapshot is invalid."
+            )
+
+        assert_snapshot_consistency(
+            current["state"],
+            snapshot_state,
+            formal_id
+        )
 
         result = self.db.execute(
             update(AnalysisWorkDraft)
