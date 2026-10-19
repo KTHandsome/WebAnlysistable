@@ -608,6 +608,34 @@ class AnalysisWorkDraft(Base):
         default="{}"
     )
 
+    # Basic analysis information snapshot.
+    form_data_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="{}"
+    )
+
+    # Annual control configuration snapshot.
+    control_data_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="{}"
+    )
+
+    # Analytical method configuration snapshot.
+    method_data_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="{}"
+    )
+
+    # Report configuration snapshot.
+    report_data_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="{}"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,

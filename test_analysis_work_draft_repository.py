@@ -269,9 +269,9 @@ class TestAnalysisWorkDraftRepository(unittest.TestCase):
         import json
         from models import AnalysisWorkState
 
-        draft_state = self.load_a()["state"]
+        draft = self.load_a()
 
-        snapshot_state = dict(draft_state)
+        snapshot_state = dict(draft["state"])
         snapshot_state["formal_analysis_id"] = formal_id
 
         snapshot = AnalysisWorkState(
@@ -281,7 +281,22 @@ class TestAnalysisWorkDraftRepository(unittest.TestCase):
                 snapshot_state,
                 ensure_ascii=False
             ),
-            form_data_json='{"method_code":"W434"}'
+            form_data_json=json.dumps(
+                draft["form_data"],
+                ensure_ascii=False
+            ),
+            control_data_json=json.dumps(
+                draft["control_data"],
+                ensure_ascii=False
+            ),
+            method_data_json=json.dumps(
+                draft["method_data"],
+                ensure_ascii=False
+            ),
+            report_data_json=json.dumps(
+                draft["report_data"],
+                ensure_ascii=False
+            )
         )
 
         self.db.add(snapshot)
@@ -488,7 +503,22 @@ class TestAnalysisWorkDraftRepository(unittest.TestCase):
             analysis_id=formal_id,
             method_code="W434",
             state_json=json.dumps(snapshot_state),
-            form_data_json='{"method_code":"W434"}'
+            form_data_json=json.dumps(
+                self.load_a()["form_data"],
+                ensure_ascii=False
+            ),
+            control_data_json=json.dumps(
+                self.load_a()["control_data"],
+                ensure_ascii=False
+            ),
+            method_data_json=json.dumps(
+                self.load_a()["method_data"],
+                ensure_ascii=False
+            ),
+            report_data_json=json.dumps(
+                self.load_a()["report_data"],
+                ensure_ascii=False
+            )
         )
 
         self.db.add(snapshot)
@@ -515,6 +545,125 @@ class TestAnalysisWorkDraftRepository(unittest.TestCase):
         record.status = status
         self.db.commit()
 
+    def test_bundle_save_five_sections(self):
+        revision = self.repo.save_work_bundle(
+            self.a.work_id,
+            "USER001",
+            "W434",
+            0,
+            state={
+                "sample_id": "A",
+                "qaqc_results": [{"status": "PASS"}]
+            },
+            form_data={"projno": "TEST001"},
+            control_data={"year": 2026},
+            method_data={"method": "W434"},
+            report_data={"report": "R1"}
+        )
+        self.db.commit()
+
+        loaded = self.load_a()
+
+        self.assertEqual(revision, 1)
+        self.assertEqual(loaded["revision"], 1)
+        self.assertEqual(loaded["state"]["sample_id"], "A")
+        self.assertEqual(
+            loaded["form_data"]["projno"], "TEST001"
+        )
+        self.assertEqual(
+            loaded["control_data"]["year"], 2026
+        )
+        self.assertEqual(
+            loaded["method_data"]["method"], "W434"
+        )
+        self.assertEqual(
+            loaded["report_data"]["report"], "R1"
+        )
+
+    def test_bundle_partial_update_preserves_sections(self):
+        self.repo.save_work_bundle(
+            self.a.work_id, "USER001", "W434", 0,
+            form_data={"projno": "TEST001"},
+            control_data={"year": 2026},
+            method_data={"method": "W434"},
+            report_data={"report": "R1"}
+        )
+        self.db.commit()
+
+        self.repo.save_work_bundle(
+            self.a.work_id, "USER001", "W434", 1,
+            form_data={"projno": "TEST002"}
+        )
+        self.db.commit()
+
+        loaded = self.load_a()
+
+        self.assertEqual(loaded["revision"], 2)
+        self.assertEqual(
+            loaded["form_data"]["projno"], "TEST002"
+        )
+        self.assertEqual(
+            loaded["control_data"]["year"], 2026
+        )
+        self.assertEqual(
+            loaded["method_data"]["method"], "W434"
+        )
+        self.assertEqual(
+            loaded["report_data"]["report"], "R1"
+        )
+        self.assertEqual(
+            loaded["state"]["sample_id"], "A"
+        )
+
+    def test_bundle_stale_revision_preserves_all(self):
+        self.repo.save_work_bundle(
+            self.a.work_id, "USER001", "W434", 0,
+            form_data={"projno": "TEST001"},
+            control_data={"year": 2026}
+        )
+        self.db.commit()
+
+        before = self.load_a()
+
+        with self.assertRaises(DraftConflictError):
+            self.repo.save_work_bundle(
+                self.a.work_id, "USER001", "W434", 0,
+                form_data={"projno": "STALE"},
+                report_data={"report": "STALE"}
+            )
+
+        self.db.rollback()
+
+        after = self.load_a()
+
+        self.assertEqual(after, before)
+
+    def test_bundle_invalid_json_rejected(self):
+        from models import AnalysisWorkDraft
+
+        row = self.db.query(AnalysisWorkDraft).filter(
+            AnalysisWorkDraft.work_id == self.a.work_id
+        ).one()
+
+        row.control_data_json = "{invalid json"
+        self.db.commit()
+
+        with self.assertRaises(ValueError):
+            self.load_a()
+
+    def test_bundle_non_object_json_rejected(self):
+        from models import AnalysisWorkDraft
+
+        row = self.db.query(AnalysisWorkDraft).filter(
+            AnalysisWorkDraft.work_id == self.a.work_id
+        ).one()
+
+        row.method_data_json = "[]"
+        self.db.commit()
+
+        with self.assertRaises(ValueError):
+            self.load_a()
+
     def test_submit_success_then_rollback(self):
         import json
         from models import (
@@ -537,7 +686,22 @@ class TestAnalysisWorkDraftRepository(unittest.TestCase):
             analysis_id=formal_id,
             method_code="W434",
             state_json=json.dumps(original_snapshot),
-            form_data_json='{"method_code":"W434"}'
+            form_data_json=json.dumps(
+                self.load_a()["form_data"],
+                ensure_ascii=False
+            ),
+            control_data_json=json.dumps(
+                self.load_a()["control_data"],
+                ensure_ascii=False
+            ),
+            method_data_json=json.dumps(
+                self.load_a()["method_data"],
+                ensure_ascii=False
+            ),
+            report_data_json=json.dumps(
+                self.load_a()["report_data"],
+                ensure_ascii=False
+            )
         )
 
         self.db.add(snapshot)
@@ -736,6 +900,84 @@ class TestAnalysisWorkDraftRepository(unittest.TestCase):
             saved_draft["state"],
             original_state
         )
+
+    def test_resume_five_section_mismatch_denied(self):
+        import json
+        from copy import deepcopy
+        from models import AnalysisWorkState
+
+        formal_id = self._prepare_submitted_draft()
+        self._set_formal_status(formal_id, "REJECTED")
+
+        snapshot = self.db.query(
+            AnalysisWorkState
+        ).filter(
+            AnalysisWorkState.analysis_id == formal_id
+        ).one()
+
+        original_draft = deepcopy(self.load_a())
+
+        changes = {
+            "state_json": {
+                "sample_id": "DIFFERENT",
+                "formal_analysis_id": formal_id
+            },
+            "form_data_json": {
+                "projno": "DIFFERENT"
+            },
+            "control_data_json": {
+                "year": 2025
+            },
+            "method_data_json": {
+                "method": "W330"
+            },
+            "report_data_json": {
+                "report": "DIFFERENT"
+            }
+        }
+
+        for column_name, changed_data in changes.items():
+
+            with self.subTest(column=column_name):
+
+                original_json = getattr(
+                    snapshot,
+                    column_name
+                )
+
+                setattr(
+                    snapshot,
+                    column_name,
+                    json.dumps(
+                        changed_data,
+                        ensure_ascii=False
+                    )
+                )
+
+                self.db.commit()
+
+                with self.assertRaises(ValueError):
+                    self.repo.resume_draft(
+                        self.a.work_id,
+                        "USER001",
+                        "W434",
+                        expected_revision=1
+                    )
+
+                self.db.rollback()
+
+                self.assertEqual(
+                    self.load_a(),
+                    original_draft
+                )
+
+                setattr(
+                    snapshot,
+                    column_name,
+                    original_json
+                )
+
+                self.db.commit()        
 
     def test_resume_draft_success(self):
         formal_id = self._prepare_submitted_draft()
