@@ -3992,14 +3992,135 @@ def analysis_w43401():
                     )
                     
                 elif import_type == "PE900_PDF":
-                    preview_rows = parse_pe900_pdf(
-                        temp_path
+
+                    preview_rows = parse_pe900_pdf(temp_path)
+
+                    # ==========================================
+                    # PE900 Performance sample separation
+                    # PFM must not enter calibration or QA/QC.
+                    # ==========================================
+                    prm_rows, preview_rows = (
+                        split_performance_rows(preview_rows)
                     )
+
+                    # ==========================================
+                    # PE900 PFM - ACTIVE Performance Control
+                    # ==========================================
+                    from datetime import datetime
+                    import math
+
+                    instrument_id = str(
+                        form_data.get("instrument_id", "") or ""
+                    ).strip()
+
+                    analysis_date_text = str(
+                        form_data.get("analysis_start_date", "") or ""
+                    ).strip()
+
+                    if analysis_date_text:
+                        analysis_date = datetime.strptime(
+                            analysis_date_text[:10],
+                            "%Y-%m-%d"
+                        ).date()
+                    else:
+                        analysis_date = None
+
+                    prm_results = []
+
+                    for prm_row in prm_rows:
+
+                        result = {
+                            "sample_id": prm_row.get("sample_id"),
+                            "analysis_datetime": prm_row.get("analysis_datetime"),
+                            "signal": prm_row.get("signal"),
+                            "signal_field": "BLNKCORR_SIGNAL",
+                            "status": "UNDETERMINED",
+                            "message": "",
+                            "control": None,
+                        }
+
+                        try:
+                            if not instrument_id:
+                                raise ValueError(
+                                    "Basic Info 尚未選擇儀器。"
+                                )
+
+                            if analysis_date is None:
+                                raise ValueError(
+                                    "Basic Info 尚未輸入分析開始日期。"
+                                )
+
+                            signal = float(
+                                prm_row.get("signal")
+                            )
+
+                            if not math.isfinite(signal):
+                                raise ValueError(
+                                    "PFM 測定值不是有效數字。"
+                                )
+
+                            monitor_item = str(
+                                prm_row.get("analyte", "") or ""
+                            ).strip()
+
+                            if monitor_item.upper() not in ("AS", "SE"):
+                                raise ValueError(
+                                    "PE900 PFM 測項不是 As 或 Se。"
+                                )
+
+                            control = find_active_performance_control(
+                                session_factory=SessionLocal,
+                                instrument_id=instrument_id,
+                                monitor_item=monitor_item,
+                                performance_type="CAL_HIGH_SIGNAL",
+                                analysis_date=analysis_date,
+                            )
+
+                            lower_limit = control.get("lower_limit")
+                            upper_limit = control.get("upper_limit")
+
+                            if lower_limit is None or upper_limit is None:
+                                raise ValueError(
+                                    "Performance 管制標準缺少上下限。"
+                                )
+
+                            lower_limit = float(lower_limit)
+                            upper_limit = float(upper_limit)
+
+                            if (
+                                not math.isfinite(lower_limit)
+                                or not math.isfinite(upper_limit)
+                                or lower_limit > upper_limit
+                            ):
+                                raise ValueError(
+                                    "Performance 管制上下限設定異常。"
+                                )
+
+                            passed = (
+                                lower_limit <= signal <= upper_limit
+                            )
+
+                            result["control"] = control
+                            result["status"] = (
+                                "PASS" if passed else "FAIL"
+                            )
+                            result["message"] = (
+                                "符合管制標準"
+                                if passed
+                                else "超出管制標準"
+                            )
+
+                        except (
+                            ValueError,
+                            TypeError,
+                            PerformanceControlQueryError,
+                        ) as ex:
+                            result["message"] = str(ex)
+
+                        prm_results.append(result)
+
                 else:
-                    raise ValueError(
-                        "尚未支援的 PDF 匯入格式："
-                        + import_type
-                    )
+                    raise ValueError("尚未支援的 PDF 匯入格式："+ import_type)
 
                 if preview_rows and method_data:
 

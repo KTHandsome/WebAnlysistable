@@ -81,20 +81,17 @@ def parse_pe900_pdf(pdf_path):
                     rows_by_sequence[
                         current_sequence_no
                     ] = {
-                        "sequence_no":
-                            current_sequence_no,
+                        "sequence_no":current_sequence_no,
 
-                        "sample_id":
-                            "",
+                        "sample_id":"",
 
-                        "signal":
-                            None,
+                        "analysis_datetime": "",
 
-                        "analyte":
-                            "",
+                        "signal":None,
 
-                        "wavelength":
-                            None
+                        "analyte":"",
+
+                        "wavelength":None
                     }
 
                 continue
@@ -115,23 +112,41 @@ def parse_pe900_pdf(pdf_path):
             # --------------------------------
 
             sample_match = re.search(
-                r"Sample\s+ID\s*:?\s*"
-                r"(.*?)"
-                r"\s+Date\s+Collected\s*:",
+                r"Sample\s+ID\s*:?\s*(.*?)"
+                r"\s+Date\s+Collected\s*:\s*"
+                r"(\d{1,2}/\d{1,2}/\d{4})"
+                r"\s+(\d{1,2}:\d{2}:\d{2})"
+                r"\s*(AM|PM)",
                 clean_line,
                 flags=re.IGNORECASE
             )
 
             if sample_match:
 
-                sample_id = (
-                    sample_match.group(1)
-                    .strip()
+                current_row["sample_id"] = (
+                    sample_match.group(1).strip()
                 )
 
-                current_row[
-                    "sample_id"
-                ] = sample_id
+                from datetime import datetime
+
+                collected_text = (
+                    sample_match.group(2)
+                    + " "
+                    + sample_match.group(3)
+                    + " "
+                    + sample_match.group(4).upper()
+                )
+
+                collected_datetime = datetime.strptime(
+                    collected_text,
+                    "%m/%d/%Y %I:%M:%S %p"
+                )
+
+                current_row["analysis_datetime"] = (
+                    collected_datetime.strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
+                )
 
                 continue
 
