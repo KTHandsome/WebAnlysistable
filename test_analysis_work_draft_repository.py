@@ -515,6 +515,125 @@ class TestAnalysisWorkDraftRepository(unittest.TestCase):
         record.status = status
         self.db.commit()
 
+    def test_submit_success_then_rollback(self):
+        import json
+        from models import (
+            AnalysisRecord,
+            AnalysisWorkState,
+        )
+
+        formal_id = self._create_formal_record(
+            status="REJECTED"
+        )
+
+        draft_state = self.load_a()["state"]
+
+        original_snapshot = {
+            "sample_id": "OLD",
+            "formal_analysis_id": formal_id,
+        }
+
+        snapshot = AnalysisWorkState(
+            analysis_id=formal_id,
+            method_code="W434",
+            state_json=json.dumps(original_snapshot),
+            form_data_json='{"method_code":"W434"}'
+        )
+
+        self.db.add(snapshot)
+        self.db.commit()
+
+        original_json = snapshot.state_json
+
+        record = self.db.query(
+            AnalysisRecord
+        ).filter(
+            AnalysisRecord.analysis_id == formal_id
+        ).one()
+
+        # Modify the formal record in the current transaction.
+        record.status = "UNDER_REVIEW"
+
+        new_snapshot = dict(draft_state)
+        new_snapshot["formal_analysis_id"] = formal_id
+
+        snapshot.state_json = json.dumps(
+            new_snapshot,
+            ensure_ascii=False
+        )
+
+        self.db.flush()
+
+        # Submission succeeds, but is not committed.
+        next_revision = self.repo.submit_draft(
+            self.a.work_id,
+            "USER001",
+            "W434",
+            expected_revision=0,
+            formal_analysis_id=formal_id
+        )
+
+        self.assertEqual(next_revision, 1)
+
+        temporary = self.load_a()
+
+        self.assertEqual(
+            temporary["work_status"],
+            "SUBMITTED"
+        )
+
+        self.assertEqual(
+            temporary["revision"],
+            1
+        )
+
+        # Simulate a failure after the draft UPDATE.
+        self.db.rollback()
+        self.db.expire_all()
+
+        saved_record = self.db.query(
+            AnalysisRecord
+        ).filter(
+            AnalysisRecord.analysis_id == formal_id
+        ).one()
+
+        saved_snapshot = self.db.query(
+            AnalysisWorkState
+        ).filter(
+            AnalysisWorkState.analysis_id == formal_id
+        ).one()
+
+        saved_draft = self.load_a()
+
+        self.assertEqual(
+            saved_record.status,
+            "REJECTED"
+        )
+
+        self.assertEqual(
+            saved_snapshot.state_json,
+            original_json
+        )
+
+        self.assertEqual(
+            saved_draft["work_status"],
+            "EDITING"
+        )
+
+        self.assertEqual(
+            saved_draft["revision"],
+            0
+        )
+
+        self.assertIsNone(
+            saved_draft["formal_analysis_id"]
+        )
+
+        self.assertEqual(
+            saved_draft["state"],
+            draft_state
+        )
+
     def test_submit_transaction_rollback(self):
         import json
         from models import (
