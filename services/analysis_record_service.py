@@ -205,7 +205,8 @@ def save_analysis_record(
     report_data,
     analysis_state,
     current_user,
-    db=None
+    db=None,
+    strict_work_identity=False
 ):
 
     if not form_data:
@@ -254,8 +255,8 @@ def save_analysis_record(
 
     calibration_result = analysis_state.get(
     "calibration_result"
-)   
-    
+)
+
 
     if not sample_rows:
         raise ValueError(
@@ -369,6 +370,11 @@ def save_analysis_record(
         raise ValueError(
             "尚未取得登入者帳號。"
         )
+
+    # The acting user and original analyst have distinct audit meanings.
+    actor_user_id = analyst_user_id
+    actor_employee_id = analyst_employee_id
+    actor_name = analyst_name
 
     # ========================================
     # 資料來源
@@ -503,6 +509,11 @@ def save_analysis_record(
         #      是否已有正式紀錄。
         # ========================================
 
+        if strict_work_identity and formal_analysis_id and record is None:
+            raise ValueError(
+                "工作綁定的正式紀錄不存在或基本資料不一致，請重新確認。"
+            )
+
         if record is None:
 
             record = (
@@ -537,6 +548,20 @@ def save_analysis_record(
         # ========================================
 
         if record is not None:
+
+            if strict_work_identity:
+                if not formal_analysis_id:
+                    raise ValueError(
+                        "相同測項、方法、儀器及分析日期已有正式紀錄，"
+                        "本工作未送審；請至分析紀錄查詢查看既有紀錄，"
+                        "如需修正，請依退回修正流程處理。"
+                    )
+                if str(record.analyst_user_id or "").strip() != actor_user_id:
+                    from analysis.analysis_work_access import is_review_actor
+                    if not is_review_actor(actor_user_id):
+                        raise PermissionError("無權更新此正式分析紀錄。")
+                if record.status != "REJECTED":
+                    raise ValueError("只有退回的正式分析紀錄可重新送審。")
 
             previous_status = (
                 record.status
@@ -668,15 +693,15 @@ def save_analysis_record(
                 to_status="UNDER_REVIEW",
 
                 reviewer_user_id=(
-                    analyst_user_id
+                    actor_user_id
                 ),
 
                 reviewer_employee_id=(
-                    analyst_employee_id
+                    actor_employee_id
                 ),
 
                 reviewer_name=(
-                    analyst_name
+                    actor_name
                 ),
 
                 comment=""
@@ -758,17 +783,20 @@ def save_analysis_record(
 
         record.wavelength = wavelength
 
-        record.analyst_user_id = (
-            analyst_user_id
-        )
+        # Draft resubmission retains the original analyst. The RESUBMIT
+        # history above records the actual actor; never impersonate the owner.
+        if not strict_work_identity or previous_status is None:
+            record.analyst_user_id = (
+                analyst_user_id
+            )
 
-        record.analyst_employee_id = (
-            analyst_employee_id
-        )
+            record.analyst_employee_id = (
+                analyst_employee_id
+            )
 
-        record.analyst_name = (
-            analyst_name
-        )
+            record.analyst_name = (
+                analyst_name
+            )
 
         record.source_type = (
             source_type
@@ -1203,7 +1231,7 @@ def save_analysis_record(
                     batch_remark_item
                 )
 
-                qaqc_display_order += 1           
+                qaqc_display_order += 1
 
             # ====================================
             # 3A：ICV / QC / CCV
@@ -1626,7 +1654,7 @@ def save_analysis_record(
         work_state.method_data_json = json.dumps(
             method_data,
             ensure_ascii=False
-        )    
+        )
 
         work_state.report_data_json = json.dumps(
             report_data,
@@ -1666,7 +1694,7 @@ def save_analysis_record(
         qaqc_display_order - 1,
 
     "calibration_point_count":
-       len(calibration_points)    
+       len(calibration_points)
 
         }
 

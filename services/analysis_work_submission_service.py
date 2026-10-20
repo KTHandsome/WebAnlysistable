@@ -10,7 +10,8 @@ from analysis.analysis_work_draft_repository import (
     AnalysisWorkDraftRepository,
     DraftConflictError,
 )
-from models import AnalysisRecord
+from models import AnalysisRecord, AnalysisWorkDraft
+from analysis.analysis_work_access import resolve_work_owner
 from services.analysis_record_service import save_analysis_record
 from services.qaqc_export_service import validate_qaqc_export_ready
 
@@ -36,7 +37,16 @@ def submit_analysis_work(
         raise ValueError("工作版本格式不正確。")
 
     repo = AnalysisWorkDraftRepository(db)
-    bundle = repo.load_draft(work_id, user_id, method)
+    from analysis.analysis_work_identity import validate_work_id
+    canonical_id = validate_work_id(work_id)
+    draft = db.query(AnalysisWorkDraft).filter(
+        AnalysisWorkDraft.work_id == canonical_id
+    ).first()
+    if draft is None:
+        raise ValueError("找不到指定的分析工作。")
+    # owner_id is the repository resource owner; user remains the actual actor.
+    owner_id = resolve_work_owner(db, draft, user_id, method)
+    bundle = repo.load_draft(canonical_id, owner_id, method)
 
     if bundle["work_status"] != "EDITING":
         raise ValueError("此工作目前不可送審。")
@@ -67,7 +77,7 @@ def submit_analysis_work(
         if record is None:
             raise ValueError("工作關聯的正式分析紀錄不存在。")
 
-        if str(record.analyst_user_id or "").strip() != user_id:
+        if str(record.analyst_user_id or "").strip() != owner_id:
             raise PermissionError("無權更新此正式分析紀錄。")
 
         if str(record.method_code or "").strip().upper() != method:
@@ -98,11 +108,12 @@ def submit_analysis_work(
         analysis_state=state,
         current_user=user,
         db=db,
+        strict_work_identity=True,
     )
 
     next_revision = repo.submit_draft(
         work_id=bundle["work_id"],
-        user_id=user_id,
+        user_id=owner_id,
         method_code=method,
         expected_revision=expected_revision,
         formal_analysis_id=result["analysis_id"],

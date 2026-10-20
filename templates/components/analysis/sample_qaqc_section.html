@@ -225,6 +225,11 @@
     method="post"
     action="{{ sample_update_url_value }}"
 >
+{% if analysis_work_id is defined and analysis_work_id %}
+<input type="hidden" name="work_id" value="{{ analysis_work_id }}">
+<input type="hidden" name="expected_revision" value="{{ analysis_work_revision }}">
+{% endif %}
+
 
 <input
     type="hidden"

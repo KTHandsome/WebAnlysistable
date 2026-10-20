@@ -32,9 +32,7 @@ batch_remarks_bp = Blueprint(
 @login_required
 def update_batch_remarks():
 
-    form_data = session.get(
-        "basic_info_form"
-    ) or {}
+    form_data = work_form_data(None) or {}
 
     method_code = str(
         form_data.get(
@@ -155,3 +153,8 @@ def update_batch_remarks():
           saved="1"
       )
     )
+
+# Stage 35G request-scoped adapters (legacy fallback without work_id).
+from analysis.analysis_work_web import (
+    active_work, work_form_data, load_analysis_state, save_analysis_state,
+)

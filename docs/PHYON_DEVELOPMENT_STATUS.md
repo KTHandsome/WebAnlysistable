@@ -135,6 +135,105 @@ W434、W341 已通過 PDF 解析、PFM 判定、檢量線、分析紀錄儲存�
 
 驗證範圍限 W532、記憶體 SQLite、單一工作。跨使用者、過期 Revision、重複送審、退回重送及真正並行的服務整合案例尚未在本次驗證涵蓋；Repository 既有案例不能替代完整網頁驗收。Firebird 共同交易與部署未進行。新服務與本次修改尚未確認 Commit／Push。
 
+### 0.8 Stage 35G 網頁測試包與舊紀錄相容性（2026-10-20）
+
+- 已確認 Commit：`c8db435 — Add shared transaction service for analysis work submission`，共 3 檔（正式儲存服務、共同送審服務、進度 MD）；Push 尚未確認。
+- Commit 前已核對服務 Diff；中文字串以 `ascii()` 檢查確認正確，先前 Diff 顯示問號屬顯示／複製編碼問題。修復字串的保護指令停止，沒有修改檔案。
+- 已提供並由使用者套用 W434 網頁測試包，共 9 個程式／模板檔。備份：`D:\PhyonWeb\backups\stage35g_web_20261020_102439_415089`。
+- 新增 `analysis/analysis_work_web.py`；僅明確設定 `PHYON_ENABLE_STAGE35G_WEB=1` 才建立 W434（As）新 Draft，預設關閉。W532／W341／W330 仍沿用既有流程。
+- 工作隔離從 Draft 建立後開始；基本資料頁多分頁隔離仍未完成。
+- 網頁測試包的 11 項隔離測試使用 Flask harness、實際 Repository／models 與部分測試替身；非完整 Phyon 瀏覽器端到端驗收。
+- 開發端實際 SQLite 尚缺 `analysis_work_draft`。此時驗收舊紀錄退回修正，新增 managed-draft 檢查直接查表而出現 `no such table`。
+- 已提供程式修正：以 `inspect(db.connection()).has_table(AnalysisWorkDraft.__tablename__)` 確認表存在才查詢；不為修復舊流程而先建表。表存在／不存在兩種 guard 情境檢查通過。
+- 缺表錯誤排除後，使用者遇到既有的「目前已有其他分析工作」衝突提示，並確認有 ICP 暫存。既有程式只要 Session 存在 `icp_work_key` 就阻擋；本次未移除檢查或刪除 ICP 暫存。
+- 使用者要求衝突時留在原頁，以訊息視窗提示；已修改 `templates/analysis_record_detail.html` 的進入修正表單，使用 fetch 提交，失敗時 alert，成功重新導向。模板與 JavaScript 語法檢查通過；後續截圖已確認衝突彈窗留在原明細頁，操作驗收通過。
+- 使用者回報：登出後再次操作可正常進入分析數據頁，修正並再次儲存後進入「待審核」。**舊紀錄退回進入與重新送審操作驗收通過**。登出後成功支持 Session 狀態涉及阻擋，不能據此推定 ICP 暫存已刪除或所有衝突來源均已排除。
+- 本次未確認新建 Draft 流程已啟用或驗收；不可標示 W434 網頁隔離或 Stage 35G 完成。後續須先明確準備開發 Draft 資料表，再啟用新流程驗收。
+- 新 Draft 的退回修正與原分析員／審核者權限銜接仍未完成，關聯新 Draft 的紀錄暫阻擋舊 resume，避免回退全域狀態。沒有 Draft 的舊紀錄維持原權限及既有流程。
+- 網頁測試包、缺表相容性修正及明細頁提示調整，均尚未確認 Commit／Push；不得部署 Server 或標示全部回歸通過。
+
+### 0.9 舊紀錄工作切換與退回重送回歸完成（2026-10-20）
+
+- 發現已正式儲存的 W434 As 工作，仍被舊 `has_resume_work_conflict()` 當成未完成工作，阻擋 W532 TOC 進入修正。
+- 修改 `routes/analysis_record_routes.py` 的衝突判定：核對目前狀態／基本資料與正式快照、正式關聯、登入者及方法；確認已儲存且一致時，允許切換至退回紀錄。未儲存差異、關聯不明或權限不符仍阻擋；保留 `icp_work_key` 的 ICP 暫存保護。
+- 修正指令執行及語法檢查通過；備份：`backups/analysis_record_routes_before_saved_work_fix_20261020_105747_150486.py`。
+- 隔離測試 11 項通過，涵蓋已儲存工作切換、未儲存差異、ICP 暫存保護與所有權；未改動 ICP 暫存或正式資料。
+- 使用者瀏覽器驗收：TOC 可進入修正，再儲存後回到「待審核」。2026-10-20 11:06 截圖確認 ID 1 TOC／W532 與 ID 2 砷／W434 兩筆正式紀錄均存在且皆為「待審核」。
+- 衝突提示以訊息視窗顯示並留在原明細頁，已由前次截圖確認。
+- 一次性 `fix_resume_saved_work.py` 與 `stage35g_patch` 資料夾已由使用者刪除；執行所需模組與備份保留。
+- 本節完成的是舊紀錄相容性回歸，不代表 Stage 35G 全部完成。新 Draft 建立仍預設關閉，實際開發 Draft 表準備、新工作隔離及新 Draft 退回權限銜接尚待處理。
+- 本次網頁及相容性修正尚未確認 Commit／Push；Server 未部署。
+
+下一步：先核對開發端 Draft 資料表與啟用條件，再準備 W434 新工作流程驗收；ICP 開發主線仍暫停，保留既有 ICP 暫存。
+
+
+### 0.10 W434 新 Draft 送審與防覆寫操作驗收（2026-10-20 14:17）
+
+本節更新並優先於 0.8／0.9 的當時待驗收狀態；Stage 35G 整體仍進行中。
+
+- 開發端確認使用 SQLite，原無 `analysis_work_draft`；依現有模型的限定建表指令執行，使用者回報建表成功。該指令先以 SQLite backup API 備份並檢查備份完整性，再只建立此表；實際備份路徑輸出未貼回，不補記虛構路徑。
+- 開發 PowerShell 設定 `PHYON_ENABLE_STAGE35G_WEB=1` 後重啟，W434 新工作網址帶 UUID。PDF 匯入、PFM 0.149 合格、暫存與 F5 讀回正常。
+- 首次工作 `21569f7d-888e-4c17-b469-ea1f6d1a20ea` 正式儲存後，唯讀查詢確認 Draft SUBMITTED／Revision 5，關聯正式 ID 3／UNDER_REVIEW。
+- 新增模板修改 `templates/methods/w43401.html`：將工作控制腳本移出 title 區塊；送審後停用表單與外部 form 按鈕；工作表單以 fetch 操作，錯誤 alert 留在原頁；波長確認成功改為 GET saved=1，避免 reload 重送上一個匯入 POST 造成 Revision Conflict。模板與 JavaScript 語法檢查通過；使用者後續儲存後按鈕停用。
+- 發現第二工作 `8027bf1b-ad60-4846-8e96-99a89bfc894b` 亦為 SUBMITTED／Revision 4，卻關聯同一正式 ID 3。核對服務確認：既有 Analysis Identity 搜尋允許更新 UNDER_REVIEW，因此不同 Draft 可沿用已送審紀錄。不能將此結果當作防重複成功；是否改變數值未查證。
+- 修正 `services/analysis_record_service.py`：新增 `strict_work_identity=False`，預設保留舊呼叫行為。嚴格模式下，新工作遇到相同 Identity 的既有正式紀錄，在資料更新前拒絕；明確綁定的紀錄必須存在且 Identity 一致、屬於原分析員且 REJECTED 才能重送。
+- 修改 `services/analysis_work_submission_service.py`：呼叫正式服務明確傳入 `strict_work_identity=True`。同一 Session 與外層交易管理方式保留。
+- Python 3.8 語法檢查、實際紀錄選取／guard 區段的 12 個獨立 SQLite 案例通過。此測試非完整服務或並行驗收，未宣稱資料庫唯一性／跨交易競爭已全部解決。
+- 使用者 14:17 操作驗收：重複正式紀錄被拒絕後，F5 仍保留分析資料且工作可繼續編輯；使用者自行刪除所有測試資料後，重新匯入並儲存，暫存／正式儲存按鈕反白停用。上述兩條 UI 操作路徑通過。未對清除後資料庫重新查詢 ID、Revision 或 PFM 數量，不推定清除範圍及舊 Draft 關聯均已清理。
+- 所有修正未對 Server 執行 Migration 或部署；新網頁與 guard 修正 Commit／Push 仍未確認。
+- 訊息視窗決議：後續改共用自訂對話框時，開發環境可用「老闆說」彩蛋，發布環境用「Phyon 提示」。尚未實作；目前仍為瀏覽器原生 alert。
+
+**下一步：**核對最新版退回路由與 Draft 恢復服務，完成新 Draft 的退回修正及重新送審整合，再驗證不同工作／使用者隔離與過期 Revision。既有新 Draft resume 阻擋尚未解除；不能直接套用舊紀錄恢復流程。ICP 主線仍暫停。完成子步驟後再更新本文件，Stage 35G 未標示完成。
+
+### 0.11 新 Draft 退回修訂與重新送審整合驗收（2026-10-20 15:17）
+
+**目前接續依據：本節優先於 0.8～0.10 當時的待辦描述。這輪功能驗收結束，先更新文件與核對 Git；Stage 35G 整體仍保留未完成項目。**
+
+#### 權限決議與身分保留
+
+- 使用者明確要求保留審核者代為修正的既有設計：原分析員或登入 Session 具 REVIEW_ANALYSIS 者，可恢復退回工作、修訂及重送。不能將新版權限縮減成僅原分析員。
+- 已讀取最新版 auth_session.py，can_review_analysis() 經 has_permission() 判定 Session permissions。授權不接受前端傳入審核者旗標。
+- 新版正式紀錄重送保留原 analyst_user_id／analyst_employee_id／analyst_name；RESUBMIT 記錄當次實際操作者。原 Draft owner 不移轉。
+- 新增 analysis/analysis_work_access.py：後端核對 actor、審核權限、Draft owner、原正式紀錄及方法後，回傳明確的 repository owner_id。這是資源所有者識別，不偽造 current_user；實際操作者另存歷程。
+- Repository、auth_session.py 及 models.py 均未因本次整合修改。
+
+#### 整合修改
+
+| 檔案 | 行為 |
+|---|---|
+| analysis/analysis_work_access.py | 新增後端工作授權與實際操作者歷程 helper |
+| analysis/analysis_work_web.py | 授權審核者存取原工作；修訂限正式紀錄 REJECTED；寫入 EDIT_DRAFT 歷程，與 Draft 共同交易 |
+| routes/analysis_record_routes.py | 唯一關聯 Draft 呼叫原 resume_draft()，恢復原 work_id、Revision +1，寫 RESUME_DRAFT 歷程；已 EDITING 可重開，不覆蓋修訂；多筆關聯拒絕自動恢復；舊紀錄保留原流程 |
+| services/analysis_work_submission_service.py | 區分實際 actor 與 repository owner，授權後重送原正式紀錄 |
+| services/analysis_record_service.py | 延續防覆寫及原分析員保護，允許後端授權審核者更新 REJECTED；RESUBMIT 寫實際 actor |
+
+- 2026-10-20 15:10 安裝工具來源、依賴與語法檢查通過，使用者套用成功。備份：D:\PhyonWeb\backups\stage35g_resume_20261020_151042_507585。
+- 未執行資料庫初始化、Migration、正式資料覆蓋或環境變數變更；未部署 Server。
+- Python 3.8 語法及 17 項隔離檢查通過。使用實際 models／Repository／恢復路由／Web bridge／授權 helper／共同送審服務，並檢查實際正式服務 guard 與身分賦值區段；身分工具及完整正式計算儲存部分使用替身。不得當成完整 PDF/PFM、Firebird 或真正並行驗收。
+
+#### 使用者瀏覽器操作驗收
+
+測試帳號；本輪工作 ID：c705c07a-6446-4b6c-a4ae-cc868270bdd8。
+
+| 項目 | 結果 |
+|---|---|
+| 退回後按進入修正，無原先「尚待完成驗收」阻擋 | 通過 |
+| 進入原工作頁，資料保留，暫存／儲存可操作 | 通過 |
+| 修改樣品稀釋倍數、暫存、F5 後值保留且 work_id 不變 | 通過 |
+| 重新送審後原紀錄回到待審核，未多出紀錄 | 通過 |
+| 返回工作頁後暫存／儲存按鈕停用 | 通過 |
+
+連同 0.9／0.10 的匯入、暫存讀回、新紀錄送審、重複 Identity 防覆寫與失敗後可編輯，這輪功能操作驗收完成，不重複擴測。
+
+#### 明確未驗收項目與下一步
+
+- 使用者決議：暫不安排不同帳號區分原分析員／審核者的實際操作；程式已整合且有隔離檢查，不標示跨帳號瀏覽器驗收通過。
+- 使用者尚未另貼實際 DB 的新 RESUME_DRAFT／EDIT_DRAFT／RESUBMIT 操作者及原分析員欄位查詢，不宣稱這些欄位已完成實際 DB 專項驗收。
+- 跨工作／多分頁／多使用者隔離、過期 Revision、真正並行、基本資料頁隔離及 Firebird 專項保留後續；Stage 35G 整體不標示全部完成。
+- 新 Draft 旗標已在開發端啟用測試；Server 狀態不可據此推定變更。ICP 開發主線仍暫停。
+- 本輪收尾：更新本文件後，取得 git status --short 與 git diff --stat，核對本次修改、新模組及差異，再逐檔 git add／Commit。不可 git add .，不處理無關 PDF、CSV、instance、backups、run_server.py 或一次性安裝工具。
+- 本輪網頁、相容性、防覆寫、操作者與退回整合尚未確認新 Commit／Push；最後已知共同交易服務 Commit 仍為 c8db435。收尾確認後再記錄實際 Commit，不預填。
+
 ## 1. 專案環境與開發約定
 
 - 專案：Phyon Web；本機工作目錄：`D:\PhyonWeb`。

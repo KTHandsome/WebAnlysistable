@@ -36,9 +36,7 @@ def confirm_w434_wavelength():
         ""
     ).strip().lower()
 
-    form_data = session.get(
-        "basic_info_form"
-    ) or {}
+    form_data = work_form_data(None) or {}
 
     current_method_code = str(
         form_data.get(
@@ -130,9 +128,10 @@ def confirm_w434_wavelength():
             ".2f"
         )
 
-        session[
-            "basic_info_form"
-        ] = form_data
+        if not active_work():
+            session[
+                "basic_info_form"
+            ] = form_data
 
     elif choice == "basic":
 
@@ -181,3 +180,8 @@ def confirm_w434_wavelength():
     )
 
     return "", 204
+
+# Stage 35G request-scoped adapters (legacy fallback without work_id).
+from analysis.analysis_work_web import (
+    active_work, work_form_data, load_analysis_state, save_analysis_state,
+)

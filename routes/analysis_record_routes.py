@@ -95,86 +95,93 @@ def can_resume_analysis_record(record):
     return can_review_analysis()
 
 def has_resume_work_conflict(method_code, analysis_id):
-    """
-    檢查 Resume 是否可能覆蓋其他分析工作。
-
-    True：存在衝突，禁止恢復。
-    False：未偵測到衝突。
-    """
-
+    """Block unsaved legacy work, but allow switching from a saved snapshot."""
     method_code = str(method_code or "").strip().upper()
     analysis_id = str(analysis_id or "").strip()
 
-    # ========================================
-    # 檢查目前 Session 是否已有其他分析工作
-    # ========================================
-
-    current_form = session.get("basic_info_form")
-
-    if current_form:
-
-        if not isinstance(current_form, dict):
-            return True
-
-        current_method = str(
-            current_form.get("method_code") or ""
-        ).strip().upper()
-
-        current_formal_id = str(
-            current_form.get("formal_analysis_id")
-            or session.get(
-             get_analysis_session_key(method_code)
-            )
-            or ""
-        ).strip()
-
-        # 目前基本資料屬於其他分析方法
-        if current_method and current_method != method_code:
-            return True
-
-        # 目前基本資料明確屬於其他正式分析紀錄
-        if current_formal_id and current_formal_id != analysis_id:
-            return True
-
-        # 無正式 ID 的基本資料可能是尚未完成的新工作。
-        # 不直接覆寫。
-        if not current_formal_id:
-            return True
-
-    # ICP 匯入工作使用另一套 SQLite 暫存機制。
-    # 若目前 Session 指向 ICP 工作，先阻擋恢復。
+    # ICP's separate work lifecycle has not yet been integrated here.
     if session.get("icp_work_key"):
         return True
 
-    state_key = get_analysis_state_key(method_code)
-    session_key = get_analysis_session_key(method_code)
-
-    current_id = str(
-        session.get(session_key) or ""
-    ).strip()
-
-    # Session 已指向其他正式分析紀錄。
-    if current_id and current_id != analysis_id:
+    current_form = session.get("basic_info_form")
+    if current_form is not None and not isinstance(current_form, dict):
+        return True
+    current_form = current_form or {}
+    current_method = str(current_form.get("method_code") or "").strip().upper()
+    if current_form and not current_method:
         return True
 
-    existing_state = load_analysis_state(state_key)
+    user = get_current_user() or {}
+    user_id = str(user.get("user_id") or "").strip()
+    if not user_id:
+        return True
 
-    if existing_state is not None:
+    db = SessionLocal()
+    try:
+        methods = {method_code}
+        if current_method:
+            methods.add(current_method)
 
-        # 狀態資料異常時，不允許直接覆寫。
-        if not isinstance(existing_state, dict):
-            return True
+        for candidate_method in methods:
+            state = load_analysis_state(get_analysis_state_key(candidate_method))
+            if state is not None and not isinstance(state, dict):
+                return True
+            form = current_form if candidate_method == current_method else None
 
-        state_id = str(
-            existing_state.get("formal_analysis_id") or ""
-        ).strip()
+            # No state and no active form will be overwritten for this method.
+            if not state and not form:
+                continue
 
-        # 全域記憶體有工作，但無法確認屬於本次恢復紀錄。
-        # 包含尚未正式儲存的新分析工作。
-        if state_id != analysis_id:
-            return True
+            state_id = str((state or {}).get("formal_analysis_id") or "").strip()
+            session_id = str(
+                session.get(get_analysis_session_key(candidate_method)) or ""
+            ).strip()
+            form_id = str((form or {}).get("formal_analysis_id") or "").strip()
+            identifiers = {value for value in (state_id, session_id, form_id) if value}
+            if len(identifiers) != 1:
+                return True
+            formal_id = next(iter(identifiers))
 
-    return False
+            record = db.query(AnalysisRecord).filter(
+                AnalysisRecord.analysis_id == formal_id
+            ).first()
+            snapshot = db.query(AnalysisWorkState).filter(
+                AnalysisWorkState.analysis_id == formal_id
+            ).first()
+            if record is None or snapshot is None:
+                return True
+            if str(record.analyst_user_id or "").strip() != user_id:
+                return True
+            if str(record.method_code or "").strip().upper() != candidate_method:
+                return True
+            if str(snapshot.method_code or "").strip().upper() != candidate_method:
+                return True
+
+            try:
+                saved_state = json.loads(snapshot.state_json)
+                saved_form = json.loads(snapshot.form_data_json)
+            except (TypeError, ValueError):
+                return True
+            if not isinstance(saved_state, dict) or not isinstance(saved_form, dict):
+                return True
+            if str(saved_state.get("formal_analysis_id") or "").strip() != formal_id:
+                return True
+
+            if state:
+                # Only this system-managed field may differ in representation.
+                live_content = dict(state)
+                saved_content = dict(saved_state)
+                live_content.pop("formal_analysis_id", None)
+                saved_content.pop("formal_analysis_id", None)
+                if live_content != saved_content:
+                    return True
+
+            if form is not None and form != saved_form:
+                return True
+
+        return False
+    finally:
+        db.close()
 
 @analysis_record_bp.route(
     "/analysis-records",
@@ -965,6 +972,58 @@ def resume_analysis_record(analysis_id):
         method_code = str(
             record.method_code or ""
         ).strip().upper()
+
+        # Stage 35G: managed drafts must not bypass revision checks.
+        # Resume permissions will be integrated in the next web substep.
+        from sqlalchemy import inspect
+        from models import AnalysisWorkDraft
+        managed_draft = None
+        managed_drafts = []
+        if inspect(db.connection()).has_table(AnalysisWorkDraft.__tablename__):
+            managed_drafts = db.query(AnalysisWorkDraft).filter(
+                AnalysisWorkDraft.formal_analysis_id == analysis_id
+            ).limit(2).all()
+            if len(managed_drafts) > 1:
+                return "此正式紀錄關聯多筆工作，請先查明關聯，無法自動恢復。", 409
+            managed_draft = managed_drafts[0] if managed_drafts else None
+        if managed_draft is not None:
+            from analysis.analysis_work_access import (
+                resolve_work_owner, add_work_actor_history,
+            )
+            from analysis.analysis_work_draft_repository import (
+                AnalysisWorkDraftRepository, DraftConflictError,
+            )
+            if method_code != "W434":
+                return "此方法尚未接入新版工作恢復流程。", 400
+            actor = get_current_user() or {}
+            actor_id = str(actor.get("user_id") or "").strip()
+            try:
+                owner_id = resolve_work_owner(db, managed_draft, actor_id, method_code)
+                repo = AnalysisWorkDraftRepository(db)
+                bundle = repo.load_draft(managed_draft.work_id, owner_id, method_code)
+                work_id = bundle["work_id"]
+                if bundle["work_status"] == "SUBMITTED":
+                    next_revision = repo.resume_draft(
+                        work_id, owner_id, method_code, bundle["revision"]
+                    )
+                    add_work_actor_history(
+                        db, analysis_id, "RESUME_DRAFT", work_id,
+                        next_revision, "REJECTED",
+                    )
+                    db.commit()
+                elif bundle["work_status"] != "EDITING":
+                    return "此工作狀態不可進入修正。", 409
+                # Existing EDITING work is reopened without reverting its edits.
+                return redirect(url_for("analysis_w43401", saved="1", work_id=work_id))
+            except PermissionError as exc:
+                db.rollback()
+                return str(exc), 403
+            except (DraftConflictError, ValueError) as exc:
+                db.rollback()
+                return str(exc), 409
+            except Exception:
+                db.rollback()
+                raise
 
         # 先檢查衝突，不覆寫現有工作
         if has_resume_work_conflict(method_code, analysis_id):

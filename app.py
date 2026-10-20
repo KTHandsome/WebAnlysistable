@@ -3518,9 +3518,7 @@ def analysis_w330():
 @login_required
 def analysis_w43401():
 
-    form_data = session.get(
-        "basic_info_form"
-    ) or {}
+    form_data = work_form_data(None) or {}
 
     current_method_code = str(
         form_data.get(
@@ -3589,18 +3587,19 @@ def analysis_w43401():
     if not formal_analysis_id:
 
         formal_analysis_id = str(
-            session.get(
+            work_formal_id(session.get(
                 analysis_session_key,
                 ""
-            )
+            ))
             or ""
         ).strip()
 
     if formal_analysis_id:
 
-        session[
-            analysis_session_key
-        ] = formal_analysis_id
+        if not active_work():
+            session[
+                analysis_session_key
+            ] = formal_analysis_id
     
     preview_rows = []
     prm_rows = []    
@@ -3822,7 +3821,7 @@ def analysis_w43401():
                             "Reagent Blank 必須是非負有限數值。"
                         )
 
-                    preview_rows = parse_oi_toc_pdf(temp_path)
+                    preview_rows = capture_original_rows(parse_oi_toc_pdf(temp_path))
 
                     # ==========================================
                     # PRM Performance 原始資料分流
@@ -3993,7 +3992,7 @@ def analysis_w43401():
                     
                 elif import_type == "PE900_PDF":
 
-                    preview_rows = parse_pe900_pdf(temp_path)
+                    preview_rows = capture_original_rows(parse_pe900_pdf(temp_path))
 
                     # ==========================================
                     # PE900 Performance sample separation
@@ -4771,9 +4770,7 @@ def analysis_w43401():
 @login_required
 def update_w434_calibration():
 
-    form_data = session.get(
-        "basic_info_form"
-    ) or {}
+    form_data = work_form_data(None) or {}
 
     current_method_code = str(
         form_data.get(
@@ -5058,9 +5055,7 @@ def update_w434_calibration():
     # 重新計算 QA/QC
     # ========================================
 
-    form_data = session.get(
-        "basic_info_form"
-    )
+    form_data = work_form_data(None)
 
     qaqc_results = []
 
@@ -5154,9 +5149,7 @@ def update_w434_calibration():
 @login_required
 def update_analysis_samples():
 
-    form_data = session.get(
-        "basic_info_form"
-    ) or {}
+    form_data = work_form_data(None) or {}
 
     current_method_code = str(
         form_data.get(
@@ -5818,9 +5811,10 @@ def update_analysis_samples():
 @login_required
 def save_analysis_record_route():
 
-    form_data = session.get(
-    "basic_info_form"
-       ) or {}
+    if active_work():
+        return submit_current_work()
+
+    form_data = work_form_data(None) or {}
 
     current_method_code = str(
         form_data.get(
@@ -5899,9 +5893,7 @@ def save_analysis_record_route():
             current_method_code
         )
 
-    form_data = session.get(
-        "basic_info_form"
-    )
+    form_data = work_form_data(None)
 
     qaqc_results = (
     analysis_state.get(
@@ -5976,11 +5968,12 @@ def save_analysis_record_route():
         "analysis_id"
     ]
 
-    session[
-    analysis_session_key
-] = save_result[
-    "analysis_id"
-]
+    if not active_work():
+        session[
+        analysis_session_key
+    ] = save_result[
+        "analysis_id"
+    ]
 
     save_analysis_state(
     analysis_state_key,
@@ -6000,9 +5993,7 @@ def save_analysis_record_route():
 @login_required
 def export_w434_pdf():
 
-    form_data = session.get(
-    "basic_info_form"
-    ) or {}
+    form_data = work_form_data(None) or {}
 
     current_method_code = str(
     form_data.get(
@@ -6138,9 +6129,7 @@ def export_w434_pdf():
 @login_required
 def export_w434_lims():
 
-    form_data = session.get(
-        "basic_info_form"
-    ) or {}
+    form_data = work_form_data(None) or {}
 
     if not form_data:
 
@@ -6324,6 +6313,17 @@ def export_w434_lims():
 # 第一階段：檔案與欄位驗證
 # 尚不寫入正式 CSV
 # ========================================
+
+
+# Stage 35G: request-scoped W434 work; other requests use legacy behavior.
+from analysis.analysis_work_web import (
+    active_work, work_form_data, work_formal_id, capture_original_rows,
+    load_analysis_state, save_analysis_state,
+    load_control_and_method_data, load_report_setting,
+    submit_current_work, install_work_web,
+)
+
+install_work_web(app)
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)

@@ -88,6 +88,11 @@
                 action="{{ formal_save_url }}"
                 style="display: inline;"
             >
+{% if analysis_work_id is defined and analysis_work_id %}
+<input type="hidden" name="work_id" value="{{ analysis_work_id }}">
+<input type="hidden" name="expected_revision" value="{{ analysis_work_revision }}">
+{% endif %}
+
 
                 <button
                     type="submit"
