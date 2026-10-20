@@ -1,8 +1,139 @@
 # Phyon 開發進度與跨聊天室交接紀錄
 
-> 文件版本：V1.1｜更新日期：2026-10-16
+> 文件版本：V1.2｜更新日期：2026-10-20
 > 目的：保留已驗證功能、目前開發主線、暫停工作、關鍵設計決策及接續位置。  
 > 注意：本文件依目前對話整理；未實際執行的測試、尚未確認的 Commit 與正式儲存功能，不得標示為完成。
+
+## 0. 最新進度與接續位置（2026-10-20）
+
+本節為目前交接依據；後續第 2～7 節保留 2026-10-16 的歷史紀錄。舊紀錄中的優先主線、未提交狀態及待辦，若與本節衝突，以本節已確認事項為準；未重新驗證的舊問題仍保留，不推定已解決。
+
+### 0.1 名稱與合作約定
+
+- 儀器性能查核統一使用 **PFM**；既有 `prm_*`、類別及工具檔名保留，不全面更名。
+- 每完成一個 Stage 或一組完整修改並驗收後，更新本文件：記錄修改檔案、行為變更、驗收結果、Git 狀態與下一步。
+- 部分完成可記錄，但必須明列未驗收內容，不得將語法檢查當成執行或交易一致性驗收。
+- 一次處理一個明確目標；先核對現有檔案及定位，再修改；優先瀏覽器實際驗收。
+
+### 0.2 四個檢項與 PE900 PFM 驗收
+
+已完成分析功能及 PFM 整合：
+
+| 方法 | 測項 | 儀器 |
+|---|---|---|
+| W532 | TOC | OI 1030W |
+| W434 | As | PE900 |
+| W341 | Se | PE900 |
+| W330 | Hg | RA7000 |
+
+W434、W341 已通過 PDF 解析、PFM 判定、檢量線、分析紀錄儲存與性能查核歷程查詢的實際操作驗收。
+
+- PE900 Sample ID `PFM` 獨立分流，不參與 STD0～STD5 檢量線。
+- As PFM：0.1490；實際測定時間：2026-10-15 14:32:37。
+- Se PFM：0.2194；實際測定時間：2026-10-15 13:23:13。
+- 管制版本依基本資料的儀器編號及 `analysis_start_date` 查詢。
+- 性能事件識別採 PDF 實際測定日期時間。
+- 管制上下限讀取資料庫正式發布的 ACTIVE Performance 設定，不直接讀取開發 CSV。開發資料庫為 SQLite，Server 為 Firebird。
+
+已確認 Commit：
+
+- `aa26c07` — Fix PFM release history guard for existing ACTIVE batch
+- `cc52951` — Integrate PE900 As Se PFM control and measurement history
+
+### 0.3 Server 程式與 Firebird 驗收
+
+- 開發目錄：`D:\PhyonWeb`；Server：`E:\PhyonWeb`。
+- GitHub：`KTHandsome/WebAnlysistable`。
+- Server 已同步至 `cc52951`（當時 HEAD/main、origin/main、origin/HEAD 相同）。
+- Server 目前仍為測試環境，尚未正式啟用；「發布環境」為程式依 Firebird 模式顯示的標籤，不代表已正式上線。
+- `run_server.py` 為未追蹤的 Server 本機檔案，必須保留，不得刪除或覆蓋。
+- `database.py` 讀取 `PHYON_DB_TYPE`，未設定時預設 SQLite；Server 啟動明確設定為 `firebird`。
+- Phyon Firebird 目標：主機 `192.168.0.5`、主機端路徑 `E:/PhyonDatabase/PHYON.FDB`；不得與 LIMS 連線混為一談。
+- `instance/phyon.db` 雖存在且為 0 bytes，不是本次 Server 使用的分析資料庫。
+- 發現 Port 80 舊程序自 2026-10-12 啟動，pull 後未重啟；停止舊程序後，以 Server 虛擬環境啟動更新程式，網頁已顯示「發布環境」及性能查核匯入功能。
+- 查詢曾出現 Firebird -204：`PERFORMANCE_ANALYSIS_LINK` 不存在。唯讀結構檢查確認既有 `analysis_record` 存在，但四張 PFM 表均缺少。
+- 已依現有模型，限縮指定四張表執行 `create_all(..., tables=..., checkfirst=True)`，回報 `PFM tables created successfully.`：
+  - `performance_import_history`
+  - `instrument_performance_control`
+  - `performance_measurement_history`
+  - `performance_analysis_link`
+- 未複製開發 SQLite 至 Server，未執行全庫重建。
+- 2026-10-20 使用者回報：Server Web 各項功能均可正常操作。本次操作驗收通過；不推定已完成多人並行、備份還原或所有資料完整性專項驗證。
+- 當時服務以 PowerShell 前景執行；後續是否已改為常駐服務尚未確認。
+- 部署原則：Git pull 只同步程式碼；執行中的服務須重啟，資料庫結構更新須獨立處理。
+
+### 0.4 Stage 35B～35F：既有基礎
+
+依使用者提供的階段交接，已完成：
+
+| 階段 | 完成內容 |
+|---|---|
+| 35B | Work Identity、工作所有權隔離 |
+| 35C | SQLite Draft Repository、送審與退回恢復 |
+| 35D | 快照一致性與交易 Rollback |
+| 35E | 提交成功後的 Rollback |
+| 35F | 五組 JSON 共用 Revision、完整讀寫及一致性驗證 |
+
+上述為 Repository 層基礎，不代表正式路由已具備多使用者隔離；正式儲存仍需逐步脫離 Flask Session 與 `W434_CURRENT` 資料來源。
+
+### 0.5 Stage 35G：進行中，尚未完成
+
+目標：指定 `work_id`，驗證登入者與分析方法，讀取同一 Revision 的五組 JSON（分析、基本資料、管制、方法、報告設定），保留原有計算及 QA/QC 規則，在同一交易更新正式分析紀錄、工作快照與 Draft；PFM 事件及關聯亦須包含於相同交易。舊紀錄沒有 Draft 時，維持退回修正相容性。
+
+**已完成的檢查與局部修改：**
+
+- 檢查最新版 `services/analysis_record_service.py`：原服務自行建立 Session，並負責 Commit／Rollback／Close；PFM 同步透過同一 `db` 在 Commit 前執行。
+- 已由使用者修改 `save_analysis_record(..., current_user, db=None)`，支援外部傳入 Session。
+- `owns_session = db is None`；僅自行建立 Session 時負責 Commit／Refresh、Rollback 與 Close。
+- 外部傳入 Session 時只 Flush，交易由外層統一管理；PFM 同步位置保留。
+- 使用者回報 `py_compile` 語法檢查通過。
+
+**驗收與限制：**
+
+- 修改後檔案尚未重新讀取核對；目前依使用者修改及語法檢查回報記錄。
+- 既有呼叫流程已以 W532（TOC）完成瀏覽器操作驗收：正式紀錄儲存成功，查詢頁顯示「待審核」，對應 PFM 歷程正常顯示。其他方法尚未逐項回歸。
+- 驗收初次遇到 `local variable 'db' referenced before assignment`；經使用者修正後重新儲存成功。修改後完整檔案仍待核對，不推定具體漏改位置。
+- 介面實際用詞為「待審核」，不得因先前口述「送審中」而修改既有狀態規則。
+- 外部 Session 共同交易已以 W532 實際快照、記憶體 SQLite 驗證通過（詳見 0.7）；尚未完成網頁路由整合及 Firebird 共同交易驗收。
+- Draft Repository 及正式路由尚未接入，不得宣稱 Stage 35G 或多人隔離已完成。
+- 本次局部修改尚未確認 Git Commit／Push，亦未部署 Server。
+- 本步無資料庫結構變更，不執行 Migration。
+
+**下次接續：**規劃並接入網頁的工作建立／保存／讀取與送審流程，使 work_id、Revision 及五組 JSON 真正由 Draft 提供。共同交易服務已通過 W532 記憶體 SQLite 整合驗證；現有網頁仍未使用該服務。修改路由前須重新核對最新檔案，不能沿用舊行號。
+
+### 0.6 後續主線排序
+
+1. Stage 35G：工作資料一致性、多使用者隔離及正式路由整合。
+2. ICP5800：完整分析流程、多波長與正式檢驗紀錄串接，尚未完成。
+3. PFM V2 發布簡化：保留 Excel／CSV 編輯匯入，後續改善為一鍵發布。
+
+### 0.7 Stage 35G 共同送審服務子步驟（2026-10-20）
+
+新增檔案：`services/analysis_work_submission_service.py`。
+
+- 新增 `submit_analysis_work(db, work_id, method_code, expected_revision, current_user)`。
+- 使用外部 Session；服務不 Commit／Rollback／Close，呼叫端必須成功時提交、例外時回復。
+- 驗證登入者、方法、Draft 所有權、EDITING 狀態及預期 Revision。
+- 從 Draft 讀取五組 JSON，不依賴 Flask Session 或全域分析狀態。
+- 檢查表單方法、正式紀錄關聯、原分析人員與退回狀態。
+- 呼叫既有 `validate_qaqc_export_ready()` 與 `save_analysis_record(..., db=db)`，保留原有驗證和儲存規則。
+- 正式儲存後呼叫 `submit_draft()`，核對五組快照並以 Revision 條件更新。
+- `app.py` 尚未改接；此子步驟不代表多使用者網頁流程已完成。
+
+使用者執行整合驗證：只讀開發資料庫最新 W532 正式快照，將快照內容複製至獨立記憶體 SQLite，實際呼叫正式儲存服務。開發及 Server 資料庫未新增測試資料。
+
+| 驗證項目 | 結果 |
+|---|---|
+| 新服務建立及語法檢查 | PASS |
+| 正式儲存後模擬 Draft 提交例外，外層 Rollback 清除主檔、快照、PFM 並還原 Draft | PASS |
+| 正式儲存與 Draft 提交成功後，外層 Rollback 仍完整回復 | PASS |
+| 外層 Commit 保留正式紀錄、快照與 SUBMITTED Draft 關聯 | PASS |
+| 正式狀態 UNDER_REVIEW（介面：待審核） | PASS |
+| PFM Event／Link | 各 1 筆 |
+
+測試輸出：`PASS: Stage 35G shared transaction integration.`
+
+驗證範圍限 W532、記憶體 SQLite、單一工作。跨使用者、過期 Revision、重複送審、退回重送及真正並行的服務整合案例尚未在本次驗證涵蓋；Repository 既有案例不能替代完整網頁驗收。Firebird 共同交易與部署未進行。新服務與本次修改尚未確認 Commit／Push。
 
 ## 1. 專案環境與開發約定
 
@@ -378,6 +509,7 @@ PFM Event 不保存 `category` 或 `analysis_id`；類別由關聯的 `AnalysisR
 ```powershell
 git status --short
 git log -1 --oneline
+```
 
 ## 6. 換聊天室交接步驟
 

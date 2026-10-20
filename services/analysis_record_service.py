@@ -204,7 +204,8 @@ def save_analysis_record(
     method_data,
     report_data,
     analysis_state,
-    current_user
+    current_user,
+    db=None
 ):
 
     if not form_data:
@@ -423,7 +424,10 @@ def save_analysis_record(
     # Database
     # ========================================
 
-    db = SessionLocal()
+    owns_session = db is None
+
+    if owns_session:
+        db = SessionLocal()
 
     try:
 
@@ -1639,11 +1643,11 @@ def save_analysis_record(
             analysis_state=analysis_state
         )
 
-        db.commit()
-
-        db.refresh(
-            record
-        )
+        if owns_session:
+            db.commit()
+            db.refresh(record)
+        else:
+            db.flush()
 
         return {
     "analysis_id":
@@ -1668,9 +1672,12 @@ def save_analysis_record(
 
     except Exception:
 
-        db.rollback()
+        if owns_session:
+            db.rollback()
+
         raise
 
     finally:
 
-        db.close()
+        if owns_session:
+            db.close()
