@@ -68,6 +68,9 @@ DATABASE_TYPE = (
 
 if DATABASE_TYPE == "firebird":
 
+    # Materialize BLOBs before SQLAlchemy closes the cursor.
+    driver_config.stream_blob_threshold.value = __import__('sys').maxsize
+
     # ----------------------------------------
     # 明確指定 64-bit Firebird Client
     # ----------------------------------------

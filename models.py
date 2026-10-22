@@ -17,8 +17,36 @@ from sqlalchemy import (
 )
 
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import TypeDecorator
 
 from database import Base
+
+
+class JsonText(TypeDecorator):
+    """Materialize JSON text while the database connection is still open.
+
+    Firebird may return a BlobReader for large TEXT BLOBs. SQLite returns str.
+    The underlying SQL type remains Text; no schema change is required.
+    """
+    impl = Text
+    cache_ok = True
+
+    def process_result_value(self, value, dialect):
+        if value is None or isinstance(value, str):
+            return value
+        if callable(getattr(value, "read", None)):
+            reader = value
+            try:
+                value = reader.read()
+            finally:
+                close = getattr(reader, "close", None)
+                if callable(close):
+                    close()
+        if isinstance(value, str):
+            return value
+        if isinstance(value, (bytes, bytearray, memoryview)):
+            return bytes(value).decode("utf-8-sig")
+        raise TypeError("JSON database column must return text or a text BLOB reader.")
 
 class SystemTest(Base):
     __tablename__ = "system_test"
@@ -516,31 +544,31 @@ class AnalysisWorkState(Base):
     )
 
     state_json: Mapped[str] = mapped_column(
-        Text,
+        JsonText,
         nullable=False,
         default="{}"
     )
 
     form_data_json: Mapped[str] = mapped_column(
-        Text,
+        JsonText,
         nullable=False,
         default="{}"
     )
 
     control_data_json: Mapped[str] = mapped_column(
-        Text,
+        JsonText,
         nullable=False,
         default="{}"
     )
 
     method_data_json: Mapped[str] = mapped_column(
-        Text,
+        JsonText,
         nullable=False,
         default="{}"
     )
 
     report_data_json: Mapped[str] = mapped_column(
-        Text,
+        JsonText,
         nullable=False,
         default="{}"
     )
@@ -603,35 +631,35 @@ class AnalysisWorkDraft(Base):
     )
 
     state_json: Mapped[str] = mapped_column(
-        Text,
+        JsonText,
         nullable=False,
         default="{}"
     )
 
     # Basic analysis information snapshot.
     form_data_json: Mapped[str] = mapped_column(
-        Text,
+        JsonText,
         nullable=False,
         default="{}"
     )
 
     # Annual control configuration snapshot.
     control_data_json: Mapped[str] = mapped_column(
-        Text,
+        JsonText,
         nullable=False,
         default="{}"
     )
 
     # Analytical method configuration snapshot.
     method_data_json: Mapped[str] = mapped_column(
-        Text,
+        JsonText,
         nullable=False,
         default="{}"
     )
 
     # Report configuration snapshot.
     report_data_json: Mapped[str] = mapped_column(
-        Text,
+        JsonText,
         nullable=False,
         default="{}"
     )
@@ -678,7 +706,7 @@ class IcpImportWorkState(Base):
     )
 
     state_json: Mapped[str] = mapped_column(
-        Text,
+        JsonText,
         nullable=False,
         default="{}"
     )
@@ -870,7 +898,7 @@ class PerformanceImportHistory(Base):
     )
 
     control_versions_json: Mapped[str] = mapped_column(
-        Text,
+        JsonText,
         nullable=False,
         default="[]"
     )
