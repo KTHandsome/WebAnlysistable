@@ -1,0 +1,39 @@
+{% macro num(value, digits=6) -%}{{ (('%.' ~ digits ~ 'f')|format(value)) if value is not none else '—' }}{%- endmacro %}
+{% macro status(value) -%}<span class="icpqc-status {{ 'icpqc-pass' if value == '合格' else 'icpqc-warn' if value == '警告' else 'icpqc-fail' if value == '超出管制' else 'icpqc-pending' }}">{{ value }}</span>{%- endmacro %}
+{% macro bounds(value) -%}
+{% if value.get('limit') is not none %}±{{ num(value.limit, 1) }}%
+{% else %}{% if value.get('lwl') is not none and value.get('uwl') is not none %}<small>警告：{{ num(value.lwl,1) }}～{{ num(value.uwl,1) }}%</small>{% endif %}
+{% if value.get('lcl') is not none and value.get('ucl') is not none %}管制：{{ num(value.lcl,1) }}～{{ num(value.ucl,1) }}%{% else %}待設定標準{% endif %}{% endif %}
+{%- endmacro %}
+<section class="eacs-card icpd-section" id="icp-section-3">
+<h3>3. QA/QC 檢核</h3>
+<p class="icpd-muted" id="icpqc-saved-note">{% if icp_snapshot is defined %}以下為正式紀錄儲存時的 QA/QC 判定。{% else %}依目前載入的分析資料計算；修改區塊 2 後，請先暫存再確認判定。{% endif %}</p>
+<p id="icpqc-dirty" class="icpd-warning" hidden>分析資料已修改，請先「暫存全部批次分析資料」，再查看更新後的 QA/QC 判定。</p>
+<div id="icpqc-results">
+{% if icp_qaqc_view %}{% for batch in icp_qaqc_view.batches %}
+<div class="icpqc-batch">
+<h4>BATCH {{ batch.number }} · {{ batch.category }} · {{ batch.exam_no }} <span class="icpqc-summary">{{ status(batch.status) }}</span></h4>
+{% if batch.error %}<p class="icpd-warning">{{ batch.error }}</p>{% endif %}
+<h4>3A. ICV／QC／CCV 查核</h4>
+<div class="icpd-scroll"><table class="icpd-table icpqc-table">
+<colgroup><col style="width:8%"><col style="width:15%"><col style="width:12%"><col style="width:12%"><col style="width:11%"><col style="width:14%"><col style="width:18%"><col style="width:10%"></colgroup>
+<thead><tr><th>項目</th><th>樣品編號</th><th>添加濃度<br>({{ batch.unit }})</th><th>計算濃度<br>({{ batch.unit }})</th><th>判定方式</th><th>相對誤差／回收率 (%)</th><th>判定標準</th><th>判定</th></tr></thead>
+<tbody>{% for row in batch.a %}<tr><td>{{ row.role }}<small>{{ row.check_position }}</small></td><td title="量測序號 {{ row.sequence|default('—') }}">{{ row.sample_id }}</td><td>{{ num(row.spike,batch.digits) }}</td><td>{{ num(row.value,batch.digits) }}</td><td>{{ row.calculation_name }}</td><td>{{ num(row.metric,1) }}</td><td>{{ bounds(row.bounds) }}</td><td>{{ status(row.status) }}{% if row.reason %}<small>{{ row.reason }}</small>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+<h4>3B. 重複分析精密度</h4>
+<div class="icpd-scroll"><table class="icpd-table icpqc-table">
+<colgroup><col style="width:18%"><col style="width:22%"><col style="width:22%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:8%"></colgroup>
+<thead><tr><th>判定來源／原樣</th><th>樣品 A<br>濃度 ({{ batch.unit }})</th><th>樣品 B<br>濃度 ({{ batch.unit }})</th><th>RPD (%)</th><th>警告上限 (%)</th><th>管制上限 (%)</th><th>判定</th></tr></thead>
+<tbody>{% for row in batch.b %}<tr><td>{{ row.source }}<small>原樣：{{ row.parent_sample }}</small></td><td>{{ row.sample_a }}<br>{{ num(row.value_a,batch.digits) }}</td><td>{{ row.sample_b }}<br>{{ num(row.value_b,batch.digits) }}</td><td>{{ num(row.rpd,1) }}</td><td>{{ num(row.uwl,1) }}</td><td>{{ num(row.ucl,1) }}</td><td>{{ status(row.status) }}</td></tr>{% endfor %}</tbody></table></div>
+<div class="icpqc-precision-notes">
+{% for row in batch.b %}{% if row.reason %}<p><strong>{{ row.parent_sample }} · {{ row.source }}：</strong>{{ row.reason }}</p>{% endif %}{% endfor %}
+</div>
+<h4>3C. MS／MSD 添加樣品回收率</h4>
+<div class="icpd-scroll"><table class="icpd-table icpqc-table">
+<colgroup><col style="width:14%"><col style="width:16%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:9%"><col style="width:19%"><col style="width:9%"></colgroup>
+<thead><tr><th>添加樣品</th><th>原樣編號</th><th>原樣濃度<br>({{ batch.unit }})</th><th>添加後濃度<br>({{ batch.unit }})</th><th>添加濃度<br>({{ batch.unit }})</th><th>回收率 (%)</th><th>判定標準</th><th>判定</th></tr></thead>
+<tbody>{% for row in batch.c %}<tr><td title="量測序號 {{ row.sequence|default('—') }}">{{ row.sample_id }}<small>{{ row.role }}</small></td><td>{{ row.original_sample_id }}</td><td>{{ num(row.original_value,batch.digits) }}</td><td>{{ num(row.value,batch.digits) }}</td><td>{{ num(row.spike,batch.digits) }}</td><td>{{ num(row.metric,1) }}</td><td>{{ bounds(row.bounds) }}</td><td>{{ status(row.status) }}{% if row.reason %}<small>{{ row.reason }}</small>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+</div>
+{% else %}<p class="icpd-muted">請先完成批次設定與樣品計算。</p>{% endfor %}{% endif %}
+</div>
+</section>
+

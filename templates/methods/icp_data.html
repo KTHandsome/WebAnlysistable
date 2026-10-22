@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}ICP 分析數據{% endblock %}
+{% macro measurements(rows) %}
+{% if rows %}
+<div class="icpd-scroll" tabindex="0"><table class="icpd-table">
+<thead><tr><th>序號</th><th>樣品／標準名稱</th><th>角色</th><th>測定時間</th><th>訊號</th><th>儀器濃度（mg/L）</th><th>註記</th><th>RSD</th></tr></thead>
+<tbody>{% for row in rows %}<tr>
+<td>{{ row.sequence }}</td><td>{{ row.sample_label }}</td><td>{{ row.role }}</td><td>{{ row.measured_at or '—' }}</td><td>{{ row.signal if row.signal is not none else '—' }}</td>
+<td>{{ row.instrument_concentration if row.instrument_concentration is not none else '—' }}</td><td>{{ row.instrument_concentration_flag or '—' }}</td><td>{{ row.rsd if row.rsd is not none else '—' }}</td>
+</tr>{% endfor %}</tbody></table></div>
+{% else %}<p class="icpd-muted">目前沒有這類量測資料。</p>{% endif %}
+{% endmacro %}
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/icp.css', v='20261022a') }}">
+{% endblock %}
+{% block content %}
+<div class="icp-page">
+<div class="page-header icpd-page-header"><h1 class="page-title">ICP 分析數據</h1>
+<div class="icpd-header-actions">
+{% if channels and not error_message %}
+<form id="icp-formal-form" action="{{ url_for('icp_data_bp.save_icp_record') }}" method="post">
+<input type="hidden" name="work_key" value="{{ work_key }}"><input type="hidden" name="work_token" value="{{ pfm_work_token }}">
+<input type="hidden" name="csrf_token" value="{{ pfm_csrf }}"><input type="hidden" name="configuration_token" value="{{ pdf_configuration_token }}">
+<button type="submit" class="eacs-button eacs-button-primary">儲存分析紀錄</button></form>
+<button type="button" class="eacs-button eacs-button-primary" id="icp-pdf-open">匯出檢驗紀錄 PDF</button>
+<button type="button" class="eacs-button eacs-button-primary" id="icp-excel-open">匯出 LIMS Excel</button>{% endif %}
+<a class="eacs-button eacs-button-secondary" href="{{ url_for('analysis_icp_import', tab='setup') }}">返回批次設定</a></div></div>
+{% if error_message %}
+<div class="eacs-card"><p class="icpd-error">{{ error_message }}</p></div>
+{% else %}
+{% if lookup_error %}<p class="icpd-warning" role="status">{{ lookup_error }}</p>{% endif %}
+<div class="icpd-layout">
+<nav class="icpd-nav" aria-label="金屬與波長">
+<strong>金屬／波長</strong>
+{% for channel in channels %}
+<a href="{{ url_for('icp_data_bp.analysis_icp_data', work_key=work_key, channel=channel.key) }}"
+   {% if selected_channel and channel.key == selected_channel.key %}aria-current="page"{% endif %}>
+<span>{{ channel.label }}</span></a>
+{% endfor %}
+</nav>
+<main class="icpd-main">
+{% if selected_channel %}{% set channel = selected_channel %}
+<section class="eacs-card icpd-section" id="icp-section-0">
+<div class="icpd-pfm-heading"><h3>基本資料與儀器性能查核</h3>
+<div class="icpd-meta icpd-pfm-meta"><span>方法：{{ form_data.method_code }}</span><span>金屬：{{ channel.element }}</span><span>波長：{{ channel.wavelength }} nm</span><span>一般樣品候選組：{{ channel.sample_count }}</span></div></div>
+<div class="icpd-pfm">
+<h4>儀器性能查核（PFM）</h4>
+{% if pfm_error %}<p class="icpd-warning">{{ pfm_error }}</p>{% endif %}
+{% if pfm_control %}
+<p class="icpd-muted">PFM 日期：{{ pfm_control.analysis_date }}</p>
+<form id="icp-pfm-form" method="post" action="{{ url_for('icp_data_bp.save_manual_icp_pfm') }}">
+<input type="hidden" name="work_key" value="{{ work_key }}">
+<input type="hidden" name="csrf_token" value="{{ pfm_csrf }}">
+<input type="hidden" name="work_token" value="{{ pfm_work_token }}">
+<input type="hidden" name="control_token" value="{{ pfm_control_token }}">
+<div class="icpd-pfm-fields">
+<label>{{ pfm_control.numerator_item }} {{ pfm_control.numerator_wavelength_nm }} nm 感應值
+<input name="numerator_signal" type="number" step="any" min="0" required
+       value="{{ saved_pfm.get('numerator_signal', '') }}" autocomplete="off"></label>
+<label>{{ pfm_control.denominator_item }} {{ pfm_control.denominator_wavelength_nm }} nm 感應值
+<input name="denominator_signal" type="number" step="any" min="0" required
+       value="{{ saved_pfm.get('denominator_signal', '') }}" autocomplete="off"></label>
+<button type="submit" class="eacs-button eacs-button-primary">計算並儲存 PFM</button>
+<button type="button" class="eacs-button eacs-button-secondary prm-trend-button"
+ data-instrument-id="{{ pfm_control.instrument_id }}"
+ data-monitor-item="{{ pfm_control.monitor_item }}"
+ data-performance-type="{{ pfm_control.performance_type }}"
+ title="查看最近 30 筆性能查核趨勢">查看趨勢圖</button>
+</div>
+</form>
+<p class="icpd-muted">{{ pfm_control.monitor_item }} 管制範圍：{{ pfm_control.lower_limit }} ～ {{ pfm_control.upper_limit }}</p>
+{% endif %}
+{% if saved_pfm %}
+{% if not pfm_current %}<p class="icpd-warning">下方為先前儲存結果，目前設定尚未確認或已變更，請重新確認並儲存。</p>{% endif %}
+<div class="icpd-pfm-result" role="status">
+<strong>{{ saved_pfm.get('control', {}).get('monitor_item', '') }} 比值：{{ saved_pfm.get('ratio_display', '') }}</strong>
+<span class="{{ 'icpd-pfm-pass' if saved_pfm.get('result') == 'PASS' else 'icpd-error' }}">{{ '合格' if saved_pfm.get('result') == 'PASS' else '不合格' }}</span>
+{% if not pfm_control %}<span class="icpd-muted">PFM 日期：{{ saved_pfm.get('analysis_date', '') }}</span>{% endif %}
+</div>
+{% elif pfm_control %}<p class="icpd-muted">尚未輸入本次工作 PFM 感應值。</p>{% endif %}
+</div>
+</section>
+
+<section class="eacs-card icpd-section" id="icp-section-1">
+<h3>1. 檢量線</h3>
+{% for card in calibration_cards %}
+<div class="icpd-calibration-batch">
+<strong>BATCH {{ card.batch_number }}{% if card.category %} · {{ card.category }}{% endif %}{% if card.exam_no %} · {{ card.exam_no }}{% endif %}</strong>
+{% if card.error %}<p class="icpd-warning">{{ card.error }}</p>
+{% elif card.result %}
+<p class="icpd-calibration-equation"><strong>{{ card.result.equation }}</strong><span>r = {{ card.result.r_text }}</span></p>
+<div class="icpd-scroll" tabindex="0"><table class="icpd-table">
+<thead><tr><th>樣品／標準名稱</th><th>檢量線濃度（mg/L）</th><th>平均測定值</th><th>RSD(n=3)</th><th>回歸濃度（mg/L）</th></tr></thead>
+<tbody>{% for point in card.result.points %}<tr><td>{{ point.sample_label }}</td><td>{{ point.concentration_text }}</td><td>{{ point.signal_text }}</td><td>{{ point.rsd_text }}</td><td>{{ point.backcalc_text }}</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endif %}
+</div>
+{% else %}<p class="icpd-muted">請先完成批次類別與檢測設定。</p>{% endfor %}
+</section>
+<section class="eacs-card icpd-section" id="icp-section-2">
+<h3>2. 樣品及 QA/QC 計算</h3>
+{% if sample_view %}
+{% for warning in sample_view.warnings %}<p class="icpd-warning">{{ warning }}</p>{% endfor %}
+<form id="icp-samples-form" method="post" action="{{ url_for('icp_data_bp.save_icp_samples') }}">
+<input type="hidden" name="work_key" value="{{ work_key }}">
+<input type="hidden" name="csrf_token" value="{{ pfm_csrf }}">
+<input type="hidden" name="work_token" value="{{ pfm_work_token }}">
+<input type="hidden" name="sample_token" value="{{ sample_view.token }}">
+<input type="hidden" name="channel_key" value="{{ selected_channel.key }}">
+{% for batch in sample_view.batches %}
+<div class="icpd-sample-batch"><strong>BATCH {{ batch.number }} · {{ batch.category }} · {{ batch.exam_no }}</strong>
+{% if batch.error %}<p class="icpd-warning">{{ batch.error }}</p>{% endif %}
+{% for warning in batch.warnings %}<p class="icpd-warning">{{ warning }}</p>{% endfor %}
+{% if batch.rows %}<div class="icpd-scroll"><table class="icpd-table icpd-samples-table">
+<colgroup><col style="width:5%"><col style="width:17%"><col style="width:7%"><col style="width:7%"><col style="width:7%"><col style="width:12%"><col style="width:7%"><col style="width:12%"><col style="width:12%"><col style="width:14%"></colgroup>
+<thead><tr><th>刪除</th><th>樣品編號</th><th>樣品體積</th><th>定量體積</th><th>稀釋倍數</th><th>平均測定值</th><th>RSD(n=3)</th><th>測定濃度（mg/L）</th><th>樣品濃度（mg/L）</th><th>備註</th></tr></thead>
+<tbody>{% for row in batch.rows %}
+<tr class="icpd-sample-row{% if row.is_excluded %} icpd-row-excluded{% endif %}"
+ data-row-id="{{ row.row_id }}" data-excluded="{{ '1' if row.is_excluded else '0' }}"
+ data-linked-count="{{ row.linked_count }}" data-role="{{ row.role }}"
+ data-signal="{{ row.signal }}" data-calculation='{{ row.calculation|tojson }}'>
+<td><button type="button" class="eacs-button eacs-button-secondary icpd-row-delete">{{ '恢復' if row.is_excluded else '刪除' }}</button></td>
+<td>{{ row.sample_id }}{% if row.check_position %}<small>{{ row.check_position }}</small>{% endif %}{% if row.manual_adoption %}<br><small title="{{ row.manual_adoption.reason }}">人工採用（LIMS 未配對）</small>{% endif %}{% if row.parent_sample_id %}<br><small>原樣：{{ row.parent_sample_id }}</small>{% endif %}{% if row.link_error %}<br><span class="icpd-error">原樣待確認</span>{% endif %}</td>
+{% for field in ['sample_volume', 'final_volume', 'dilution_factor'] %}<td><input class="icpd-sample-input" name="{{ field }}" type="number" step="any" min="0" required value="{{ row[field] }}" {% if row.direct %}readonly{% endif %} aria-label="{{ row.sample_id }} {{ field }}"></td>{% endfor %}
+<td>{{ row.signal_text }}</td><td>{{ row.rsd_text }}</td>
+<td class="icpd-measured">{{ row.measured_concentration_text }}</td><td class="icpd-concentration">{{ row.sample_concentration_text }}</td><td class="icpd-interpretation"></td>
+</tr>{% endfor %}</tbody></table></div>
+{% elif not batch.error %}<p class="icpd-muted">本批沒有已採用的樣品或適用的品管量測。</p>{% endif %}
+</div>{% endfor %}
+{% if sample_view.batches %}<button class="eacs-button eacs-button-primary" type="submit" {% if not sample_view.ready %}disabled{% endif %}>暫存全部批次分析資料</button>{% endif %}
+</form>
+{% endif %}
+</section>
+{% include "components/analysis/icp_qaqc_section.html" %}
+{% else %}<div class="eacs-card">目前沒有可顯示的金屬／波長。</div>{% endif %}
+</main></div>
+{% endif %}
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("icp-pfm-form");
+    if (!form) return;
+    let busy = false;
+    form.addEventListener("submit", async function (event) {
+        event.preventDefault();
+        if (busy) return;
+        busy = true;
+        const button = form.querySelector('button[type="submit"]');
+        button.disabled = true;
+        try {
+            const response = await fetch(form.action, {
+                method: "POST", body: new FormData(form), credentials: "same-origin"
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                alert(data.message || "PFM 無法儲存，請重新載入頁面確認。");
+                return;
+            }
+            window.location.assign(window.location.href);
+        } catch (error) {
+            alert("無法確認 PFM 儲存結果，請重新載入頁面確認後再操作。");
+        } finally {
+            busy = false;
+            button.disabled = false;
+        }
+    });
+});
+</script>
+
+
+
+
+
+
+<script src="{{ url_for('static', filename='js/analysis_interpretation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/icp_samples.js') }}"></script>
+
+
+
+
+{% if channels and not error_message %}
+<dialog id="icp-pdf-dialog" aria-labelledby="icp-pdf-title">
+<form id="icp-pdf-form" method="post" action="{{ url_for('icp_data_bp.export_icp_pdf') }}">
+<h3 id="icp-pdf-title">選擇匯出的金屬／波長</h3>
+<input type="hidden" name="work_key" value="{{ work_key }}">
+<input type="hidden" name="work_token" value="{{ pfm_work_token }}">
+<input type="hidden" name="configuration_token" value="{{ pdf_configuration_token }}">
+<input type="hidden" name="csrf_token" value="{{ pfm_csrf }}">
+<p>所選項目將依左側清單順序合併為一份 PDF。</p>
+{% if pdf_export_error %}<p class="icpd-error">{{ pdf_export_error }}</p>{% endif %}
+<div class="icpd-header-actions"><button type="button" class="eacs-button eacs-button-secondary" id="icp-pdf-all">全選</button><button type="button" class="eacs-button eacs-button-secondary" id="icp-pdf-none">取消全選</button></div>
+<div class="icpd-pdf-options">
+{% for item in channels %}<label><input type="checkbox" name="channels" value="{{ item.key }}" {% if selected_channel and item.key == selected_channel.key %}checked{% endif %}> {{ item.label }}</label>{% endfor %}
+</div>
+<div class="icpd-header-actions"><button type="submit" class="eacs-button eacs-button-primary" {% if pdf_export_error %}disabled{% endif %}>匯出 PDF</button><button type="button" class="eacs-button eacs-button-secondary" id="icp-pdf-close">取消</button></div>
+<p id="icp-pdf-message" role="status"></p>
+</form>
+</dialog>
+<script src="{{ url_for('static', filename='js/icp_pdf_export.js', v='20261022a') }}"></script>
+{% endif %}
+{% include "components/analysis/performance_trend_modal.html" %}
+{% if channels and not error_message %}
+<dialog id="icp-excel-dialog" aria-labelledby="icp-excel-title">
+<form id="icp-excel-form" method="post" action="{{ url_for('icp_data_bp.export_icp_excel') }}">
+<h3 id="icp-excel-title">選擇匯出的金屬／波長</h3>
+<input type="hidden" name="work_key" value="{{ work_key }}">
+<input type="hidden" name="work_token" value="{{ pfm_work_token }}">
+<input type="hidden" name="configuration_token" value="{{ pdf_configuration_token }}">
+<input type="hidden" name="csrf_token" value="{{ pfm_csrf }}">
+<p>所選項目將合併成一份 LIMS Excel；同一批次、同一檢測代碼僅選一個波長。</p>
+<p>分析數據僅輸出已確認 LIMS 委測且採用的一般樣品；未配對的採用資料仍可作為品管原樣。</p>
+{% if pdf_export_error %}<p class="icpd-error">{{ pdf_export_error }}</p>{% endif %}
+<div class="icpd-header-actions"><button type="button" class="eacs-button eacs-button-secondary" id="icp-excel-all">全選</button><button type="button" class="eacs-button eacs-button-secondary" id="icp-excel-none">取消全選</button></div>
+<div class="icpd-pdf-options">
+{% for item in channels %}<label><input type="checkbox" name="channels" value="{{ item.key }}" {% if selected_channel and item.key == selected_channel.key %}checked{% endif %}> {{ item.label }}</label>{% endfor %}
+</div>
+<div class="icpd-header-actions"><button type="submit" class="eacs-button eacs-button-primary" {% if pdf_export_error %}disabled{% endif %}>匯出 Excel</button><button type="button" class="eacs-button eacs-button-secondary" id="icp-excel-close">取消</button></div>
+<p id="icp-excel-message" role="status"></p>
+</form>
+</dialog>
+<script src="{{ url_for('static', filename='js/icp_excel_export.js', v='20261022a') }}"></script>
+{% endif %}
+</div>
+<script src="{{ url_for('static', filename='js/icp_formal_record.js', v='20261022a') }}"></script>
+{% endblock %}

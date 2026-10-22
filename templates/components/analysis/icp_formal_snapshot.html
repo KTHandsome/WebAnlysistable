@@ -1,0 +1,23 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='css/icp.css') }}">
+<div class="icp-page">
+<div class="eacs-card"><strong>ICP 正式分析快照</strong><p>以下內容為儲存時的完整結果。修正請由退回紀錄的「進入修正」操作。</p>
+{% set pfm = icp_snapshot.work.pfm_manual %}
+<p>PFM 日期：{{ pfm.analysis_date }}　{{ pfm.control.monitor_item }}：{{ pfm.ratio_display }}　{{ '合格' if pfm.result == 'PASS' else '不合格' }}</p>
+<p>{{ pfm.control.numerator_item }}：{{ pfm.numerator_signal }}　{{ pfm.control.denominator_item }}：{{ pfm.denominator_signal }}　管制：{{ pfm.control.lower_limit }} ～ {{ pfm.control.upper_limit }}</p></div>
+<div class="icpd-layout">
+<nav class="icpd-nav" aria-label="正式紀錄金屬與波長"><strong>金屬／波長</strong>
+{% for item in icp_snapshot.bundles %}<a href="{{ url_for('analysis_record_detail', analysis_id=record.analysis_id, channel=item.key) }}" {% if item.key == icp_channel.key %}aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}</nav>
+<main class="icpd-main">
+{% for batch in icp_channel.batches %}
+<section class="eacs-card icpd-section"><h3>{{ icp_channel.label }} · BATCH {{ batch.number }} · {{ batch.category }} · {{ batch.exam_no }}</h3>
+<h4>1. 檢量線</h4><p>{{ batch.calibration.equation }}　r = {{ batch.calibration.r_text }}</p>
+<div class="icpd-scroll"><table class="icpd-table"><thead><tr><th>樣品／標準名稱</th><th>檢量線濃度（mg/L）</th><th>平均測定值</th><th>RSD(n=3)</th><th>回歸濃度（mg/L）</th></tr></thead>
+<tbody>{% for point in batch.calibration.points %}<tr><td>{{ point.sample_label }}</td><td>{{ point.concentration_text }}</td><td>{{ point.signal_text }}</td><td>{{ point.rsd_text }}</td><td>{{ point.backcalc_text }}</td></tr>{% endfor %}</tbody></table></div>
+<h4>2. 樣品及 QA/QC 計算</h4><div class="icpd-scroll"><table class="icpd-table icpd-samples-table"><thead><tr><th>樣品編號</th><th>樣品體積</th><th>定量體積</th><th>稀釋倍數</th><th>平均測定值</th><th>RSD(n=3)</th><th>測定濃度（mg/L）</th><th>樣品濃度（mg/L）</th><th>備註</th></tr></thead>
+<tbody>{% for row in batch.rows %}<tr><td>{{ row.sample_id }}{% if row.check_position %}<small>{{ row.check_position }}</small>{% endif %}{% if row.parent_sample_id %}<small>原樣：{{ row.parent_sample_id }}</small>{% endif %}</td><td>{{ row.sample_volume }}</td><td>{{ row.final_volume }}</td><td>{{ row.dilution_factor }}</td><td>{{ row.signal_text }}</td><td>{{ row.rsd_text }}</td><td>{{ row.measured_concentration_text }}</td><td>{{ row.sample_concentration_text }}</td><td>{{ row.interpretation_text }}</td></tr>{% endfor %}</tbody></table></div></section>
+{% endfor %}
+{% set icp_qaqc_view = {'batches': icp_channel.batches|map(attribute='qaqc')|list} %}
+{% include "components/analysis/icp_qaqc_section.html" %}
+</main></div>
+<p><a class="eacs-button eacs-button-secondary" href="{{ url_for('analysis_records') }}">返回分析紀錄查詢</a></p>
+</div>

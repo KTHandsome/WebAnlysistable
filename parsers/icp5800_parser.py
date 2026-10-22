@@ -243,6 +243,9 @@ def parse_icp5800_pdf(pdf_source):
                         "element": element,
                         "element_marker": marker or "",
                         "wavelength": wavelength,
+                        "instrument_concentration_text": concentration.strip(),
+                        "signal_text": intensity.strip(),
+                        "rsd_text": rsd.strip(),
                         "instrument_concentration": (
                             concentration_value
                         ),

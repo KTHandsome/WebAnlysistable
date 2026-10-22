@@ -1,0 +1,3 @@
+<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><title>工作提示</title><body>
+<p>{{ message }}</p><button type="button" onclick="history.back()">返回</button>
+<script>window.alert({{ message|tojson }}); if (history.length > 1) history.back();</script></body></html>

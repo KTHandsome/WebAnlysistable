@@ -765,6 +765,9 @@
                         {% elif item.action == "REOPEN_AFTER_APPROVAL" %}
                             再次退回修正
 
+                        {% elif item.action == "RESUME_ICP" %}
+                            開啟 ICP 修正
+
                         {% elif item.action == "RESUBMIT" %}
                             修正後重新送審
 
@@ -843,6 +846,9 @@
 
 {% endif %}
 
+{% if icp_snapshot is defined %}
+{% include "components/analysis/icp_formal_snapshot.html" %}
+{% else %}
 <div class="eacs-card">
 
     <h2 class="eacs-card-title">
@@ -2218,6 +2224,7 @@
 </div>
 
 
+{% endif %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const form = document.getElementById("resume-analysis-record-form");

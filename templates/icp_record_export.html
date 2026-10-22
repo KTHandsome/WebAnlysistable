@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block title %}ICP 正式紀錄匯出{% endblock %}
+{% block head %}{{ super() }}<link rel="stylesheet" href="{{ url_for('static', filename='css/icp.css') }}">{% endblock %}
+{% block content %}<div class="icp-page"><div class="eacs-card"><h2>匯出 ICP 正式紀錄 {{ 'PDF' if export_kind == 'pdf' else 'LIMS Excel' }}</h2>
+<p>請選擇金屬／波長，合併匯出一份檔案。內容以此正式紀錄快照為準。</p>
+{% if export_kind == 'excel' %}<p>同一批次、同一檢測代碼僅能選一個波長，避免 LIMS 重複結果。</p>{% endif %}
+<form id="icp-frozen-export" action="{{ url_for('icp_data_bp.export_icp_formal', analysis_id=record.analysis_id, kind=export_kind) }}" method="post" data-kind="{{ export_kind }}">
+<input type="hidden" name="csrf_token" value="{{ session.icp_record_csrf }}"><input type="hidden" name="snapshot_token" value="{{ snapshot_token }}">
+<p><button type="button" id="icp-frozen-all" class="eacs-button eacs-button-secondary">全選</button> <button type="button" id="icp-frozen-none" class="eacs-button eacs-button-secondary">取消全選</button></p>
+<div class="icpd-pdf-options">{% for item in snapshot.bundles %}<label><input type="checkbox" name="channels" value="{{ item.key }}" {% if loop.first %}checked{% endif %}> {{ item.label }}</label>{% endfor %}</div>
+<p><button type="submit" class="eacs-button eacs-button-primary">匯出</button> <a class="eacs-button eacs-button-secondary" href="{{ url_for('analysis_record_detail', analysis_id=record.analysis_id) }}">返回正式紀錄</a></p><p id="icp-frozen-message" role="status"></p></form>
+</div></div><script src="{{ url_for('static', filename='js/icp_frozen_export.js') }}"></script>{% endblock %}

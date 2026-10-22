@@ -1,4 +1,7 @@
-﻿# -*- coding: utf-8 -*-
+import json
+from sqlalchemy import or_, and_
+from models import AnalysisWorkState
+# -*- coding: utf-8 -*-
 """
 Phyon Performance History Query Service.
 
@@ -133,7 +136,11 @@ def query_performance_history(
     # ========================================
 
     if category:
-
+        category_token = json.dumps({"category": category}, ensure_ascii=False)
+        snapshot_match = db.query(AnalysisWorkState.id).filter(
+            AnalysisWorkState.analysis_id == AnalysisRecord.analysis_id,
+            AnalysisWorkState.state_json.contains(category_token, autoescape=True),
+        ).correlate(AnalysisRecord).exists()
         matching_events = (
             db.query(
                 PerformanceAnalysisLink.performance_id
@@ -144,7 +151,8 @@ def query_performance_history(
                 == PerformanceAnalysisLink.analysis_id
             )
             .filter(
-                AnalysisRecord.category == category
+                or_(AnalysisRecord.category == category,
+                    and_(AnalysisRecord.source_type == "ICP_IMPORT", snapshot_match))
             )
             .distinct()
         )
@@ -179,7 +187,7 @@ def query_performance_history(
         links = (
             db.query(
                 PerformanceAnalysisLink,
-                AnalysisRecord.category
+                AnalysisRecord
             )
             .join(
                 AnalysisRecord,
@@ -198,7 +206,13 @@ def query_performance_history(
             .all()
         )
 
-        for link, linked_category in links:
+        for link, linked_record in links:
+            linked_category = linked_record.category
+            if linked_record.source_type == "ICP_IMPORT":
+                from services.icp_record_service import load_snapshot
+                categories = load_snapshot(db, linked_record).get("categories", [])
+                category_map.setdefault(link.performance_id, set()).update(categories)
+                linked_category = ""
 
             category_map.setdefault(
                 link.performance_id, set()

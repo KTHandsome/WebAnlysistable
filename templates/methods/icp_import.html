@@ -3,7 +3,12 @@
 {% block title %}ICP 多金屬匯入
 {% endblock %}
 
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/icp.css', v='20261022-status-colors') }}">
+{% endblock %}
 {% block content %}
+<div class="icp-page">
 <div class="page-header">
     <h1 class="page-title">ICP 多金屬匯入</h1>
 </div>
@@ -33,6 +38,7 @@
                    accept=".pdf,application/pdf" required>
             <button type="submit" class="eacs-button eacs-button-primary">上傳 PDF</button>
         </form>
+
     </div>
 </div>
 
@@ -98,6 +104,7 @@
                     </td>
 
                     <td>
+                        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
                         <form
                             method="post"
                             action="{{ url_for('open_icp_saved_work') }}"
@@ -116,6 +123,13 @@
                                 開啟工作
                             </button>
                         </form>
+                        <form method="post" action="{{ url_for('icp_saved_work_bp.delete_icp_saved_work') }}"
+                              class="icp-delete-work-form" data-filename="{{ work.source_filename }}" style="margin:0">
+                            <input type="hidden" name="work_key" value="{{ work.work_key }}">
+                            <input type="hidden" name="csrf_token" value="{{ icp_delete_csrf }}">
+                            <button type="submit" class="eacs-button eacs-button-secondary" style="color:#b42318;padding:5px 12px;white-space:nowrap">刪除</button>
+                        </form>
+                        </div>
                     </td>
 
                 </tr>
@@ -137,6 +151,8 @@
         <button type="button" id="icp-tab-candidates" class="icp-tab" role="tab"
                 aria-controls="icp-panel-candidates" aria-selected="false" tabindex="-1">候選量測</button>
 
+        <button type="button" id="icp-tab-setup" class="icp-tab" role="tab"
+                aria-controls="icp-panel-setup" aria-selected="false" tabindex="-1">批次設定</button>
         <button
                 type="button"
                 id="icp-tab-lims"
@@ -147,8 +163,16 @@
                 tabindex="-1"
                       >
                 LIMS 委測配對
-        </button> 
+        </button>
 
+
+        {% if parsed_row_count and session.get('icp_work_key') %}
+        <a class="icp-tab"
+           style="display:block;text-decoration:none;box-sizing:border-box"
+           href="{{ url_for('icp_data_bp.analysis_icp_data', work_key=session.get('icp_work_key')) }}">
+            分析數據表
+        </a>
+        {% endif %}
     </nav>
     <div class="icp-panels">
 <section id="icp-panel-raw" class="eacs-card icp-panel" role="tabpanel"
@@ -212,17 +236,17 @@
                     <th>樣品／標準名稱</th>
                     <th>拆解後名稱</th>
                     <th>角色</th>
-                    <th>LIMS樣品編號</th>                    
+
                     <th>標記倍數</th>
-                    <th>指定金屬</th>
+
                     <th>金屬適用性</th>
-                    <th>標記檢查</th>
+
                     <th>量測時間</th>
                     <th>金屬</th>
                     <th>波長（nm）</th>
                     <th>訊號</th>
                     <th>儀器濃度（mg/L）</th>
-                    <th>濃度註記</th>
+
                     <th>RSD</th>
                 </tr>
             </thead>
@@ -235,9 +259,9 @@
                     <td>{{ row.sample_label }}</td>
                     <td>{{ row.base_label }}</td>
                     <td>{{ row.role }}</td>
-                    <td>{{ row.lims_keepid }}</td>
+
                     <td>{{ row.label_dilution_factor }}</td>
-                    <td>{{ row.dilution_elements | join("、") }}</td>
+
                     <td
                         {% if row.element_applicability == "NOT_TARGET" %}
                         style="color: #777;"
@@ -247,7 +271,7 @@
                     >
                         {{ row.element_applicability_note }}
                     </td>
-                    <td>{{ row.label_warning }}</td>
+
                     <td>{{ row.measured_at }}</td>
                     <td>{{ row.element }}{{ row.element_marker }}</td>
                     <td>{{ row.wavelength }}</td>
@@ -257,7 +281,7 @@
                            if row.instrument_concentration is not none
                            else "" }}
                     </td>
-                    <td>{{ row.instrument_concentration_flag }}</td>
+
                     <td>{{ row.rsd }}</td>
                 </tr>
                 {% endfor %}
@@ -274,7 +298,7 @@
     id="icp-candidate-batch-form"
     method="post"
     action="{{ url_for('save_icp_candidate_selection') }}"
-    ></form> 
+    ></form>
 
     <p>
         依原始量測頁籤的金屬／波長篩選，不受角色篩選影響。
@@ -392,10 +416,100 @@
     </button>
 </div>
 {% endif %}
-    
+
     {% if not candidate_groups %}
     <p>目前金屬／波長篩選下沒有適用的一般樣品候選量測。</p>
     {% endif %}
+</section>
+<section id="icp-panel-setup" class="eacs-card icp-panel" role="tabpanel"
+         aria-labelledby="icp-tab-setup" tabindex="0" hidden>
+<h2 class="eacs-card-title">批次設定</h2>
+<p>每批選擇一個類別，再確認各金屬／波長的檢測代碼；本次不使用的項目請選「不採用」，完成後統一儲存。整批不使用時，類別請選「不採用」。</p>
+{% if setup_error %}<p>{{ setup_error }}</p>
+{% elif setup_view %}
+{% for warning in setup_view.warnings %}<p>{{ warning }}</p>{% endfor %}
+<form id="icp-setup-form" method="post" action="{{ url_for('icp_data_bp.save_icp_batch_setup') }}">
+<input type="hidden" name="csrf_token" value="{{ setup_csrf }}">
+<input type="hidden" name="work_key" value="{{ session.get('icp_work_key', '') }}">
+<input type="hidden" name="work_token" value="{{ setup_view.work_token }}">
+<input type="hidden" name="settings_token" value="{{ setup_view.settings_token }}">
+{% for batch in setup_view.batches %}
+<div class="icp-setup-batch" data-batch="{{ batch.id }}" style="border-top:1px solid #dbe2ea;padding:12px 0">
+<strong>BATCH {{ batch.number }}</strong>
+<label>類別 <select class="icp-setup-category" required><option value="">請選擇類別</option>
+<option value="__EXCLUDE__" {% if batch.category == "__EXCLUDE__" %}selected{% endif %}>不採用</option>
+{% for cat in setup_view.categories %}<option value="{{ cat }}" {% if cat == batch.category %}selected{% endif %}>{{ cat }}</option>{% endfor %}</select></label>
+<p class="icp-batch-skip-note icp-choice-reject" {% if batch.category != "__EXCLUDE__" %}hidden{% endif %}>本批次不採用，不進行後續數據整理。</p>
+<div class="icp-table-scroll"><table class="icp-preview-table" style="width:100%"><thead><tr><th>金屬／波長</th><th>檢測代碼</th><th>檢量線濃度</th><th>管制範圍</th><th>狀態</th></tr></thead><tbody>
+{% for channel in batch.channels %}<tr data-channel="{{ channel.key }}">
+<td>{{ channel.label }}</td><td><select class="icp-setup-exam" data-selected="{{ channel.exam_no }}" required></select></td>
+<td class="setup-calibration"></td><td class="setup-control"></td>
+<td class="{{ 'icp-choice-reject' if channel.is_excluded else ('icp-choice-accept' if channel.ready else 'icp-choice-pending') }}">{{ '不採用' if channel.is_excluded else ('已確認' if channel.ready else '待確認') }}</td></tr>{% endfor %}
+</tbody></table></div></div>{% endfor %}
+{% if setup_view.batches %}<button class="eacs-button eacs-button-primary" type="submit">儲存全部批次設定</button>{% endif %}
+</form>
+<script>
+(function () {
+const catalogs = {{ setup_view.catalogs|tojson }};
+const form = document.getElementById("icp-setup-form");
+form.querySelectorAll(".icp-setup-batch").forEach(function (batch) {
+ const category = batch.querySelector(".icp-setup-category");
+ batch.querySelectorAll("tr[data-channel]").forEach(function (row) {
+  const exam = row.querySelector("select");
+  function details() {
+   if (exam.value === "__EXCLUDE__") {
+    row.querySelector(".setup-calibration").textContent = "—";
+    row.querySelector(".setup-control").textContent = "—";
+    return;
+   }
+   const setting = (catalogs[row.dataset.channel][category.value] || []).find(s => s.exam_no === exam.value && !s.error);
+   row.querySelector(".setup-calibration").textContent = setting ? setting.calibration_values : "—";
+   const c = setting ? setting.control : {};
+   row.querySelector(".setup-control").textContent = setting ? "QC："+(c.QC_LCL || "—")+" ～ "+(c.QC_UCL || "—")+"；添加："+(c.SPIKE_LCL || "—")+" ～ "+(c.SPIKE_UCL || "—")+"；重複："+(c.DC_LCL || "—")+" ～ "+(c.DC_UCL || "—") : "—";
+  }
+  function fill(selected) {
+   const skip = category.value === "__EXCLUDE__";
+   exam.disabled = skip;
+   const note = batch.querySelector(".icp-batch-skip-note");
+   if (note) note.hidden = !skip;
+   const table = batch.querySelector(".icp-table-scroll");
+   if (table) table.hidden = skip;
+   if (skip) {
+    exam.replaceChildren(new Option("不採用", "__EXCLUDE__"));
+    exam.value = "__EXCLUDE__";
+    details();
+    return;
+   }
+   const options = catalogs[row.dataset.channel][category.value] || [];
+   exam.replaceChildren(new Option("請選擇檢測代碼", ""), new Option("不採用", "__EXCLUDE__"));
+   options.forEach(s => {const o = new Option(s.label, s.exam_no); o.disabled = Boolean(s.error); exam.add(o);});
+   if (selected) exam.value = selected;
+   else if (options.length === 1 && !options[0].error) exam.value = options[0].exam_no;
+   details();
+  }
+  fill(exam.dataset.selected);
+  exam.addEventListener("change", function () {details(); row.lastElementChild.textContent="待儲存"; row.lastElementChild.className="icp-choice-pending";});
+  category.addEventListener("change", function () {fill(""); row.lastElementChild.textContent="待儲存"; row.lastElementChild.className="icp-choice-pending";});
+ });
+});
+form.addEventListener("submit", async function (event) {
+ event.preventDefault(); const button = form.querySelector("button[type=submit]");
+ if (button.disabled) return; button.disabled=true;
+ try {
+  const batches = Array.from(form.querySelectorAll(".icp-setup-batch")).map(batch => ({
+   batch_id:batch.dataset.batch, category:batch.querySelector(".icp-setup-category").value,
+   channels:Object.fromEntries(Array.from(batch.querySelectorAll("tr[data-channel]")).map(row => [row.dataset.channel,row.querySelector("select").value]))
+  }));
+  const body = new FormData(form); body.set("batches_json",JSON.stringify(batches));
+  const response = await fetch(form.action,{method:"POST",body:body,credentials:"same-origin"});
+  const result = await response.json(); if (!response.ok) {alert(result.message);return;}
+  const url = new URL(window.location.href);url.searchParams.set("tab","setup");window.location.assign(url);
+ } catch(error) {alert("無法確認儲存結果，請重新載入。");}
+ finally {button.disabled=false;}
+});
+})();
+</script>
+{% else %}<p>請先匯入 PDF。</p>{% endif %}
 </section>
 <section
     id="icp-panel-lims"
@@ -416,12 +530,17 @@
     id="icp-lims-batch-form"
     method="post"
     action="{{ url_for('save_icp_lims_decision') }}"
-></form>
+>
+<input type="hidden" name="csrf_token" value="{{ decision_context.csrf }}">
+<input type="hidden" name="work_key" value="{{ decision_context.work_key }}">
+<input type="hidden" name="work_token" value="{{ decision_context.work_token }}">
+</form>
 
 <p>
     依樣品編號、金屬及樣品型態進行配對。
     跨方法項目仍須由使用者確認。
-    此表尚未選定正式分析結果。
+    未配對委測的量測預設不採用；可在完成批次設定後由使用者決定是否採用，作為計算或品管原樣使用。
+    採用不代表 LIMS 已有正式委測，此表尚未選定正式分析結果。
 </p>
 
 {% if icp_lims_matches %}
@@ -486,17 +605,17 @@
                 </td>
                 <td>
                     {% if item.user_decision == "ACCEPT" %}
-                    <span style="color: #176b36; font-weight: 600;">
+                    <span class="icp-choice-accept">
                     採用
                     </span>
 
                    {% elif item.user_decision == "PENDING" %}
-                   <span style="color: #a16207; font-weight: 600;">
+                   <span class="icp-choice-pending">
                    待確認
                    </span>
 
                    {% elif item.user_decision == "REJECT" %}
-                   <span style="color: #64748b;">
+                   <span class="icp-choice-reject">
                    不採用
                    </span>
 
@@ -531,13 +650,28 @@
                             {% if item.user_decision == "REJECT" %}selected{% endif %}>
                             不採用
                      </option>
-                   </select> 
+                   </select>
 
                          {% else %}
 
-                          <span style="color: #64748b;">
-                              不採用（不可變更）
-                          </span>
+                          {% if item.status == "NOT_COMMISSIONED" and item.manual_options %}
+                          {% for option in item.manual_options %}
+                          <div class="icp-manual-option">
+                            <span>{{ option.label }}{% if option.eligible %} · BATCH {{ option.batch_id }} · {{ option.category }} · 採用設定 {{ option.exam_no }}{% endif %}</span><br>
+                            {% if option.eligible %}
+                            {% if option.warning %}<span class="icp-adoption-warning">{{ option.warning }}</span>{% endif %}
+                            <select form="icp-lims-batch-form" class="icp-manual-decision"
+                                    name="manual_decisions[{{ option.key }}]" data-reason-id="manual-reason-{{ loop.index0 }}-{{ option.key }}">
+                              <option value="REJECT" {% if option.decision != 'ACCEPT' %}selected{% endif %}>不採用</option>
+                              <option value="ACCEPT" {% if option.decision == 'ACCEPT' %}selected{% endif %}>採用</option>
+                            </select>
+
+                            {% else %}<span style="color:#a16207">{{ option.error }}</span>{% endif %}
+                          </div>
+                          {% endfor %}
+                          {% else %}
+                          <span style="color: #64748b;">—</span>
+                          {% endif %}
 
                          {% endif %}
                  </td>
@@ -679,312 +813,7 @@
 {% endif %}
 
 
-<style>
-    /* 本次分析資料：縮成資訊列 + 提示列 + 操作列。 */
-    .icp-summary-card { padding: 14px 20px; }
-    .icp-summary-top { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 24px; row-gap: 8px; }
-    .icp-summary-top .eacs-card-title { margin: 0; flex: 0 0 auto; }
-    .icp-summary-details { display: flex; flex: 1 1 650px; flex-wrap: wrap; gap: 6px 22px; font-size: 14px; }
-    .icp-summary-details span { white-space: normal; }
-    .icp-upload-notice { margin: 9px 0 0; line-height: 1.5; }
-    .icp-summary-actions { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-top: 12px; }
-    .icp-upload-form { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: 0; }
-    .icp-summary-actions .eacs-button { margin: 0; }
-    @media (max-width: 768px) {
-        .icp-summary-card { padding: 12px; }
-        .icp-summary-top { gap: 6px; }
-        .icp-summary-details { flex-basis: 100%; gap: 4px 12px; }
-    }
-    /* ICP 匯入頁使用完整可用寬度。 */
-    .main-content { padding-left: 16px; padding-right: 16px; }
-    .main-content .page-container { max-width: none; }
-    .icp-workspace { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; margin-top: 20px; }
-    .icp-tabs { display: flex; flex-direction: column; gap: 8px; }
-    .icp-tab { padding: 12px 14px; border: 1px solid #ccd4dc; border-radius: 6px; background: #fff; color: #334155; text-align: left; font: inherit; cursor: pointer; }
-    .icp-tab[aria-selected="true"] { background: #eaf0f6; border-color: #365e85; color: #23496e; font-weight: bold; }
-    .icp-tab:focus-visible { outline: 2px solid #365e85; outline-offset: 2px; }
-    .icp-panels, .icp-panel { min-width: 0; }
-    .icp-panel { margin: 0; }
-    .icp-panel[hidden] { display: none !important; }
-    .icp-panel form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-    .icp-panel select { max-width: 100%; }
-    .icp-table-scroll { overflow: auto; max-height: 60vh; }
-    .icp-preview-table th, .icp-preview-table td { border: 1px solid #ccd4dc; padding: 6px 10px; text-align: center; }
-    .icp-preview-table th { background: #eaf0f6; position: sticky; top: 0; z-index: 1; }
-    @media (max-width: 768px) {
-        .icp-workspace { grid-template-columns: minmax(0, 1fr); gap: 10px; }
-        .icp-tabs { flex-direction: row; }
-        .icp-tab { flex: 1; text-align: center; }
-    }
 
-/* ICP 委測批次選擇 */
-.icp-decision-select {
-    min-width: 100px;
-    padding: 5px 8px;
-    font-size: 14px;
-}
-
-.icp-batch-actions {
-    display: flex;
-    justify-content: flex-end;
-    padding: 12px 4px;
-}
-
-.icp-batch-actions button {
-    white-space: nowrap;
-    padding: 8px 18px;
-}
-
-/* ICP 候選量測選取狀態 */
-.icp-selection-auto {
-    color: #176b36;
-    font-weight: 600;
-}
-
-.icp-selection-user {
-    color: #1d4ed8;
-    font-weight: 600;
-}
-
-.icp-selection-pending {
-    color: #a16207;
-    font-weight: 600;
-}
-
-/* ========================================
-   ICP 候選量測表格：緊湊版面
-   ======================================== */
-
-.icp-candidate-table {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-    font-size: 12.5px;
-}
-
-.icp-candidate-table th,
-.icp-candidate-table td {
-    padding: 5px 6px;
-    line-height: 1.4;
-    vertical-align: middle;
-    white-space: nowrap;
-}
-
-.icp-candidate-table th:nth-child(1) {
-    width: 13%;
-}
-
-.icp-candidate-table th:nth-child(2) {
-    width: 5%;
-}
-
-.icp-candidate-table th:nth-child(3) {
-    width: 8%;
-}
-
-.icp-candidate-table th:nth-child(4) {
-    width: 7%;
-}
-
-.icp-candidate-table th:nth-child(5) {
-    width: 10%;
-}
-
-.icp-candidate-table th:nth-child(6) {
-    width: 8%;
-}
-
-.icp-candidate-table th:nth-child(7) {
-    width: 20%;
-}
-
-.icp-candidate-table th:nth-child(8) {
-    width: 12%;
-}
-
-.icp-candidate-table th:nth-child(9) {
-    width: 17%;
-}
-
-.icp-candidate-values {
-    text-align: left;
-}
-
-.icp-candidate-values div {
-    white-space: nowrap;
-}
-
-/* ICP 候選量測倍數選擇 */
-.icp-candidate-select {
-    width: 100%;
-    max-width: 145px;
-    min-width: 90px;
-    padding: 4px 6px;
-    font-size: 12.5px;
-    border: 1px solid #94a3b8;
-    border-radius: 4px;
-    background: #fff;
-    color: #1e293b;
-}
-
-.icp-candidate-select:focus {
-    outline: 2px solid #2563eb;
-    outline-offset: 1px;
-}
-
-/* ========================================
-   ICP 已暫存工作清單
-   ======================================== */
-
-.icp-saved-work-card {
-    margin-top: 12px;
-    margin-bottom: 12px;
-}
-
-.icp-saved-work-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12.5px;
-}
-
-.icp-saved-work-table th,
-.icp-saved-work-table td {
-    padding: 6px 8px;
-    vertical-align: middle;
-}
-
-.icp-saved-work-table th:nth-child(1) {
-    width: 34%;
-}
-
-.icp-saved-work-table th:nth-child(2) {
-    width: 12%;
-}
-
-.icp-saved-work-table th:nth-child(3),
-.icp-saved-work-table th:nth-child(4) {
-    width: 20%;
-}
-
-.icp-saved-work-table th:nth-child(5) {
-    width: 14%;
-}
-
-.icp-open-work-form {
-    margin: 0;
-}
-
-.icp-open-work-form button {
-    padding: 5px 12px;
-    font-size: 12px;
-    white-space: nowrap;
-}
-
-/* ========================================
-   ICP 已暫存工作：專業簡約收合式
-   ======================================== */
-
-.icp-saved-work-summary {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px 16px;
-    cursor: pointer;
-
-    color: #24476f;
-    background: #edf3fa;
-    border: 1px solid #c8d7e8;
-    border-radius: 7px;
-
-    font-size: 16px;
-    font-weight: 600;
-
-    list-style: none;
-}
-
-.icp-saved-work-summary::-webkit-details-marker {
-    display: none;
-}
-
-.icp-saved-work-title {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    min-width: 0;
-}
-
-.icp-saved-work-icon {
-    font-size: 17px;
-    line-height: 1;
-}
-
-.icp-saved-work-count {
-    color: #64748b;
-    font-size: 12px;
-    font-weight: 400;
-    white-space: nowrap;
-}
-
-.icp-saved-work-toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #45688f;
-    font-size: 12px;
-    font-weight: 500;
-    white-space: nowrap;
-}
-
-.icp-toggle-arrow {
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    border-right: 2px solid currentColor;
-    border-bottom: 2px solid currentColor;
-    transform: rotate(45deg);
-    transition: transform 0.15s ease;
-}
-
-.icp-toggle-close {
-    display: none;
-}
-
-/* 滑鼠移入 */
-.icp-saved-work-summary:hover {
-    background: #e2edfa;
-    border-color: #a7bfdd;
-}
-
-/* 鍵盤操作提示 */
-.icp-saved-work-summary:focus-visible {
-    outline: 2px solid #315f9c;
-    outline-offset: 2px;
-}
-
-/* 展開狀態 */
-.icp-saved-work-card[open] .icp-saved-work-summary {
-    background: #e2edfa;
-    border-color: #a7bfdd;
-}
-
-.icp-saved-work-card[open] .icp-toggle-open {
-    display: none;
-}
-
-.icp-saved-work-card[open] .icp-toggle-close {
-    display: inline;
-}
-
-.icp-saved-work-card[open] .icp-toggle-arrow {
-    transform: rotate(225deg);
-}
-
-.icp-saved-work-card[open] .icp-table-scroll {
-    margin-top: 14px;
-}
-
-</style>
 
 <script>
 (function () {
@@ -1002,6 +831,7 @@
         const tabNames = {
     'icp-tab-raw': 'raw',
     'icp-tab-candidates': 'candidates',
+    'icp-tab-setup': 'setup',
     'icp-tab-lims': 'lims'
 };
 
@@ -1034,7 +864,7 @@ url.searchParams.set(
     if (narrowScreen.addEventListener) narrowScreen.addEventListener('change', updateOrientation);
     else narrowScreen.addListener(updateOrientation);
     const selected = new URL(window.location.href).searchParams.get('tab');
-    const tabIndex = {raw: 0, candidates: 1, lims: 2};
+    const tabIndex = {raw: 0, candidates: 1, setup: 2, lims: 3};
 
 activate(
     tabs[tabIndex[selected] ?? 0],
@@ -1077,4 +907,40 @@ activate(
 })();
 </script>
 
+<script>
+(function () {
+    const form = document.getElementById("icp-lims-batch-form");
+    if (!form) return;
+
+    let busy = false;
+    form.addEventListener("submit", async function (event) {
+        event.preventDefault();
+        if (busy) return;
+        busy = true;
+        try {
+            const response = await fetch(form.action, {method:"POST", body:new FormData(form), credentials:"same-origin"});
+            const result = await response.json();
+            if (!response.ok) { alert(result.message || "配對決定無法儲存。"); return; }
+            window.location.assign(result.redirect_url);
+        } catch (error) { alert("無法確認儲存結果，請重新載入頁面確認。"); }
+        finally { busy = false; }
+    });
+})();
+</script>
+
+</div>
+<script src="{{ url_for('static', filename='js/icp_delete_work.js', v='20261022a') }}"></script>
+<script>
+(function () {
+    document.querySelectorAll(".icp-decision-select, .icp-manual-decision").forEach(function (select) {
+        function updateChoiceColor() {
+            select.classList.remove("icp-choice-accept", "icp-choice-reject", "icp-choice-pending");
+            select.classList.add(select.value === "ACCEPT" ? "icp-choice-accept" :
+                select.value === "REJECT" ? "icp-choice-reject" : "icp-choice-pending");
+        }
+        updateChoiceColor();
+        select.addEventListener("change", updateChoiceColor);
+    });
+})();
+</script>
 {% endblock %}

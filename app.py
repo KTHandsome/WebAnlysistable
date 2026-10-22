@@ -1,3 +1,9 @@
+from analysis.icp_batch_adoption import filter_lims_matches, filter_lims_groups
+from services.icp_batch_setup_service import build_setup_view
+from services.icp_lims_decision_service import (
+    decorate_manual_adoptions, lims_decision_form_context, handle_lims_decision_post,
+)
+from routes.icp_data_routes import icp_data_bp
 from routes.icp_candidate_selection_routes import (
     icp_candidate_selection_bp,
 )
@@ -360,6 +366,7 @@ app.extensions[
 ] = load_basic_info_data
 
 app.register_blueprint(icp_candidate_selection_bp)
+app.register_blueprint(icp_data_bp)
 
 app.add_url_rule(
     "/analysis/icp/candidate-selection",
@@ -982,8 +989,14 @@ def analysis_icp_import():
             if work_key else None
         )
 
+        if saved_work and saved_work.get("formal_status") in {"SUBMITTED", "DELETED"}:
+            session.pop("icp_work_key", None)
+            work_key, saved_work = None, None
+            upload_message = "此工作已離開暫存清單；正式資料請由分析紀錄查詢查看。"
+
         if (
             saved_work
+            and saved_work.get("formal_status") not in {"SUBMITTED", "DELETED"}
             and saved_work.get("form_data") == form_data
             and saved_work.get("import_type")
             == method_data.get("IMPORT_TYPE")
@@ -1138,6 +1151,7 @@ def analysis_icp_import():
                         save_icp_work_state(
                             work_key,
                             {
+                                "owner_user_id": str((get_current_user() or {}).get("user_id") or ""),
                                 "form_data": dict(form_data),
                                 "import_type": import_type,
                                 "source_filename": (
@@ -1172,6 +1186,11 @@ def analysis_icp_import():
                             "請查看伺服器錯誤紀錄。"
                         )
 
+    # Apply explicit batch exclusions before querying LIMS; raw previews stay intact.
+    from analysis.icp_batch_adoption import active_candidate_groups
+    lims_work = load_icp_work_state(session.get("icp_work_key")) or {}
+    lims_candidate_groups = active_candidate_groups(lims_work, all_candidate_groups)
+
     # ICP 適用測項對照表
     icp_analyte_map = {}
 
@@ -1182,7 +1201,7 @@ def analysis_icp_import():
             "Phyon_ICP_Analyte_Map.csv"
         )
 
-        if all_candidate_groups:
+        if lims_candidate_groups:
            icp_analyte_map = load_icp_analyte_map(
            icp_map_path
         )
@@ -1203,7 +1222,7 @@ def analysis_icp_import():
     # ========================================
     keepids = sorted({
     str(group.get("keepid") or "").strip()
-    for group in all_candidate_groups
+    for group in lims_candidate_groups
     if str(group.get("keepid") or "").strip()
        })   
 
@@ -1245,10 +1264,10 @@ def analysis_icp_import():
     # ========================================
     # ICP PDF 與 LIMS 委測項目配對
     # ========================================
-    if all_candidate_groups and not lims_lookup_error:
+    if lims_candidate_groups and not lims_lookup_error:
 
         icp_lims_matches = build_icp_lims_matches(
-        all_candidate_groups,
+        lims_candidate_groups,
         lims_match_groups,
         form_data.get("method_code", "")
     )
@@ -1303,8 +1322,24 @@ def analysis_icp_import():
                     saved.get("reason") or ""
                 )
 
+    decision_work = load_icp_work_state(session.get("icp_work_key"))
+    icp_lims_matches = filter_lims_matches(decision_work, icp_lims_matches)
+    lims_match_groups = filter_lims_groups(decision_work, lims_match_groups)
+    if not lims_lookup_error:
+        decorate_manual_adoptions(icp_lims_matches, decision_work)
+    setup_view, setup_error = None, None
+    try:
+        setup_view = build_setup_view(decision_work)
+    except ValueError as exc:
+        setup_error = str(exc)
+    if "icp_pfm_csrf" not in session:
+        import secrets
+        session["icp_pfm_csrf"] = secrets.token_urlsafe(32)
+    decision_context = lims_decision_form_context(decision_work)
     return render_template(
-        "methods/icp_import.html",
+        "methods/icp_import.html", decision_context=decision_context,
+        setup_view=setup_view, setup_error=setup_error,
+        setup_csrf=session["icp_pfm_csrf"],
         icp_saved_works=icp_saved_works,
         form_data=form_data,
         method_data=method_data,
@@ -1332,314 +1367,8 @@ def analysis_icp_import():
 )
 @login_required
 def save_icp_lims_decision():
-
-    work_key = session.get("icp_work_key")
-    saved_work = (
-        load_icp_work_state(work_key)
-        if work_key else None
-    )
-
-    if not saved_work:
-        return "ICP 暫存資料不存在，請重新匯入 PDF。", 400
-
-    form_data = session.get("basic_info_form") or {}
-
-    _, method_data, error_message = load_basic_info_data(
-        form_data
-    )
-
-    if (
-        error_message
-        or not method_data
-        or method_data.get("ANALYSIS_MODE") != "MULTI_ANALYTE"
-        or saved_work.get("form_data") != form_data
-        or saved_work.get("import_type")
-        != method_data.get("IMPORT_TYPE")
-    ):
-        return "分析基本資料已變更，請重新確認。", 400
-
-    # ========================================
-    # 1. 讀取批次提交的使用者決定
-    #
-    # 前端欄位格式：
-    # decisions[KEEPID|EXAMNO] = ACCEPT / PENDING / REJECT
-    # ========================================
-    submitted = {}
-
-    for field_name, field_value in request.form.items():
-
-        if not (
-            field_name.startswith("decisions[")
-            and field_name.endswith("]")
-        ):
-            continue
-
-        decision_key = field_name[
-            len("decisions["):-1
-        ].strip().upper()
-
-        parts = decision_key.split("|")
-
-        if len(parts) != 2:
-            return "委測項目識別格式不正確。", 400
-
-        keepid, examno = parts
-
-        if not keepid or not examno:
-            return "委測項目識別不得為空白。", 400
-
-        decision = str(
-            field_value or ""
-        ).strip().upper()
-
-        if decision not in (
-            "ACCEPT",
-            "PENDING",
-            "REJECT"
-        ):
-            return "使用者決定不合法。", 400
-
-        submitted[decision_key] = decision
-
-    if not submitted:
-        return "沒有收到任何委測項目決定。", 400
-
-    # ========================================
-    # 2. 重新建立完整 PDF 候選資料
-    # 不受目前畫面篩選條件影響
-    # ========================================
-    parsed_data = saved_work.get("parsed_data") or {}
-    parsed_rows = parsed_data.get("rows") or []
-
-    all_candidate_groups = build_sample_candidate_groups(
-        parsed_rows
-    )
-
-    if not all_candidate_groups:
-        return "目前沒有可供配對的 ICP 候選資料。", 400
-
-    all_keepids = sorted({
-        str(group.get("keepid") or "").strip().upper()
-        for group in all_candidate_groups
-        if group.get("keepid")
-    })
-
-    # ========================================
-    # 3. 重新查詢 LIMS 委測項目
-    # ========================================
-    try:
-        analyte_map = load_icp_analyte_map(
-            os.path.join(
-                app.root_path,
-                "data",
-                "Phyon_ICP_Analyte_Map.csv"
-            )
-        )
-
-        lims_match_groups = []
-
-        for keepid in all_keepids:
-
-            lims_rows = get_lims_sample_analysis(
-                keepid
-            )
-
-            if not lims_rows:
-                return (
-                    "LIMS 查無樣品 {} 的委測資料，"
-                    "本次未儲存任何決定。".format(keepid),
-                    400
-                )
-
-            matched_result = match_lims_icp_analytes(
-                lims_rows,
-                analyte_map
-            )
-
-            lims_match_groups.append({
-                "keepid": keepid,
-                "matched_rows": (
-                    matched_result["matched_rows"]
-                ),
-            })
-
-        matches = build_icp_lims_matches(
-            all_candidate_groups,
-            lims_match_groups,
-            form_data.get("method_code", "")
-        )
-
-    except Exception:
-        app.logger.exception(
-            "ICP 批次委測決定驗證失敗"
-        )
-        return (
-            "無法重新驗證 ICP PDF 與 LIMS 委測資料。",
-            503
-        )
-
-    # ========================================
-    # 4. 建立後端可信任的配對索引
-    # ========================================
-    valid_matches = {}
-
-    for item in matches:
-
-        keepid = str(
-            item.get("keepid") or ""
-        ).strip().upper()
-
-        examno = str(
-            item.get("examno") or ""
-        ).strip().upper()
-
-        if not examno:
-            continue
-
-        key = "{}|{}".format(
-            keepid, examno
-        )
-
-        if key in valid_matches:
-            return (
-                "發現重複的 LIMS 委測識別，"
-                "本次未儲存任何決定。",
-                400
-            )
-
-        valid_matches[key] = item
-
-    # ========================================
-    # 5. 驗證所有提交資料
-    # 任一筆不合法，整批拒絕
-    # ========================================
-    for decision_key, decision in submitted.items():
-
-        target = valid_matches.get(
-            decision_key
-        )
-
-        if target is None:
-            return (
-                "委測項目 {} 不存在於目前配對資料，"
-                "本次未儲存任何決定。".format(
-                    decision_key
-                ),
-                400
-            )
-
-        status = target.get("status")
-
-        if status == "METHOD_MATCHED":
-            allowed = {
-                "ACCEPT",
-                "PENDING",
-                "REJECT"
-            }
-
-        elif status == "CROSS_METHOD_REVIEW":
-            allowed = {
-                "PENDING",
-                "REJECT"
-            }
-
-        else:
-            allowed = {
-                "REJECT"
-            }
-
-        if decision not in allowed:
-            return (
-                "委測項目 {} 的決定不符合配對限制，"
-                "本次未儲存任何決定。".format(
-                    decision_key
-                ),
-                400
-            )
-
-    # ========================================
-    # 6. 驗證舊有暫存決定
-    # 防止未提交的舊狀態繞過限制
-    # ========================================
-    old_decisions = (
-        saved_work.get("lims_decisions") or {}
-    )
-
-    if not isinstance(old_decisions, dict):
-        return "既有委測決定資料格式異常。", 400
-
-    new_decisions = {}
-
-    for key, value in old_decisions.items():
-
-        if key not in valid_matches:
-            continue
-
-        if not isinstance(value, dict):
-            continue
-
-        decision = str(
-            value.get("decision") or ""
-        ).strip().upper()
-
-        status = valid_matches[key].get("status")
-
-        if status == "METHOD_MATCHED":
-            allowed = {"ACCEPT", "PENDING", "REJECT"}
-        elif status == "CROSS_METHOD_REVIEW":
-            allowed = {"PENDING", "REJECT"}
-        else:
-            allowed = {"REJECT"}
-
-        if decision in allowed:
-            new_decisions[key] = {
-                "decision": decision,
-                "reason": "",
-            }
-
-    # ========================================
-    # 7. 套用本次所有使用者決定
-    # ========================================
-    for key, decision in submitted.items():
-
-        new_decisions[key] = {
-            "decision": decision,
-            "reason": "",
-        }
-
-    # ========================================
-    # 8. 通過驗證後一次寫入 SQLite
-    # ========================================
-
-    # 從原有工作狀態建立新資料，
-    # 不直接修改原本的 parsed_data。
-    updated_work = dict(saved_work)
-
-    updated_work["lims_decisions"] = new_decisions
-
-    try:
-        saved_ok = save_icp_work_state(
-            work_key,
-            updated_work
-        )
-
-    except Exception:
-        app.logger.exception(
-            "ICP LIMS 批次決定寫入 SQLite 失敗"
-        )
-        return (
-            "ICP 批次決定儲存失敗，請稍後重試。",
-            500
-        )
-
-    if not saved_ok:
-        return "ICP 批次決定儲存失敗。", 500
-
-    return redirect(
-        url_for(
-            "analysis_icp_import",
-            tab="lims"
-        )
+    return handle_lims_decision_post(
+        load_basic_info_data, get_lims_sample_analysis, get_current_user() or {}
     )
 
 # ========================================

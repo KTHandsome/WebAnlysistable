@@ -222,9 +222,16 @@ def analysis_records():
             value = search_data[field]
 
             if value:
-                query = query.filter(
-                    getattr(AnalysisRecord, field) == value
-                )
+                if field == "category":
+                    from sqlalchemy import or_, and_
+                    index_token = json.dumps({"category": value}, ensure_ascii=False)
+                    match = db.query(AnalysisWorkState.id).filter(
+                        AnalysisWorkState.analysis_id == AnalysisRecord.analysis_id,
+                        AnalysisWorkState.state_json.contains(index_token, autoescape=True)).exists()
+                    query = query.filter(or_(AnalysisRecord.category == value,
+                        and_(AnalysisRecord.source_type == "ICP_IMPORT", match)))
+                else:
+                    query = query.filter(getattr(AnalysisRecord, field) == value)
 
         # 部分文字比對
         for field in (
@@ -235,9 +242,15 @@ def analysis_records():
             value = search_data[field]
 
             if value:
-                query = query.filter(
-                    getattr(AnalysisRecord, field).contains(value)
-                )
+                if field == "exam_name":
+                    from sqlalchemy import or_, and_
+                    match = db.query(AnalysisWorkState.id).filter(
+                        AnalysisWorkState.analysis_id == AnalysisRecord.analysis_id,
+                        AnalysisWorkState.report_data_json.contains(value, autoescape=True)).exists()
+                    query = query.filter(or_(AnalysisRecord.exam_name.contains(value, autoescape=True),
+                        and_(AnalysisRecord.source_type == "ICP_IMPORT", match)))
+                else:
+                    query = query.filter(getattr(AnalysisRecord, field).contains(value))
 
         # 分析日期：查詢期間與分析期間有交集即可
         start_date = search_data["analysis_date_start"]
@@ -338,6 +351,20 @@ def analysis_record_detail(analysis_id):
         if record is None:
             return "查無此分析紀錄。", 404
 
+        if record.source_type == "ICP_IMPORT":
+            from services.icp_record_service import load_snapshot
+            snapshot = load_snapshot(db, record)
+            selected = request.args.get("channel") or snapshot["bundles"][0]["key"]
+            channel = next((c for c in snapshot["bundles"] if c["key"] == selected), None)
+            if channel is None:
+                return "指定的金屬與波長不在此正式紀錄中。", 400
+            history = db.query(AnalysisReviewHistory).filter(
+                AnalysisReviewHistory.analysis_id == analysis_id
+            ).order_by(AnalysisReviewHistory.created_at, AnalysisReviewHistory.id).all()
+            return render_template("analysis_record_detail.html", record=record,
+                icp_snapshot=snapshot, icp_channel=channel, review_history=history,
+                active_page="analysis_records")
+
         samples = (
             db.query(AnalysisSample)
             .filter(
@@ -428,6 +455,15 @@ def export_analysis_record_pdf(analysis_id):
 
         if record is None:
             return "查無此分析紀錄。", 404
+
+        if record.source_type == "ICP_IMPORT":
+            from services.icp_record_service import load_snapshot
+            snapshot = load_snapshot(db, record)
+            import secrets
+            from services.icp_performance_service import work_token
+            session.setdefault("icp_record_csrf", secrets.token_urlsafe(32))
+            return render_template("icp_record_export.html", record=record, snapshot=snapshot, snapshot_token=work_token(snapshot),
+                export_kind="pdf", active_page="analysis_records")
 
         work_state = (
             db.query(AnalysisWorkState)
@@ -559,6 +595,15 @@ def export_analysis_record_lims(analysis_id):
 
         if record is None:
             return "查無此分析紀錄。", 404
+
+        if record.source_type == "ICP_IMPORT":
+            from services.icp_record_service import load_snapshot
+            snapshot = load_snapshot(db, record)
+            import secrets
+            from services.icp_performance_service import work_token
+            session.setdefault("icp_record_csrf", secrets.token_urlsafe(32))
+            return render_template("icp_record_export.html", record=record, snapshot=snapshot, snapshot_token=work_token(snapshot),
+                export_kind="excel", active_page="analysis_records")
 
         work_state = (
             db.query(AnalysisWorkState)
@@ -973,6 +1018,28 @@ def resume_analysis_record(analysis_id):
             record.method_code or ""
         ).strip().upper()
 
+        if record.source_type == "ICP_IMPORT":
+            from services.icp_record_service import resume_icp_record
+            from services.icp_performance_service import IcpPfmConflictError
+            current_key = str(session.get("icp_work_key") or "")
+            if current_key:
+                from analysis.icp_state_repository import load_icp_work_state
+                current = load_icp_work_state(current_key)
+                if current and current.get("formal_analysis_id") != analysis_id and current.get("formal_status") not in {"SUBMITTED", "DELETED"}:
+                    return "目前有其他 ICP 暫存工作，請先完成或處理目前工作，再進入修正。", 409
+            try:
+                key, work = resume_icp_record(db, record, get_current_user() or {}, can_review_analysis())
+                db.commit()
+            except PermissionError as exc:
+                db.rollback()
+                return str(exc), 403
+            except (ValueError, IcpPfmConflictError) as exc:
+                db.rollback()
+                return str(exc), 409
+            session["icp_work_key"] = key
+            session["basic_info_form"] = dict(work["form_data"])
+            return redirect(url_for("icp_data_bp.analysis_icp_data", work_key=key))
+
         # Stage 35G: managed drafts must not bypass revision checks.
         # Resume permissions will be integrated in the next web substep.
         from sqlalchemy import inspect
@@ -1140,6 +1207,23 @@ def delete_analysis_record(analysis_id):
 
         db.add(delete_history)
 
+        if record.source_type == "ICP_IMPORT":
+            from models import IcpImportWorkState
+            from services.icp_record_service import load_snapshot, dumps
+            from sqlalchemy import update
+            snap = load_snapshot(db, record)
+            original_work = db.query(IcpImportWorkState).filter(IcpImportWorkState.work_key == snap["work_key"]).one_or_none()
+            if original_work is not None:
+                old_json = original_work.state_json
+                work = json.loads(old_json)
+                work["formal_status"] = "DELETED"
+                changed = db.execute(update(IcpImportWorkState).where(
+                    IcpImportWorkState.work_key == snap["work_key"], IcpImportWorkState.state_json == old_json
+                ).values(state_json=dumps(work)))
+                if changed.rowcount != 1:
+                    raise ValueError("工作已更新，本次刪除未完成。")
+
+
         # 先刪除子表，保留原有順序
         for model in (
             AnalysisReviewHistory,
@@ -1154,10 +1238,18 @@ def delete_analysis_record(analysis_id):
             ).delete(synchronize_session=False)
 
         # PFM V2.1 關聯清理，使用同一個 DB Session
-        delete_performance_links_for_analysis(
-            db=db,
-            analysis_id=analysis_id
-        )
+        if record.source_type == "ICP_IMPORT":
+            # ICP manual events exist independently before formal submission.
+            # Removing a formal record must not remove that measurement history.
+            from models import PerformanceAnalysisLink
+            db.query(PerformanceAnalysisLink).filter(
+                PerformanceAnalysisLink.analysis_id == analysis_id
+            ).delete(synchronize_session=False)
+        else:
+            delete_performance_links_for_analysis(
+                db=db,
+                analysis_id=analysis_id
+            )
 
         db.delete(record)
         db.commit()
