@@ -368,6 +368,9 @@ app.extensions[
 app.register_blueprint(icp_candidate_selection_bp)
 app.register_blueprint(icp_data_bp)
 
+from routes.w430_import_routes import w430_import_bp
+app.register_blueprint(w430_import_bp)
+
 app.add_url_rule(
     "/analysis/icp/candidate-selection",
     endpoint="save_icp_candidate_selection",
@@ -845,6 +848,17 @@ def basic_info():
             return redirect(
                 url_for("analysis_icp_import")
             )
+
+        if next_action == "import_w430":
+            if (
+                method_data
+                and not error_message
+                and str(form_data.get("method_code") or "").strip().upper() == "W430"
+                and str(method_data.get("IMPORT_TYPE") or "").strip().upper() == "UV_TXT"
+                and form_data.get("instrument_id")
+            ):
+                return redirect(url_for("w430_import_bp.import_w430"))
+            error_message = error_message or "請先確認 W430 方法、UV_TXT 格式與儀器設定。"
 
         if (
             next_action == "manual_entry"

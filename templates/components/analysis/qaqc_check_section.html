@@ -34,7 +34,7 @@
     <form
     id="batch-remark-form"
     method="post"
-    action="{{ url_for('update_batch_remarks') }}"
+    action="{{ batch_remarks_update_url if batch_remarks_update_url is defined else url_for('update_batch_remarks') }}"
 > 
 
         {% for batch in qaqc_3a_results %}
@@ -386,12 +386,14 @@
     display: flex;
     justify-content: flex-end;
 ">
+{% if not analysis_readonly|default(false) %}
     <button
         type="submit"
         class="eacs-button eacs-button-secondary"
     >
         儲存批次備註
     </button>
+{% endif %}
 </div>
 
 </form>

@@ -5,7 +5,7 @@
 <div class="eacs-card">
 
     <h2 class="eacs-card-title">
-        儀器性能查核（Performance）
+        {{ performance_title|default("儀器性能查核（Performance）") }}
     </h2>
 
     <div style="overflow-x: auto;">
@@ -47,7 +47,7 @@
 
     <td style="text-align: center;">
 
-        {% if status in ['PASS', 'FAIL'] and control %}
+        {% if status in ['PASS', 'FAIL'] and control and show_performance_trend|default(true) %}
 
             <button
                    type="button"

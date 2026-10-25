@@ -557,7 +557,8 @@
         "RA7000A_PDF",
         "TOC_PDF",
         "ICP5110_PDF",
-        "ICP5800_PDF"
+        "ICP5800_PDF",
+        "UV_TXT"
     ]
 %}
 
@@ -574,7 +575,7 @@
     class="eacs-button eacs-button-primary"
     onclick="submitBasicInfoForImport()"
 >
-    匯入 PDF
+    {{ "匯入 UV TXT" if method_data.IMPORT_TYPE|upper == "UV_TXT" else "匯入 PDF" }}
         </button>
 
     </div>
@@ -1138,7 +1139,11 @@ function submitBasicInfoForImport() {
     const method =
         methodCode.value.trim().toUpperCase();
 
-    if (methodAnalysisModes[method] === "MULTI_ANALYTE") {
+    if (method === "W430") {
+
+        nextAction.value = "import_w430";
+
+    } else if (methodAnalysisModes[method] === "MULTI_ANALYTE") {
 
         nextAction.value = "import_icp";
 

@@ -400,8 +400,8 @@
                          padding: 9px;
                          width: 105px;
                           ">
-                        測定濃度<br>
-                         ({{ sample_concentration_unit_text }})
+                        {{ measured_value_label|default("測定濃度") }}<br>
+                         ({{ measured_value_unit|default(sample_concentration_unit_text) }})
                     </th>
 
                     <th style="
@@ -437,6 +437,13 @@
         is-excluded-row
         {% endif %}
     "
+    data-w430-group="{{ row.edit_group|default('') }}"
+    {% if w430_live_calculation|default(false) %}
+    data-w430-base-concentration="{{ row.calculated_concentration / row.dilution_factor if row.calculated_concentration is not none else '' }}"
+    data-w430-base-spike="{{ row.spike_concentration / row.dilution_factor if row.spike_concentration is not none else '' }}"
+    data-w430-base-qdl="{{ row.qdl / row.dilution_factor }}"
+    data-w430-decimals="{{ sample_concentration_decimals }}"
+    {% endif %}
     {% if row.is_excluded %}
     style="display: none;"
     {% endif %}
@@ -448,7 +455,7 @@
     padding: 4px;
     text-align: center;
 ">
-    {% if row.role in ["SAMPLE", "QC"] %}
+    {% if row.role in ["SAMPLE", "QC"] or (allow_sample_blank_delete|default(false) and row.role == "SAMPLE_BLANK") %}
 
     <input
         type="checkbox"
@@ -568,6 +575,10 @@
                                 font-size: 11px;
                             "
                         >
+                        {% if show_sample_method_notes|default(true) and row.method_note is defined and row.method_note %}
+                        <div style="font-size:11px;color:#a16207;white-space:normal;">{{ row.method_note }}</div>
+                        {% endif %}
+
 
                     </td>
 
@@ -709,7 +720,7 @@
                          font-weight: 600;
                          "
                         >
-                     {{ ("%." ~ sample_concentration_decimals ~ "f")|format(row.measured_concentration) }}
+                     {% if row.measured_concentration is not none %}{{ ("%." ~ sample_concentration_decimals ~ "f")|format(row.measured_concentration) }}{% else %}—{% endif %}
                     </td>
 
 
@@ -723,7 +734,7 @@
                                  color: #2563a6;
                                  font-weight: 700;
                                  ">
-                        {{ ("%." ~ sample_concentration_decimals ~ "f")|format(row.calculated_concentration) }}
+                        {% if row.calculated_concentration is not none %}{{ ("%." ~ sample_concentration_decimals ~ "f")|format(row.calculated_concentration) }}{% else %}—{% endif %}
                     </td>
 
                     <td
@@ -735,6 +746,7 @@
                          color: #444;
                          "
                     >
+                        {{ row.interpretation|default("") }}
                     </td>
 
 

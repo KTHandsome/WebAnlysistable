@@ -140,14 +140,14 @@
         &nbsp;&nbsp;
         
         <strong>判定標準：</strong>
-        r &gt; 0.995
+        {{ calibration_criterion_text|default("r > 0.995") }}
 
     </div>
 
 <form
     id="calibration-form"
     method="post"
-    action="{{ url_for('update_w434_calibration') }}"
+    action="{{ calibration_update_url if calibration_update_url is defined else url_for('update_w434_calibration') }}"
 >
 {% if analysis_work_id is defined and analysis_work_id %}
 <input type="hidden" name="work_id" value="{{ analysis_work_id }}">
@@ -183,7 +183,7 @@
                 border: 1px solid #ccc;
                 padding: 9px;
             ">
-                        設定濃度 ({{ calibration_unit_text }})
+                        {{ calibration_x_label|default("設定濃度") }} ({{ calibration_unit_text }})
                     </th>
     
                     <th style="
@@ -197,7 +197,7 @@
                 border: 1px solid #ccc;
                 padding: 9px;
             ">
-                        回歸濃度 ({{ calibration_unit_text }})
+                        {{ calibration_backcalc_label|default("回歸濃度") }} ({{ calibration_unit_text }})
                     </th>
 
                 {% if show_calibration_error_column %}
@@ -307,6 +307,7 @@
     
     </div>
 
+    {% if not analysis_readonly|default(false) %}
     <div style="
         margin-top: 14px;
         display: flex;
@@ -320,6 +321,7 @@
         </button>
     </div>
 
+    {% endif %}
 </form>
 
     {% else %}

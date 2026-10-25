@@ -456,6 +456,15 @@ def export_analysis_record_pdf(analysis_id):
         if record is None:
             return "查無此分析紀錄。", 404
 
+        if str(record.method_code or "").strip().upper() == "W430":
+            from services.w430_pdf_export_service import export_w430_record_pdf
+            try:
+                pdf_buffer = export_w430_record_pdf(db, record)
+            except ValueError as exc:
+                return str(exc), 400
+            return send_file(pdf_buffer, mimetype="application/pdf", as_attachment=True,
+                             download_name="W430_Sulfate_Analysis_Record.pdf")
+
         if record.source_type == "ICP_IMPORT":
             from services.icp_record_service import load_snapshot
             snapshot = load_snapshot(db, record)
@@ -595,6 +604,16 @@ def export_analysis_record_lims(analysis_id):
 
         if record is None:
             return "查無此分析紀錄。", 404
+
+        if str(record.method_code or "").strip().upper() == "W430":
+            from services.w430_lims_export_service import export_w430_record_excel
+            template_path = os.path.join(current_app.root_path,"resources","lims","lims匯入表格.xlsx")
+            try:
+                excel_buffer = export_w430_record_excel(db, record, template_path)
+            except ValueError as exc:
+                return str(exc), 400
+            return send_file(excel_buffer, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             as_attachment=True, download_name="W430_LIMS_Import.xlsx")
 
         if record.source_type == "ICP_IMPORT":
             from services.icp_record_service import load_snapshot
@@ -1060,7 +1079,7 @@ def resume_analysis_record(analysis_id):
             from analysis.analysis_work_draft_repository import (
                 AnalysisWorkDraftRepository, DraftConflictError,
             )
-            if method_code != "W434":
+            if method_code not in {"W434", "W430"}:
                 return "此方法尚未接入新版工作恢復流程。", 400
             actor = get_current_user() or {}
             actor_id = str(actor.get("user_id") or "").strip()
@@ -1081,7 +1100,8 @@ def resume_analysis_record(analysis_id):
                 elif bundle["work_status"] != "EDITING":
                     return "此工作狀態不可進入修正。", 409
                 # Existing EDITING work is reopened without reverting its edits.
-                return redirect(url_for("analysis_w43401", saved="1", work_id=work_id))
+                endpoint = "w430_import_bp.import_w430" if method_code == "W430" else "analysis_w43401"
+                return redirect(url_for(endpoint, saved="1", work_id=work_id))
             except PermissionError as exc:
                 db.rollback()
                 return str(exc), 403

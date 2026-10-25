@@ -226,6 +226,7 @@
             匯出 LIMS
         </a>
 
+
     </div>
 
     <div
@@ -1062,7 +1063,7 @@
                             border-bottom: 1px solid #d9e0e7;
                         "
                     >
-                        設定濃度
+                        {{ "設定含量 (mg)" if record.method_code == "W430" else "設定濃度" }}
                     </th>
 
                     <th
@@ -1073,7 +1074,7 @@
                             border-bottom: 1px solid #d9e0e7;
                         "
                     >
-                        測定值
+                        {{ "吸光度" if record.method_code == "W430" else "測定值" }}
                     </th>
 
                     <th
@@ -1084,7 +1085,7 @@
                             border-bottom: 1px solid #d9e0e7;
                         "
                     >
-                        回算濃度
+                        {{ "回算含量 (mg)" if record.method_code == "W430" else "回算濃度" }}
                     </th>
 
                     <th
@@ -1293,7 +1294,7 @@
                     </th>
 
                     <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
-                        測定值
+                        {{ "吸光度" if record.method_code == "W430" else "測定值" }}
                     </th>
 
                     <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
@@ -1301,7 +1302,7 @@
                     </th>
 
                     <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
-                        測定濃度
+                        {{ "測定含量 (mg)" if record.method_code == "W430" else "測定濃度" }}
                     </th>
 
                     <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
