@@ -172,11 +172,20 @@
 
     <h3 style="margin-top: 0;
         color: #03646d;
+        {% if method_data and method_data.METHOD_CODE|upper == 'W430' %}
+        display: flex; align-items: baseline; justify-content: space-between;
+        gap: 12px; flex-wrap: wrap;
+        {% endif %}
     ">
         {% if method_data and method_data.METHOD_CODE|upper == "W532" %}
             2-2. 樣品及 QA/QC 計算
         {% else %}
             2. 樣品及 QA/QC 計算
+        {% endif %}
+        {% if method_data and method_data.METHOD_CODE|upper == 'W430' %}
+        <span style="font-size: 12px; font-weight: normal; color: #4b5563; line-height: 1.5;">
+            BKB：回歸含量先扣除緩衝液 B 帶入的 1.5 mg 硫酸鹽，再換算濃度。
+        </span>
         {% endif %}
     </h3>
 <style>
