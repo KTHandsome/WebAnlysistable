@@ -255,12 +255,12 @@ def install_work_web(app):
                     "analysis_work_status": work["bundle"]["work_status"],
                     "analysis_work_read_only": work["bundle"]["work_status"] != "EDITING",
                     "analysis_formal_record_saved": work["bundle"]["work_status"] == "SUBMITTED"}
-        # Legacy W434 also uses the persisted record state, never a URL success flag.
+        # Legacy As/Se use the persisted record state, never a URL success flag.
         if request.endpoint != "analysis_w43401":
             return {}
         form = session.get("basic_info_form") or {}
         method = str(form.get("method_code") or "").strip().upper()
-        if method != "W434":
+        if method not in {"W434", "W341", "R300"}:
             return {}
         state = legacy_load_state(get_analysis_state_key(method)) or {}
         formal_id = str(state.get("formal_analysis_id") or "").strip()

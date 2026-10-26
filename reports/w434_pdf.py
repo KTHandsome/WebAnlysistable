@@ -642,7 +642,7 @@ def build_w434_pdf(
             8
         )
 
-        if is_toc or str(method_data.get("METHOD_CODE", "") or "").strip().upper() in {"W330", "W434", "R318"}:
+        if is_toc or str(method_data.get("METHOD_CODE", "") or "").strip().upper() in {"W330", "W434", "R318", "W341", "R300"}:
             return draw_toc_performance_and_calibration(calibration_title_y)
 
         pdf_canvas.drawString(

@@ -94,27 +94,27 @@ def can_resume_analysis_record(record):
 
     return can_review_analysis()
 
-def has_resume_work_conflict(method_code, analysis_id):
-    """Block unsaved legacy work, but allow switching from a saved snapshot."""
+def get_resume_work_conflict_reason(method_code, analysis_id):
+    """Explain the existing conservative check without changing its decisions."""
     method_code = str(method_code or "").strip().upper()
     analysis_id = str(analysis_id or "").strip()
 
     # ICP's separate work lifecycle has not yet been integrated here.
     if session.get("icp_work_key"):
-        return True
+        return '目前 session 仍保留 ICP 工作編號，舊版檢查因此攔阻；尚未確認該 ICP 工作是否已正式儲存。'
 
     current_form = session.get("basic_info_form")
     if current_form is not None and not isinstance(current_form, dict):
-        return True
+        return '目前基本資料格式異常，無法確認工作是否已儲存。'
     current_form = current_form or {}
     current_method = str(current_form.get("method_code") or "").strip().upper()
     if current_form and not current_method:
-        return True
+        return '目前基本資料缺少分析方法，無法確認工作身分。'
 
     user = get_current_user() or {}
     user_id = str(user.get("user_id") or "").strip()
     if not user_id:
-        return True
+        return '尚未取得登入者帳號，無法確認目前工作。'
 
     db = SessionLocal()
     try:
@@ -125,7 +125,7 @@ def has_resume_work_conflict(method_code, analysis_id):
         for candidate_method in methods:
             state = load_analysis_state(get_analysis_state_key(candidate_method))
             if state is not None and not isinstance(state, dict):
-                return True
+                return '目前分析暫存格式異常，無法比對正式紀錄。'
             form = current_form if candidate_method == current_method else None
 
             # No state and no active form will be overwritten for this method.
@@ -139,7 +139,7 @@ def has_resume_work_conflict(method_code, analysis_id):
             form_id = str((form or {}).get("formal_analysis_id") or "").strip()
             identifiers = {value for value in (state_id, session_id, form_id) if value}
             if len(identifiers) != 1:
-                return True
+                return '目前分析狀態、session 或基本資料的正式紀錄編號缺漏或不一致。'
             formal_id = next(iter(identifiers))
 
             record = db.query(AnalysisRecord).filter(
@@ -149,23 +149,23 @@ def has_resume_work_conflict(method_code, analysis_id):
                 AnalysisWorkState.analysis_id == formal_id
             ).first()
             if record is None or snapshot is None:
-                return True
+                return '目前工作所關聯的正式紀錄或分析快照不存在。'
             if str(record.analyst_user_id or "").strip() != user_id:
-                return True
+                return '目前工作屬於其他分析員，現有衝突檢查尚未允許切換。'
             if str(record.method_code or "").strip().upper() != candidate_method:
-                return True
+                return '目前工作與正式紀錄的分析方法不一致。'
             if str(snapshot.method_code or "").strip().upper() != candidate_method:
-                return True
+                return '目前工作與分析快照的分析方法不一致。'
 
             try:
                 saved_state = json.loads(snapshot.state_json)
                 saved_form = json.loads(snapshot.form_data_json)
             except (TypeError, ValueError):
-                return True
+                return '目前已儲存快照的 JSON 格式無法讀取。'
             if not isinstance(saved_state, dict) or not isinstance(saved_form, dict):
-                return True
+                return '目前已儲存快照內容格式異常。'
             if str(saved_state.get("formal_analysis_id") or "").strip() != formal_id:
-                return True
+                return '目前已儲存快照的正式紀錄關聯不一致。'
 
             if state:
                 # Only this system-managed field may differ in representation.
@@ -174,14 +174,18 @@ def has_resume_work_conflict(method_code, analysis_id):
                 live_content.pop("formal_analysis_id", None)
                 saved_content.pop("formal_analysis_id", None)
                 if live_content != saved_content:
-                    return True
+                    return '目前分析數據與已儲存快照不同，請先保留尚未儲存的修改。'
 
             if form is not None and form != saved_form:
-                return True
+                return '目前基本資料與已儲存快照不同，請先保留尚未儲存的修改。'
 
-        return False
+        return ""
     finally:
         db.close()
+
+def has_resume_work_conflict(method_code, analysis_id):
+    """Compatibility wrapper for callers that expect a boolean."""
+    return bool(get_resume_work_conflict_reason(method_code, analysis_id))
 
 @analysis_record_bp.route(
     "/analysis-records",
@@ -1139,10 +1143,10 @@ def resume_analysis_record(analysis_id):
                 raise
 
         # 先檢查衝突，不覆寫現有工作
-        if has_resume_work_conflict(method_code, analysis_id):
+        conflict_reason = get_resume_work_conflict_reason(method_code, analysis_id)
+        if conflict_reason:
             return (
-                "目前已有其他分析工作，"
-                "請先完成或處理目前工作，再恢復退回紀錄。",
+                "無法進入修正：" + conflict_reason,
                 409
             )
 
