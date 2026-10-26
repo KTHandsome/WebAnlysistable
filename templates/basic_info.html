@@ -1139,7 +1139,11 @@ function submitBasicInfoForImport() {
     const method =
         methodCode.value.trim().toUpperCase();
 
-    if (method === "W430") {
+    if (method === "W427") {
+
+        nextAction.value = "import_w427";
+
+    } else if (method === "W430") {
 
         nextAction.value = "import_w430";
 

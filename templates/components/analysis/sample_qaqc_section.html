@@ -438,6 +438,10 @@
             <tbody>
 
                 {% for row in sample_qaqc_rows %}
+                {% if sample_batch_headers|default(false) and (loop.first or row.edit_group != sample_qaqc_rows[loop.index0-1].edit_group) %}
+                <tr class="w427-batch-heading"><td colspan="12" style="padding:8px;background:#f1f5f9;color:#475569;font-weight:600;">{{ row.batch_label }}</td></tr>
+                {% endif %}
+
 
                 <tr
     class="

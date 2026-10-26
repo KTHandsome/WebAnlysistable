@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}W427 磷分析{% endblock %}
+{% block content %}
+<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+  <h1 class="page-title">W427 {{ control_data.get('EXAMNAME', '磷') }}分析</h1>
+  <a class="eacs-button" href="{{ url_for('basic_info') }}">返回基本資料</a>
+</div>
+{% if error_message %}<div class="eacs-card" role="alert" style="color:#b42318;">{{ error_message }}
+{% if work_id and work_revision is not none %}<a class="eacs-button" href="{{ url_for('w427_import_bp.import_w427',work_id=work_id) }}">重新載入暫存工作</a>{% endif %}</div>{% endif %}
+{% if draft_works %}
+<details class="eacs-card" {% if not preview %}open{% endif %}>
+  <summary>我的 W427 暫存工作（最近 {{ draft_works|length }} 筆）</summary>
+  <div style="overflow-x:auto;"><table class="eacs-table" style="width:100%;font-size:13px;">
+    <thead><tr><th>分析日期</th><th>類別</th><th>測項／檢測代碼</th><th>儀器</th><th>更新時間</th><th>來源檔案</th></tr></thead>
+    <tbody>{% for work in draft_works %}<tr>
+      <td>{{ work.analysis_start_date }}</td><td>{{ work.category }}</td><td>{{ work.exam_name }}／{{ work.exam_no }}</td>
+      <td>{{ work.instrument_id }}</td><td>{{ work.updated_at }}</td>
+      <td><a href="{{ url_for('w427_import_bp.import_w427',work_id=work.work_id) }}">{{ work.source_label }}</a></td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</details>
+{% endif %}
+{% if method_data and control_data.get('EXAMNO') %}
+<div class="eacs-card">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+    <h2 class="eacs-card-title">基本資料與儀器性能查核</h2>
+    {% if preview %}<div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <button id="w427-draft-save" type="submit" form="sample-qaqc-form" class="eacs-button" {% if not preview_token %}disabled{% endif %}>暫存分析資料</button>
+    <button id="w427-record-save" type="submit" form="sample-qaqc-form" class="eacs-button eacs-button-primary" {% if not preview_token %}disabled{% endif %}>儲存分析紀錄</button>
+    {% if work_submitted and formal_analysis_id %}
+    <button id="w427-pdf-export" type="button" data-export-url="{{ url_for('export_analysis_record_pdf',analysis_id=formal_analysis_id) }}" class="eacs-button">匯出檢驗紀錄表</button>
+    {% else %}
+    <button id="w427-pdf-export" type="submit" form="sample-qaqc-form" class="eacs-button" {% if not preview_token %}disabled{% endif %}>匯出檢驗紀錄表</button>
+    {% endif %}
+    {% if work_submitted and formal_analysis_id %}
+    <button id="w427-excel-export" type="button" data-export-url="{{ url_for('export_analysis_record_lims',analysis_id=formal_analysis_id) }}" class="eacs-button">匯出 LIMS</button>
+    {% else %}
+    <button id="w427-excel-export" type="submit" form="sample-qaqc-form" class="eacs-button" {% if not preview_token %}disabled{% endif %}>匯出 LIMS</button>
+    {% endif %}
+    </div>{% endif %}
+  </div>
+  {% if work_notice %}<p role="status" style="color:#15803d;font-size:13px;">{{ work_notice }}</p>{% endif %}
+  <p>方法：W427　儀器：{{ form_data.get('instrument_id', '') }} {{ form_data.get('instrument_model', '') }}　波長：880 nm</p>
+  <p>類別：{{ form_data.get('category', '') }}　檢測代碼：{{ control_data.EXAMNO }}　測項：{{ control_data.EXAMNAME }}</p>
+  <p>檢量線單位：{{ method_data.CALIBRATION_UNIT }}　報告單位：{{ method_data.DISPLAY_CONC_UNIT }}　結果換算係數：{{ method_data.RESULT_CONVERSION_FACTOR }}</p>
+  {% if control_data.get('CONFIRMED') != '1' or not control_data.get('DETECT_LIMITED') %}
+  <p style="font-size:12px;color:#92400e;">年度管制尚未確認或缺少 MDL，不能據此宣告判定合格。</p>
+  {% endif %}
+</div>
+{% if import_token %}<div class="eacs-card">
+  <h2 class="eacs-card-title">UV 儀器檔案</h2>
+  <form method="post" action="{{ url_for('w427_import_bp.import_w427') }}" enctype="multipart/form-data">
+    <input type="hidden" name="import_token" value="{{ import_token }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="exam_no" value="{{ control_data.EXAMNO }}">
+    <input type="hidden" name="instrument_id" value="{{ form_data.instrument_id }}">
+    <input type="file" name="uv_files" accept=".txt" multiple required aria-label="W427 UV TXT 檔案">
+    <button type="submit" class="eacs-button eacs-button-primary">匯入並預覽</button>
+  </form>
+  <p style="font-size:12px;color:#64748b;">可分檔或合併匯入；只帶入所選類別的完整批次。再次匯入會建立另一份工作；PFM 可另行儲存至性能查核歷程。</p>
+</div>{% endif %}
+{% endif %}
+{% if preview %}
+<p style="font-size:12px;color:#64748b;">符合類別：{{ preview.batches|length }} 批、{{ preview.sample_count }} 個一般樣品；其他或未確認類別：{{ preview.excluded_batches|length }} 批。</p>
+{% if preview.warnings %}<div class="eacs-card" style="color:#92400e;">{% for w in preview.warnings %}<p>{{ w }}</p>{% endfor %}</div>{% endif %}
+{% macro rows_table(rows) %}
+<div style="overflow-x:auto;"><table class="eacs-table w427-preview-table">
+<thead><tr><th>樣品／標準名稱</th><th>角色</th><th>稀釋倍數</th><th>吸光度</th><th>儀器 Conc. (mg P/L)</th><th>原樣品</th><th>實際測定時間</th></tr></thead>
+<tbody>{% for r in rows %}<tr><td>{{ r.sample_id }}</td><td>{{ r.role_label }}</td><td>{{ '%g'|format(r.dilution) }}</td><td>{{ r.absorbance_text }}</td><td>{{ r.instrument_conc_text }}</td><td>{{ r.parent_id }}</td><td>{{ r.measured_at }}</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endmacro %}
+{% set performance_title = '儀器性能查核（UV，880 nm）' %}
+{% include "components/analysis/performance_section.html" %}
+<div class="eacs-card" style="font-size:12px;">
+  <form id="w427-pfm-save" method="post" action="{{ url_for('w427_import_bp.import_w427') }}">
+    <input type="hidden" name="action" value="save_pfm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="exam_no" value="{{ control_data.EXAMNO }}">
+    <input type="hidden" name="instrument_id" value="{{ form_data.instrument_id }}">
+    <input type="hidden" name="pfm_token" value="{{ pfm_token or '' }}">
+    <button type="submit" class="eacs-button" {% if not pfm_token %}disabled{% endif %}>儲存 PFM</button>
+    <span id="w427-pfm-save-message" role="status"></span>
+  </form>
+</div>
+{% include "components/analysis/performance_trend_modal.html" %}
+<script src="{{ url_for('static', filename='js/w427_pfm.js') }}"></script>
+{% if calibration_error %}<div class="eacs-card" role="alert" style="color:#b42318;">{{ calibration_error }}</div>{% endif %}
+{% for warning in calibration_warnings %}<div class="eacs-card" style="color:#92400e;">{{ warning }}</div>{% endfor %}
+{% set calibration_name_label = '標準名稱' %}
+{% set calibration_x_label = '檢量線濃度' %}
+{% set calibration_unit = 'mg P/L' %}
+{% set calibration_signal_label = '吸光度' %}
+{% set calibration_backcalc_label = '回歸濃度' %}
+{% set calibration_criterion_text = 'r > 0.995（沿用共用判定）' %}
+{% set calibration_update_url = url_for('w427_import_bp.import_w427') %}
+{% set show_calibration_error = false %}
+{% set analysis_readonly = true %}
+<fieldset class="w427-calibration" disabled style="border:0;padding:0;margin:0;min-width:0;">
+{% include "components/analysis/calibration_section.html" %}
+</fieldset>
+<style>.w427-calibration table{font-size:13px;}.w427-calibration input:disabled{opacity:1;color:#1e293b;background:#f8fafc;font-size:13px!important;}</style>
+{% if sample_error %}<div class="eacs-card" role="alert" style="color:#b42318;">{{ sample_error }}</div>{% endif %}
+{% for warning in sample_warnings %}<div class="eacs-card" style="color:#92400e;">{{ warning }}</div>{% endfor %}
+{% for b in preview.batches %}{% if b.opening %}
+<p style="font-size:12px;color:#64748b;">Batch {{ b.number }} 開始查核沿用 {{ b.opening.sample_id }}（{{ b.opening.measured_at }}），原始資料保留於下方。</p>
+{% endif %}{% endfor %}
+{% set sample_signal_label = '吸光度' %}
+{% set measured_value_label = '測定濃度' %}
+{% set measured_value_unit = 'mg P/L' %}
+{% set sample_concentration_unit = method_data.DISPLAY_CONC_UNIT %}
+{% set spike_concentration_unit = 'mg P/L' %}
+{% set sample_volume_default = method_data.SAMPLE_VOLUME_DEFAULT|float %}
+{% set final_volume_default = method_data.FINAL_VOLUME_DEFAULT|float %}
+{% set sample_update_url = url_for('w427_import_bp.import_w427') %}
+{% set show_sample_update_button = true %}
+{% set show_sample_method_notes = false %}
+{% set sample_batch_headers = true %}
+<div id="w427-sample-edit">
+<fieldset {% if not preview_token %}disabled{% endif %} style="border:0;padding:0;margin:0;min-width:0;">
+{% include "components/analysis/sample_qaqc_section.html" %}
+</fieldset>
+<p id="w427-edit-message" role="status" style="font-size:12px;color:#64748b;">{{ work_notice or '調整後可更新計算，並按「暫存分析資料」保存；儲存分析紀錄後送交審核。' }}</p>
+</div>
+{% if preview_token and sample_qaqc_rows %}
+<script id="w427-edit-config" type="application/json">{{ dict(config=sample_config,csrf_token=csrf_token,preview_token=preview_token,exam_no=control_data.EXAMNO,instrument_id=form_data.instrument_id)|tojson }}</script>
+<script src="{{ url_for('static',filename='js/analysis_interpretation.js') }}"></script>
+{% endif %}
+<script src="{{ url_for('static',filename='js/w427_samples.js') }}"></script>
+<style>
+#w427-sample-edit .sample-qaqc-table,#w427-sample-edit .sample-qaqc-table th,#w427-sample-edit .sample-qaqc-table td,#w427-sample-edit .sample-qaqc-table input{font-size:12px!important;}
+#w427-sample-edit .sample-qaqc-table th,#w427-sample-edit .sample-qaqc-table td{padding:5px!important;}
+#w427-sample-edit .sample-qaqc-table thead{position:static;z-index:auto;}
+#w427-sample-edit .sample-qaqc-table thead th{position:sticky;top:var(--w427-header-height,100px);z-index:4;background:#eef4f9!important;}
+#w427-sample-edit .sample-qaqc-table th:nth-child(1){width:40px!important;}
+#w427-sample-edit .sample-qaqc-table th:nth-child(2){width:68px!important;}
+#w427-sample-edit .sample-qaqc-table th:nth-child(3){width:40px!important;}
+#w427-sample-edit .sample-qaqc-table th:nth-child(4){width:142px!important;}
+#w427-sample-edit .sample-qaqc-table th:nth-child(n+5):nth-child(-n+11){width:82px!important;}
+#w427-sample-edit .sample-qaqc-table th:nth-child(12){width:112px!important;}
+#w427-sample-edit .sample-qaqc-table input{box-sizing:border-box;min-width:0;padding:4px!important;}
+#w427-sample-edit button:disabled{opacity:.4;cursor:default;}
+</style>
+{% for warning in qaqc_warnings %}<div class="eacs-card" style="font-size:12px;color:#92400e;">{{ warning }}</div>{% endfor %}
+{% set qaqc_concentration_unit = 'mg P/L' %}
+{% set show_batch_remarks = true %}
+{% set hide_empty_qaqc_checks = true %}
+{% set batch_remarks_update_url = url_for('w427_import_bp.import_w427') %}
+<fieldset id="w427-qaqc" {% if not preview_token %}disabled{% endif %} style="border:0;padding:0;margin:0;min-width:0;">
+{% include "components/analysis/qaqc_check_section.html" %}
+</fieldset>
+<style>
+#w427-qaqc table,#w427-qaqc th,#w427-qaqc td{font-size:12px!important;overflow-wrap:anywhere;}
+#w427-qaqc th,#w427-qaqc td{padding:6px!important;}
+#w427-qaqc thead th{position:static;background:#eef4f9;}
+</style>
+<details class="eacs-card"><summary>查看全部原始資料（含其他類別與儀器 BLANK）</summary>{{ rows_table(preview.rows) }}</details>
+<style>.w427-preview-table{width:100%;font-size:13px;white-space:nowrap;}.w427-preview-table th,.w427-preview-table td{padding:7px 9px;}</style>
+{% endif %}
+{% endblock %}

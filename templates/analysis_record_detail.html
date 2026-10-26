@@ -192,6 +192,7 @@
 
 </div>
 
+{% if record.method_code != 'W427' %}
 <div class="eacs-card">
 
     <h2 class="eacs-card-title">
@@ -206,7 +207,8 @@
         "
     >
 
-        <a
+        {% if record.method_code != 'W427' %}
+<a
             href="{{ url_for(
                 'export_analysis_record_pdf',
                 analysis_id=record.analysis_id
@@ -225,6 +227,7 @@
         >
             匯出 LIMS
         </a>
+{% endif %}
 
 
     </div>
@@ -241,6 +244,7 @@
     </div>
 
 </div>
+{% endif %}
 
 {% if record.status == "UNDER_REVIEW" %}
 
@@ -648,6 +652,11 @@
 
 {% endif %}
 
+{% if record.method_code == 'W427' and w427_report_unit %}
+<div class="eacs-card"><a class="eacs-button eacs-button-secondary" href="{{ url_for('export_analysis_record_pdf',analysis_id=record.analysis_id) }}">匯出檢驗紀錄表</a>
+<a class="eacs-button eacs-button-accent" href="{{ url_for('export_analysis_record_lims',analysis_id=record.analysis_id) }}">匯出 LIMS</a></div>
+<div class="eacs-card" style="font-size:13px;color:#475569;">檢量線／測定濃度與 QA/QC 添加濃度：mg P/L；樣品最終濃度：{{ w427_report_unit }}。正磷酸鹽的 3.07 換算僅套用於最終樣品濃度。</div>
+{% endif %}
 {% if review_history %}
 
 <div class="eacs-card">
@@ -1074,7 +1083,7 @@
                             border-bottom: 1px solid #d9e0e7;
                         "
                     >
-                        {{ "吸光度" if record.method_code == "W430" else "測定值" }}
+                        {{ "吸光度" if record.method_code in ["W430", "W427"] else "測定值" }}
                     </th>
 
                     <th
@@ -1294,7 +1303,7 @@
                     </th>
 
                     <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">
-                        {{ "吸光度" if record.method_code == "W430" else "測定值" }}
+                        {{ "吸光度" if record.method_code in ["W430", "W427"] else "測定值" }}
                     </th>
 
                     <th style="padding: 10px; border-bottom: 1px solid #d9e0e7;">

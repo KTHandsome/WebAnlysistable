@@ -66,13 +66,14 @@
                 <span>｜</span>
 
                 <span>
-                     類別：
+                     {% if batch.batch_date is defined %}{{ batch.batch_date }}　{% endif %}類別：
                      <strong>
                          {{ batch.batch_category or "-" }}
                      </strong>
                 </span>
             </div>
 
+            {% if show_batch_remarks|default(true) %}
             <div style="
                  display: flex;
                  align-items: center;
@@ -81,7 +82,7 @@
                  justify-content: flex-end;
                 ">
                <label
-                 for="batch_remark_{{ batch.batch_no }}"
+                 for="batch_remark_{{ batch.remark_key|default(batch.batch_no) }}"
                  style="
                  white-space: nowrap;
                  font-weight: 600;
@@ -93,8 +94,8 @@
 
                <input
                   type="text"
-                  id="batch_remark_{{ batch.batch_no }}"
-                  name="batch_remark_{{ batch.batch_no }}"
+                  id="batch_remark_{{ batch.remark_key|default(batch.batch_no) }}"
+                  name="batch_remark_{{ batch.remark_key|default(batch.batch_no) }}"
                   value="{{ batch.batch_remark if batch.batch_remark is defined else '' }}"
                   placeholder="輸入本批次異常說明"
                   style="
@@ -108,6 +109,7 @@
                          "
                          >
                </div>
+            {% endif %}
 
         </div>
 
@@ -148,7 +150,7 @@
                         width: 16%;
                     ">
                         添加濃度<br>
-                        (mg/L)
+                        ({{ qaqc_concentration_unit|default('mg/L') }})
                     </th>
                 
                     <th style="
@@ -156,7 +158,7 @@
                         width: 16%;
                     ">
                         計算濃度<br>
-                        (mg/L)
+                        ({{ qaqc_concentration_unit|default('mg/L') }})
                     </th>
                 
                     <th style="
@@ -196,7 +198,7 @@
             
             </thead>
 
-<tbody>`
+<tbody>
 
     {% for row in batch.rows %}
 
@@ -396,9 +398,7 @@
 {% endif %}
 </div>
 
-</form>
-
-        {% else %}
+        {% elif not hide_empty_qaqc_checks|default(false) %}
 
         <div style="
             padding: 12px;
@@ -722,7 +722,7 @@
                             width: 9%;
                         ">
                             原樣濃度<br>
-                            (mg/L)
+                            ({{ qaqc_concentration_unit|default('mg/L') }})
                         </th>
 
                         <th style="
@@ -731,7 +731,7 @@
                             width: 10%;
                         ">
                             添加後濃度<br>
-                            (mg/L)
+                            ({{ qaqc_concentration_unit|default('mg/L') }})
                         </th>
 
                         <th style="
@@ -740,7 +740,7 @@
                             width: 10%;
                         ">
                             添加濃度<br>
-                            (mg/L)
+                            ({{ qaqc_concentration_unit|default('mg/L') }})
                         </th>
 
                         <th style="
@@ -942,7 +942,7 @@
 
 
         {% endfor %}
-
+    </form>
 
     {% else %}
 

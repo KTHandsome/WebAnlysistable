@@ -5,6 +5,11 @@ from flask import current_app
 
 
 def load_control_and_method_data(form_data):
+    # W427 has distinct report bases under one method; never select its first CSV row.
+    if str(form_data.get("method_code") or "").strip().upper() == "W427":
+        from services.w427_setting_service import load_w427_settings
+        return load_w427_settings(form_data)
+
 
     control_data = {}
     method_data = None

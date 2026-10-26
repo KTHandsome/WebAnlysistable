@@ -421,9 +421,16 @@ def analysis_record_detail(analysis_id):
             .all()
         )
 
+        w427_report_unit = None
+        if str(record.method_code or "").strip().upper() == "W427":
+            work = db.query(AnalysisWorkState).filter(AnalysisWorkState.analysis_id == analysis_id).one()
+            try:
+                w427_report_unit = json.loads(work.method_data_json)["DISPLAY_CONC_UNIT"]
+            except (ValueError, TypeError, KeyError):
+                return "W427 正式紀錄設定快照無效，請保留資料並查明原因。", 400
         return render_template(
             "analysis_record_detail.html",
-            record=record,
+            record=record, w427_report_unit=w427_report_unit,
             calibration_summary=calibration_summary,
             calibration_points=calibration_points,
             samples=samples,
@@ -455,6 +462,15 @@ def export_analysis_record_pdf(analysis_id):
 
         if record is None:
             return "查無此分析紀錄。", 404
+
+        if str(record.method_code or "").strip().upper() == "W427":
+            from services.w427_pdf_export_service import export_w427_record_pdf
+            try:
+                output = export_w427_record_pdf(db, record)
+            except ValueError as exc:
+                return str(exc), 400
+            return send_file(output, mimetype="application/pdf", as_attachment=True,
+                             download_name="W427_Analysis_Record.pdf")
 
         if str(record.method_code or "").strip().upper() == "W430":
             from services.w430_pdf_export_service import export_w430_record_pdf
@@ -604,6 +620,16 @@ def export_analysis_record_lims(analysis_id):
 
         if record is None:
             return "查無此分析紀錄。", 404
+
+        if str(record.method_code or "").strip().upper() == "W427":
+            from services.w427_lims_export_service import export_w427_record_excel
+            template_path = os.path.join(current_app.root_path,"resources","lims","lims匯入表格.xlsx")
+            try:
+                output = export_w427_record_excel(db,record,template_path)
+            except ValueError as exc:
+                return str(exc), 400
+            return send_file(output,mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                as_attachment=True,download_name="W427_LIMS_Import.xlsx")
 
         if str(record.method_code or "").strip().upper() == "W430":
             from services.w430_lims_export_service import export_w430_record_excel
@@ -1079,7 +1105,7 @@ def resume_analysis_record(analysis_id):
             from analysis.analysis_work_draft_repository import (
                 AnalysisWorkDraftRepository, DraftConflictError,
             )
-            if method_code not in {"W434", "W430"}:
+            if method_code not in {"W434", "W430", "W427"}:
                 return "此方法尚未接入新版工作恢復流程。", 400
             actor = get_current_user() or {}
             actor_id = str(actor.get("user_id") or "").strip()
@@ -1100,7 +1126,7 @@ def resume_analysis_record(analysis_id):
                 elif bundle["work_status"] != "EDITING":
                     return "此工作狀態不可進入修正。", 409
                 # Existing EDITING work is reopened without reverting its edits.
-                endpoint = "w430_import_bp.import_w430" if method_code == "W430" else "analysis_w43401"
+                endpoint = {"W430":"w430_import_bp.import_w430", "W427":"w427_import_bp.import_w427"}.get(method_code, "analysis_w43401")
                 return redirect(url_for(endpoint, saved="1", work_id=work_id))
             except PermissionError as exc:
                 db.rollback()
