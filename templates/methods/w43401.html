@@ -244,8 +244,8 @@
 
 </div>
 
-{% set show_temp_save = true %}
-{% set show_formal_save = true %}
+{% set show_temp_save = not (analysis_work_read_only|default(false)) %}
+{% set show_formal_save = not (analysis_work_read_only|default(false)) %}
 {% set show_pdf_export = true %}
 {% set show_lims_export = true %}
 
@@ -467,6 +467,31 @@ document.addEventListener(
     src="{{ url_for('static', filename='js/analysis_common.js') }}"
 ></script>
 
+
+{% if analysis_work_read_only|default(false) and not (analysis_work_id|default('')) %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll('form').forEach(function (form) {
+        if (form.method.toLowerCase() !== 'post') return;
+        const action = new URL(form.getAttribute('action') || location.href, location.href);
+        if (action.origin !== location.origin || !action.pathname.startsWith('/analysis/')) return;
+        form.querySelectorAll('button, input, select, textarea').forEach(function (item) {
+            item.disabled = true;
+        });
+        document.querySelectorAll('button[form]').forEach(function (button) {
+            if (button.form === form) button.disabled = true;
+        });
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }, true);
+    });
+    document.querySelectorAll('.wavelength-confirm-button').forEach(function (button) {
+        button.disabled = true;
+    });
+});
+</script>
+{% endif %}
 
 {% if analysis_work_id is defined and analysis_work_id %}
 <script>

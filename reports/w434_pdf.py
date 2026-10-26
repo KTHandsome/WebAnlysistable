@@ -422,6 +422,72 @@ def build_w434_pdf(
     # ========================================
     # 每頁共用：表頭 + 檢量線
     # ========================================
+    def draw_toc_performance_and_calibration(title_y):
+        # TOC only: all values come from the supplied analysis snapshot.
+        gap = 12
+        half = (page_width - left_margin - right_margin - gap) / 2
+        right_x = left_margin + half + gap
+        table_top = title_y - 26
+
+        def text_at(x, y, value, width, size=7.5):
+            value = str(value)
+            font_size = size
+            while pdfmetrics.stringWidth(value, "MicrosoftJhengHei", font_size) > width - 6 and font_size > 5.5:
+                font_size -= 0.25
+            pdf_canvas.setFont("MicrosoftJhengHei", font_size)
+            pdf_canvas.drawCentredString(x + width / 2, y, value)
+
+        def row(x, y, widths, values):
+            for width, value in zip(widths, values):
+                pdf_canvas.rect(x, y - 14, width, 14)
+                text_at(x, y - 10, value, width)
+                x += width
+            return y - 14
+
+        def value_text(value, pattern=None):
+            if value is None or value == "":
+                return "-"
+            if pattern:
+                try:
+                    return format(float(value), pattern)
+                except (ValueError, TypeError):
+                    pass
+            return str(value)
+
+        pdf_canvas.setFont("MicrosoftJhengHei", 8)
+        pdf_canvas.drawString(left_margin, title_y, "儀器性能查核（PFM）")
+        pdf_canvas.drawString(right_x, title_y, "一、檢量線")
+        result = calibration_result or {}
+        slope, intercept, r = result.get("slope"), result.get("intercept"), result.get("r")
+        equation = "Y = -"
+        if slope is not None and intercept is not None:
+            equation = "Y = {:.5f}X {} {:.5f}".format(slope, "+" if intercept >= 0 else "-", abs(intercept))
+        text_at(right_x, title_y - 12, equation + "  r=" + value_text(r, ".4f"), half, 7)
+        widths = [half * v for v in (0.15, 0.28, 0.25, 0.32)]
+        y = row(right_x, table_top, widths, ["標準品", "設定濃度 (" + calibration_unit + ")", signal_label, "回歸濃度 (" + calibration_unit + ")"])
+        for i, point in enumerate(calibration_points):
+            y = row(right_x, y, widths, ["STD" + str(i), value_text(point.get("x"), calibration_x_format), value_text(point.get("y"), signal_format), value_text(point.get("back_calculated_x"), backcalc_format)])
+        performance_y = table_top
+        items = (analysis_state or {}).get("prm_results") or []
+        if not items:
+            performance_y = row(left_margin, performance_y, [half], ["未載入 PFM 查核資料"])
+        for item in items:
+            control = item.get("control") or {}
+            status = {"PASS": "合格", "FAIL": "超出管制標準"}.get(item.get("status"), "無法判定")
+            signal_pattern = ".0f" if item.get("signal_field") == "AREA_COUNTS" else signal_format
+            values = [
+                ("查核樣品", item.get("sample_id") or "-"),
+                ("分析日期", str(item.get("analysis_datetime") or "-")[:10]),
+                ("實測值", value_text(item.get("signal"), signal_pattern)),
+                ("參考值", value_text(control.get("reference_value"))),
+                ("管制下限", value_text(control.get("lower_limit"))),
+                ("管制上限", value_text(control.get("upper_limit"))),
+                ("判定", status),
+            ]
+            for label, value in values:
+                performance_y = row(left_margin, performance_y, [half * .35, half * .65], [label, value])
+        return min(y, performance_y)
+
     def draw_page_header_and_calibration():
 
         header_top_y = top_y
@@ -575,6 +641,9 @@ def build_w434_pdf(
             "MicrosoftJhengHei",
             8
         )
+
+        if is_toc or str(method_data.get("METHOD_CODE", "") or "").strip().upper() in {"W330", "W434", "R318"}:
+            return draw_toc_performance_and_calibration(calibration_title_y)
 
         pdf_canvas.drawString(
             left_margin,

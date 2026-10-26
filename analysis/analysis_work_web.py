@@ -252,8 +252,33 @@ def install_work_web(app):
         if work and "bundle" in work:
             return {"analysis_work_id": work["bundle"]["work_id"],
                     "analysis_work_revision": work["bundle"]["revision"],
-                    "analysis_work_status": work["bundle"]["work_status"]}
-        return {}
+                    "analysis_work_status": work["bundle"]["work_status"],
+                    "analysis_work_read_only": work["bundle"]["work_status"] != "EDITING",
+                    "analysis_formal_record_saved": work["bundle"]["work_status"] == "SUBMITTED"}
+        # Legacy W434 also uses the persisted record state, never a URL success flag.
+        if request.endpoint != "analysis_w43401":
+            return {}
+        form = session.get("basic_info_form") or {}
+        method = str(form.get("method_code") or "").strip().upper()
+        if method != "W434":
+            return {}
+        state = legacy_load_state(get_analysis_state_key(method)) or {}
+        formal_id = str(state.get("formal_analysis_id") or "").strip()
+        if not formal_id:
+            return {}
+        db = SessionLocal()
+        try:
+            record = db.query(AnalysisRecord).filter(
+                AnalysisRecord.analysis_id == formal_id,
+                AnalysisRecord.method_code == method,
+            ).first()
+            if record is None:
+                return {}
+            locked = record.status != "REJECTED"
+            return {"analysis_work_read_only": locked,
+                    "analysis_formal_record_saved": locked}
+        finally:
+            db.close()
 
     @app.after_request
     def finish_analysis_work(response):

@@ -16,7 +16,13 @@
 
         {% if analysis_loaded_flag %}
 
-            {% if sample_data_saved %}
+            {% if analysis_formal_record_saved|default(false) %}
+
+            <span class="status-badge status-success">
+                已儲存正式分析紀錄，目前不可修改
+            </span>
+
+            {% elif sample_data_saved %}
 
             <span class="status-badge status-success">
                 分析資料已暫存
