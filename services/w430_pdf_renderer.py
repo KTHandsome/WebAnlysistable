@@ -134,7 +134,9 @@ def build_w430_pdf(report, method, control, form, analysis):
             pfm.append([str(r.get("sample_id") or "")+"\n"+str(r.get("analysis_datetime") or ""),
                         _number(r.get("signal"),signals),_number(ctrl.get("lower_limit"),signals)+" ~ "+_number(ctrl.get("upper_limit"),signals),
                         {"PASS":"合格","FAIL":"不合格"}.get(r.get("status"),"無法判定")])
-        right=[p("儀器性能查核（UV）",heading),
+        # Align both table top borders using the actual regression paragraph height.
+        equation_height = left[1].wrap(half, 10000)[1]
+        right=[Spacer(1,equation_height),p("儀器性能查核（UV）",heading),
                table(["查核項目／實際測定時間","吸光度","管制範圍","判定"],pfm,[110,48,79,35],half),
                Spacer(1,5),p("年度 MDL：{} mg/L\n基準 QDL：{} mg/L".format(_number(control.get("DETECT_LIMITED"),places),_number(analysis.get("qdl_value"),places))),
                p("A 液不扣 BKA；B 液扣對應 B 空白含量。\nBKB 單獨扣除 1.5 mg。")]
