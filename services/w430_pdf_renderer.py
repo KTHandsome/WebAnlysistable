@@ -139,7 +139,7 @@ def build_w430_pdf(report, method, control, form, analysis):
         right=[Spacer(1,equation_height),p("儀器性能查核（UV）",heading),
                table(["查核項目／實際測定時間","吸光度","管制範圍","判定"],pfm,[110,48,79,35],half),
                Spacer(1,5),p("年度 MDL：{} mg/L\n基準 QDL：{} mg/L".format(_number(control.get("DETECT_LIMITED"),places),_number(analysis.get("qdl_value"),places))),
-               p("A 液不扣 BKA；B 液扣對應 B 空白含量。\nBKB 單獨扣除 1.5 mg。")]
+               p("A 液：先扣樣品空白吸光度再回歸。\nB 液：扣完整 BKB 回歸含量。\nBKB 空白濃度：回歸含量扣 1.5 mg 後換算。")]
         paired=Table([[left,"",right]],colWidths=[half,10,half],hAlign="LEFT")
         paired.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP"),("LEFTPADDING",(0,0),(-1,-1),0),
                                     ("RIGHTPADDING",(0,0),(-1,-1),0),("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),0)]))
@@ -150,20 +150,21 @@ def build_w430_pdf(report, method, control, form, analysis):
         add(p("濃度 (mg/L) = 淨含量 (mg) ÷ 水樣體積 (mL) × 1000 × D；本批水樣體積："+"、".join(_number(v,2) for v in volumes)+" mL"))
         sample_rows=[]
         for seq,r in enumerate(groups[key],1):
+            is_sample_blank = r.get("role") == "SAMPLE_BLANK"
             sample_rows.append([seq,r.get("sample_id"),r.get("buffer") or "-",format(float(r["dilution_factor"]),".10g"),
-                                _number(r.get("signal"),signals),_number(r.get("measured_concentration"),masses),
-                                _number(r.get("blank_mass"),masses),_number(r.get("net_mass"),masses),
-                                _number(r.get("sample_concentration"),places),_remark(r,control,places)])
+                                _number(r.get("signal"),signals),("-" if is_sample_blank else _number(r.get("measured_concentration"),masses)),
+                                ("-" if is_sample_blank else _number(r.get("blank_mass"),masses)),("-" if is_sample_blank else _number(r.get("net_mass"),masses)),
+                                ("-" if is_sample_blank else _number(r.get("sample_concentration"),places)),_remark(r,control,places)])
         add(table(["序號","樣品編號","緩衝液","D","吸光度","測定含量\n(mg)","扣除含量\n(mg)","淨含量\n(mg)","樣品濃度\n(mg/L)","備註"],
                   sample_rows,[20,112,24,24,46,52,52,52,62,71]))
         add(Spacer(1,6));add(p("三、QA/QC 判定",heading))
         checks=[]
         for r in batch.get("rows",[]):
-            checks.append([str(r.get("role") or "")+" "+str(r.get("calculation_name") or ""),_number(r.get("check_value"),2)+" %",r.get("control_text") or "-",r.get("status") or "-"])
+            checks.append([str(r.get("role") or "")+" "+str(r.get("calculation_name") or ""),_number(r.get("check_value"),1)+" %",r.get("control_text") or "-",r.get("status") or "-"])
         r=batch.get("precision")
-        if r:checks.append([str(r.get("source_name") or "重複分析")+" RPD",_number(r.get("rpd"),2)+" %","≤ "+_number(r.get("ucl"),2)+" %",r.get("status") or "-"])
+        if r:checks.append([str(r.get("source_name") or "重複分析")+" RPD",_number(r.get("rpd"),1)+" %","<= "+_number(r.get("ucl"),1)+" %",r.get("status") or "-"])
         for r in batch.get("spike_recovery",[]):
-            checks.append([str(r.get("role") or "")+" 回收率",_number(r.get("recovery"),2)+" %",_number(r.get("lcl"),2)+" ~ "+_number(r.get("ucl"),2)+" %",r.get("status") or "-"])
+            checks.append([str(r.get("role") or "")+" 回收率",_number(r.get("recovery"),1)+" %",_number(r.get("lcl"),1)+" ~ "+_number(r.get("ucl"),1)+" %",r.get("status") or "-"])
         add(table(["查核項目","結果","判定標準","判定"],checks,[180,100,165,70]))
         if batch.get("batch_remark"):add(p("批次備註："+str(batch["batch_remark"])))
         measured=[(flow,flow.wrapOn(c,usable,10000)[1]) for flow in story]

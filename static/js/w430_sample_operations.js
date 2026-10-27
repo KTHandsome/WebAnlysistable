@@ -45,6 +45,11 @@
     const cell = row.querySelector('.calculated-concentration-cell');
     const interpretation = row.querySelector('.interpretation-cell');
     const role = row.querySelector('input[name^="role_"]').value;
+    if (role === 'SAMPLE_BLANK') {
+      cell.textContent = '－';
+      row.querySelector('.measured-concentration-cell').textContent = '－';
+      return;
+    }
     const dilution = Number(input.value);
     const baseText = row.dataset.w430BaseConcentration;
     const base = Number(baseText);

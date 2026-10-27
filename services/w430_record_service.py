@@ -37,6 +37,11 @@ def _validate(analysis):
     if not any(row.get("role") == "SAMPLE" for row in rows):
         raise ValueError("尚無可送審的一般樣品。")
     for row in rows:
+        if row.get("role") == "SAMPLE_BLANK":
+            signal = row.get("signal")
+            if not isinstance(signal, (int, float)) or not math.isfinite(signal):
+                raise ValueError(str(row.get("sample_id") or "樣品空白") + " 尚無有效吸光度。")
+            continue
         value = row.get("sample_concentration")
         if not isinstance(value, (int, float)) or not math.isfinite(value):
             raise ValueError(str(row.get("sample_id") or "樣品") + " 尚無有效濃度，請確認原樣品與 B 空白配對。")

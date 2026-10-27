@@ -1,6 +1,6 @@
 """Read-only W430 PFM evaluation against the ACTIVE release."""
 import math
-from datetime import datetime
+from services.basic_info_validation_service import parse_basic_info_date
 
 
 def apply_w430_performance(analysis, preview, form, lookup):
@@ -15,7 +15,7 @@ def apply_w430_performance(analysis, preview, form, lookup):
         try:
             if row["role"] == "PFM":
                 raise ValueError("PFM 名稱尚未指定對應查核項目，請使用最大吸光值或石英槽比對。")
-            day = datetime.strptime(str(form.get("analysis_start_date") or ""), "%Y-%m-%d").date()
+            day = parse_basic_info_date(form.get("analysis_start_date"), "分析起始日期")
             control = lookup(instrument_id=form.get("instrument_id"),
                              monitor_item=row["role"], performance_type="CAL_HIGH_SIGNAL",
                              analysis_date=day)

@@ -1,3 +1,6 @@
+from services.basic_info_validation_service import (
+    REQUIRED_FIELDS, DATE_FIELDS, validate_basic_info_for_analysis,
+)
 from analysis.icp_batch_adoption import filter_lims_matches, filter_lims_groups
 from services.icp_batch_setup_service import build_setup_view
 from services.icp_lims_decision_service import (
@@ -672,6 +675,7 @@ def load_method_analysis_modes():
 @login_required
 def basic_info():
 
+    basic_info_validation_message = ""
     control_data = None
     method_data = None
     error_message = None
@@ -840,6 +844,19 @@ def basic_info():
                     "請選擇儀器後繼續。"
                 )
 
+        if next_action in {
+            "import_icp", "import_w427", "import_w430", "manual_entry",
+            "import_w434", "import_w330",
+        }:
+            multi_analyte = str((method_data or {}).get("ANALYSIS_MODE") or "").strip().upper() == "MULTI_ANALYTE"
+            basic_errors = validate_basic_info_for_analysis(form_data, multi_analyte)
+            if basic_errors:
+                basic_info_validation_message = "請先完善基本資料：\n" + "\n".join(
+                    error["message"] for error in basic_errors
+                )
+                error_message = basic_info_validation_message
+                next_action = ""
+
         if (
             next_action == "import_icp"
             and method_data
@@ -954,6 +971,9 @@ def basic_info():
         form_data=form_data,
         instrument_options=instrument_options,
         method_analysis_modes=load_method_analysis_modes(),
+        basic_info_validation_message=basic_info_validation_message,
+        basic_info_required_fields=REQUIRED_FIELDS,
+        basic_info_date_fields=DATE_FIELDS,
         active_page="analysis_basic"
     )
 

@@ -109,6 +109,12 @@ def build_w430_analysis(preview, form_data, method_data, control_data):
     mdl = _optional(control_data.get("DETECT_LIMITED"))
     if mdl is None:
         state["analysis_warnings"].append("年度 MDL 未設定，樣品 ND 判讀暫不執行。")
+    # The legacy TXT parser labels paired blanks as B and unpaired samples as A.
+    # Translate that metadata here; source rows and saved input are not mutated.
+    bkb_rows = defaultdict(list)
+    for candidate in raw:
+        if candidate["role"] == "BKB":
+            bkb_rows[(candidate["measured_at"][:10], candidate["batch"])].append(candidate)
     batches = defaultdict(list)
     for raw_row in raw:
         if raw_row["role"] not in {"SAMPLE", "SAMPLE_BLANK", "BKA", "BKB", "QC", "ICV", "CCV", "DUP", "MS", "MSD"}:
@@ -129,31 +135,48 @@ def build_w430_analysis(preview, form_data, method_data, control_data):
             "parent_id": raw_row["parent_id"], "blank_id": raw_row["blank_id"],
             "qdl": qdl * dilution, "batch": raw_row["batch"],
         }
+        if role == "SAMPLE_BLANK":
+            row["buffer"] = "A"
+        elif role == "BKB":
+            row["buffer"] = "B"
+        elif role == "BKA":
+            row["buffer"] = "A"
         issues = list(raw_row["issues"])
         if role in {"SAMPLE", "DUP", "MS", "MSD"}:
             if role != "SAMPLE" and not raw_row.get("parent_row_id"):
                 issues.append("缺少原樣品關聯。")
             if raw_row["buffer"] == "B":
+                row["buffer"] = "A"
                 original = by_id.get(raw_row.get("parent_row_id"), raw_row)
                 matches = blanks.get((original["measured_at"][:10], original["batch"], raw_row["blank_id"]), [])
                 if len(matches) != 1:
                     issues.append("未取得唯一樣品 B 空白。")
                 else:
-                    row["blank_mass"] = (matches[0]["absorbance"] - intercept) / slope
+                    row["corrected_signal"] = raw_row["absorbance"] - matches[0]["absorbance"]
+                    # A: subtract absorbance before inversion (the intercept is applied once).
+                    row["blank_mass"] = matches[0]["absorbance"] / slope
             elif raw_row["buffer"] == "A":
-                row["blank_mass"] = 0.0
+                row["buffer"] = "B"
+                matches = bkb_rows.get((raw_row["measured_at"][:10], raw_row["batch"]), [])
+                if len(matches) != 1:
+                    issues.append("未取得同批次唯一 BKB，無法計算緩衝溶液 B 樣品。")
+                elif float(matches[0]["dilution"]) != 1.0 or matches[0]["issues"]:
+                    issues.append("同批次 BKB 資料異常或 D 不為 1，無法計算。")
+                else:
+                    row["blank_id"] = matches[0]["sample_id"]
+                    row["blank_mass"] = (matches[0]["absorbance"] - intercept) / slope
             else:
                 issues.append("緩衝液尚未確認。")
         elif role == "BKB":
-            # Confirmed Excel rule: remove the 1.5 mg reagent contribution.
-            # This correction belongs to BKB alone, never to sample A/B rows.
+            # BKB reporting subtracts 1.5 mg; buffer-B samples subtract the full BKB regression mass.
             row["blank_mass"] = 1.5
             if dilution != 1.0:
                 issues.append("BKB 查核使用未稀釋空白（D=1），請確認原始資料。")
         else:
             row["blank_mass"] = 0.0
-        if not issues and row["blank_mass"] is not None:
-            row["net_mass"] = mass - row["blank_mass"]
+        if role != "SAMPLE_BLANK" and not issues and row["blank_mass"] is not None:
+            row["net_mass"] = ((row["corrected_signal"] - intercept) / slope
+                               if "corrected_signal" in row else mass - row["blank_mass"])
             concentration = row["net_mass"] / volume * 1000.0 * dilution
             row.update(calculated_concentration=concentration, sample_concentration=concentration,
                        qaqc_concentration=concentration)
@@ -173,7 +196,7 @@ def build_w430_analysis(preview, form_data, method_data, control_data):
             if added_mass is not None and added_mass > 0:
                 row["spike_concentration"] = added_mass / volume * 1000.0 * dilution
         if role in {"SAMPLE", "DUP", "MS", "MSD"}:
-            row["method_note"] = "緩衝液 {}；空白 {}".format(row["buffer"] or "待確認", row["blank_id"] or ("不扣除" if row["buffer"] == "A" else "待確認"))
+            row["method_note"] = "緩衝液 {}；空白 {}".format(row["buffer"] or "待確認", row["blank_id"] or "待確認")
         if issues:
             row["method_note"] += "；" + "；".join(issues)
         state["sample_qaqc_rows"].append(row)

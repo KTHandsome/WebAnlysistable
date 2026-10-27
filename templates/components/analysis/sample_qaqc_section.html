@@ -1,3 +1,4 @@
+{% set is_w430_sample_table = method_data and method_data.get("METHOD_CODE", "")|upper == "W430" %}
 {% set sample_signal_decimals_text =
     (method_data.get("UI_SIGNAL_DECIMALS", "") or "")|trim
     if method_data else ""
@@ -184,7 +185,7 @@
         {% endif %}
         {% if method_data and method_data.METHOD_CODE|upper == 'W430' %}
         <span style="font-size: 12px; font-weight: normal; color: #4b5563; line-height: 1.5;">
-            BKB：回歸含量先扣除緩衝液 B 帶入的 1.5 mg 硫酸鹽，再換算濃度。
+            BKB：測定含量為原始回歸值；樣品濃度扣除 1.5 mg 後換算。B 液樣品扣除完整 BKB 回歸含量。
         </span>
         {% endif %}
     </h3>
@@ -355,6 +356,9 @@
                     ">
                         樣品編號
                     </th>
+                    {% if is_w430_sample_table %}
+                    <th style="border:1px solid #ccc;padding:9px;width:62px;">緩衝溶液</th>
+                    {% endif %}
 
                     <th style="
                         border: 1px solid #ccc;
@@ -596,6 +600,10 @@
                     </td>
 
 
+                    {% if is_w430_sample_table %}
+                    <td style="border:1px solid #ccc;padding:8px;text-align:center;">{{ 'B' if row.role == 'BKB' else 'A' if row.role in ['SAMPLE_BLANK', 'BKA'] else row.buffer|default('') or '—' }}</td>
+                    {% endif %}
+
                     <td style="
                         border: 1px solid #ccc;
                         padding: 8px;
@@ -733,7 +741,9 @@
                          font-weight: 600;
                          "
                         >
-                     {% if row.measured_concentration is not none %}{{ ("%." ~ sample_concentration_decimals ~ "f")|format(row.measured_concentration) }}{% else %}—{% endif %}
+                     {% if is_w430_sample_table %}
+                       {% if row.role == 'SAMPLE_BLANK' %}－{% elif row.role == 'BKB' and row.measured_concentration is not none %}{{ ("%." ~ sample_concentration_decimals ~ "f")|format(row.measured_concentration) }}{% elif row.net_mass is defined and row.net_mass is not none %}{{ ("%." ~ sample_concentration_decimals ~ "f")|format(row.net_mass) }}{% else %}—{% endif %}
+                     {% else %}{% if row.measured_concentration is not none %}{{ ("%." ~ sample_concentration_decimals ~ "f")|format(row.measured_concentration) }}{% else %}—{% endif %}{% endif %}
                     </td>
 
 
@@ -747,7 +757,7 @@
                                  color: #2563a6;
                                  font-weight: 700;
                                  ">
-                        {% if row.calculated_concentration is not none %}{{ ("%." ~ sample_concentration_decimals ~ "f")|format(row.calculated_concentration) }}{% else %}—{% endif %}
+                        {% if is_w430_sample_table and row.role == 'SAMPLE_BLANK' %}－{% elif row.calculated_concentration is not none %}{{ ("%." ~ sample_concentration_decimals ~ "f")|format(row.calculated_concentration) }}{% else %}—{% endif %}
                     </td>
 
                     <td
