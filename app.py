@@ -4186,7 +4186,11 @@ def analysis_w43401():
 
            row[
             "final_volume"
-           ] = sample_volume_default
+           ] = (
+               final_volume_default
+               if current_method_code in {"W434", "W341", "R318", "R300"}
+               else sample_volume_default
+           )
 
            row[
             "dilution_factor"
@@ -4209,6 +4213,11 @@ def analysis_w43401():
         row[
         "apply_volume_factor"
         ] = apply_volume_factor
+
+        row["instrument_check_volume_correction"] = (
+            current_method_code in {"W434", "W341", "R318", "R300"}
+            and role in {"ICBK", "ICV", "CCBK", "CCV"}
+        )
 
         row["sample_prep_factor"] = (
             1.0
@@ -4499,6 +4508,14 @@ def analysis_w43401():
         wavelength_warning = None
         instrument_wavelength = None
 
+    # Display-only default: keep configuration snapshots and numeric signals intact.
+    display_method_data = method_data
+    if (current_method_code in {"W434", "W341", "R318", "R300"}
+            and method_data
+            and not str(method_data.get("UI_SIGNAL_DECIMALS") or "").strip()):
+        display_method_data = dict(method_data)
+        display_method_data["UI_SIGNAL_DECIMALS"] = "4"
+
     return render_template(
         "methods/w43401.html",
         active_page="analysis_method",
@@ -4518,7 +4535,7 @@ def analysis_w43401():
             "error_message"
         ),
         uploaded_filename=uploaded_filename,
-        method_data=method_data,
+        method_data=display_method_data,
         control_data=control_data,
         report_data=report_data,
         calibration_result=calibration_result,

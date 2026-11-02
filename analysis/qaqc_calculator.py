@@ -1,3 +1,5 @@
+import math
+
 def _to_float(value):
 
     if value is None:
@@ -418,6 +420,15 @@ def build_qaqc_check_results(
                 "ICV",
                 "CCV"
             }:
+
+                # Compare on the same volume basis; never overwrite nominal spike.
+                if row.get("instrument_check_volume_correction") is True:
+                    factor = _to_float(row.get("qaqc_volume_factor"))
+                    if (factor is None or not math.isfinite(factor) or factor <= 0
+                            or spike_concentration is None):
+                        spike_concentration = None
+                    else:
+                        spike_concentration *= factor
 
                 check_value = (
                      calculate_relative_error(

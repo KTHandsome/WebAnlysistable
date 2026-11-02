@@ -1,3 +1,5 @@
+import math
+
 def recalculate_sample_rows(
     rows,
     calibration_result,
@@ -63,7 +65,13 @@ def recalculate_sample_rows(
                 )
             )
 
-            if role in direct_instrument_roles:
+            corrected_check = (
+                role in direct_instrument_roles
+                and row.get("instrument_check_volume_correction") is True
+            )
+            row["qaqc_volume_factor"] = None
+
+            if role in direct_instrument_roles and not corrected_check:
 
                 sample_volume = 1.0
                 final_volume = 1.0
@@ -95,6 +103,11 @@ def recalculate_sample_rows(
 
                     sample_volume = 1.0
                     final_volume = 1.0
+
+            if (not math.isfinite(sample_volume) or sample_volume <= 0
+                    or not math.isfinite(final_volume) or final_volume <= 0):
+                raise ValueError("Invalid check volume")
+            row["qaqc_volume_factor"] = final_volume / sample_volume
 
             if role in direct_instrument_roles:
                 dilution_factor = 1.0
@@ -176,7 +189,7 @@ def recalculate_sample_rows(
             if role in {
                 "ICV",
                 "CCV"
-             }:
+             } and not corrected_check:
               row[
                     "qaqc_concentration"
                     ] = row.get(

@@ -30,6 +30,7 @@ def parse_pe900_pdf(pdf_path):
     )
 
     rows_by_sequence = {}
+    document_lines = []
 
     current_sequence_no = None
 
@@ -47,6 +48,8 @@ def parse_pe900_pdf(pdf_path):
                 page
             )
         )
+
+        document_lines.extend(page_lines)
 
         for line in page_lines:
 
@@ -304,6 +307,8 @@ def parse_pe900_pdf(pdf_path):
         results.append(
             row
         )
+
+    apply_calibration_summary_signals(results, document_lines)
 
     return results
 
@@ -648,3 +653,128 @@ def extract_mean_blnkcorr_signal(
     except ValueError:
 
         return None
+
+# Numeric IDs in the PE900 calibration report identify concentration standards.
+_PE900_NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?"
+
+
+def _pe900_number(text):
+    import math
+    if not re.fullmatch(_PE900_NUMBER, str(text).strip()):
+        return None
+    value = float(text)
+    return value if math.isfinite(value) else None
+
+
+def _pe900_half_unit(text):
+    from decimal import Decimal
+    return float(Decimal(10) ** Decimal(str(text)).as_tuple().exponent) / 2.0
+
+
+def apply_calibration_summary_signals(rows, lines):
+    """Use the printed calibration table, never subtract STD0 a second time.
+
+    A table belongs to the preceding sequence block, including across pages.
+    Missing/ambiguous standards raise ValueError rather than silently fitting
+    the pre-auto-zero Mean. Non-standard rows keep their existing Mean signal.
+    """
+    import math
+    sequence = None
+    table = None
+    summaries = []
+    header = re.compile(r"Calibration\s+data\s+for\s+([A-Za-z][A-Za-z0-9]*)\s+(" + _PE900_NUMBER + r")", re.I)
+    coefficients = re.compile(r"Correlation\s+Coef\.?\s*:\s*(" + _PE900_NUMBER + r")\s+Slope\s*:\s*(" + _PE900_NUMBER + r")\s+Intercept\s*:\s*(" + _PE900_NUMBER + r")", re.I)
+    for line in lines:
+        match = re.search(r"Sequence\s+No\.?\s*:?\s*(\d+)", line, re.I)
+        if match:
+            if table is not None:
+                raise ValueError("PE900 檢量線摘要表不完整，請確認標準點與方程式。")
+            sequence = int(match.group(1))
+        match = header.search(line)
+        if match:
+            if table is not None or sequence is None:
+                raise ValueError("PE900 檢量線摘要表缺少明確的量測序列關聯。")
+            if not re.search(r"Equation:\s*Linear,\s*Calculated\s+Intercept", line, re.I):
+                raise ValueError("PE900 目前僅支援一次線性回歸（計算截距），請確認報表。")
+            table = dict(anchor=sequence, analyte=match.group(1), wavelength=float(match.group(2)), points=[])
+            continue
+        if table is None:
+            continue
+        match = coefficients.search(line)
+        if match:
+            table['coefficients'] = match.groups()
+            summaries.append(table)
+            table = None
+            continue
+        tokens = line.split()
+        if tokens and _pe900_number(tokens[0]) is not None:
+            # ID, Mean Signal, Entered Conc, Calculated Conc, SD, RSD, Residual.
+            if len(tokens) != 7 or any(_pe900_number(v) is None for v in tokens[:5]):
+                raise ValueError("PE900 檢量線摘要列格式不完整，未採用猜測值。")
+            point = dict(id=float(tokens[0]), signal=float(tokens[1]), concentration=float(tokens[2]), signal_text=tokens[1])
+            if point['id'] != point['concentration']:
+                raise ValueError("PE900 標準名稱與摘要表設定濃度不一致。")
+            table['points'].append(point)
+    if table is not None:
+        raise ValueError("PE900 檢量線摘要表未結束，請確認完整 PDF。")
+    numeric_rows = [r for r in rows if _pe900_number(r['sample_id']) is not None]
+    used = set()
+    previous_anchor = -1
+    for summary in summaries:
+        points = summary['points']
+        if len(points) < 2 or len({p['id'] for p in points}) != len(points):
+            raise ValueError("PE900 檢量線摘要標準點不足或重複。")
+        candidates = [r for r in numeric_rows if previous_anchor < r['sequence_no'] <= summary['anchor']]
+        if len(candidates) != len(points):
+            raise ValueError("PE900 檢量線摘要與標準量測筆數不一致，請確認完整檔案。")
+        assigned = []
+        for point in points:
+            matches = [r for r in candidates if _pe900_number(r['sample_id']) == point['id']
+                       and str(r.get('analyte', '')).upper() == summary['analyte'].upper()
+                       and r.get('wavelength') == summary['wavelength']]
+            if len(matches) != 1 or matches[0]['sequence_no'] in used:
+                raise ValueError("PE900 檢量線摘要無法唯一配對標準點／元素／波長。")
+            row = matches[0]
+            # Nonzero Mean must agree with the summary within its printed precision.
+            # STD0 intentionally differs after the instrument's auto-zero.
+            if point['concentration'] != 0 and not math.isclose(row['signal'], point['signal'], rel_tol=0, abs_tol=_pe900_half_unit(point['signal_text']) + 1e-12):
+                raise ValueError("PE900 非零標準點 Mean 與檢量線摘要不一致。")
+            assigned.append((row, point))
+        # Check the independently fitted curve against printed coefficients with
+        # a bound derived from rounding each printed signal, not exact equality.
+        xs = [p['concentration'] for p in points]
+        ys = [p['signal'] for p in points]
+        mean_x, mean_y = sum(xs) / len(xs), sum(ys) / len(ys)
+        ssx = sum((x - mean_x) ** 2 for x in xs)
+        ssy = sum((y - mean_y) ** 2 for y in ys)
+        if ssx <= 0 or ssy <= 0:
+            raise ValueError("PE900 檢量線摘要無有效變化，無法回歸。")
+        cross = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys))
+        slope = cross / ssx
+        intercept = mean_y - slope * mean_x
+        r_value = cross / math.sqrt(ssx * ssy)
+        printed_r, printed_a, printed_b = summary['coefficients']
+        errors = [_pe900_half_unit(p['signal_text']) for p in points]
+        slope_error = sum(abs(x - mean_x) * e for x, e in zip(xs, errors)) / ssx
+        intercept_error = sum(errors) / len(errors) + abs(mean_x) * slope_error
+        if (abs(slope - float(printed_a)) > slope_error + _pe900_half_unit(printed_a) + 1e-12
+                or abs(intercept - float(printed_b)) > intercept_error + _pe900_half_unit(printed_b) + 1e-12):
+            raise ValueError("PE900 摘要標準點與儀器斜率／截距不一致，請確認報表。")
+        # Correlation changes with rounded signals too; bound its possible change
+        # through the perturbation norm of the centered y vector.
+        perturbation = math.sqrt(sum(e * e for e in errors))
+        correlation_error = 2 * perturbation / max(math.sqrt(ssy) - perturbation, 1e-15)
+        if abs(r_value - float(printed_r)) > correlation_error + _pe900_half_unit(printed_r) + 1e-12:
+            raise ValueError("PE900 摘要標準點與儀器相關係數不一致。")
+        for row, point in assigned:
+            row['original_mean_signal'] = row['signal']
+            row['signal'] = point['signal']
+            row['signal_source'] = 'PE900_CALIBRATION_MEAN_SIGNAL'
+            row['instrument_calibration_concentration'] = point['concentration']
+            row['instrument_calibration_slope'] = float(printed_a)
+            row['instrument_calibration_intercept'] = float(printed_b)
+            row['instrument_calibration_r'] = float(printed_r)
+            used.add(row['sequence_no'])
+        previous_anchor = summary['anchor']
+    if any(r['sequence_no'] not in used for r in numeric_rows):
+        raise ValueError("PE900 標準點缺少完整檢量線摘要表，未使用歸零前 Mean 計算。")
