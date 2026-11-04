@@ -64,7 +64,7 @@ def parse_dilution_label(sample_label):
     match = re.fullmatch(
         r"(.+?)\s*\*\s*"
         r"(\d+(?:\.\d+)?)"
-        r"\s*\(([A-Za-z]+)\)\s*",
+        r"\s*\(([A-Za-z-]+)\)\s*",
         label
     )
 
@@ -75,6 +75,16 @@ def parse_dilution_label(sample_label):
     factor = parse_number(match.group(2))
 
     element_text = match.group(3)
+    if re.fullmatch(r"(?:D-(?:Fe|Mn))+", element_text, re.IGNORECASE):
+        if factor <= 0:
+            result["label_warning"] = "稀釋倍數或金屬標記需確認"
+            return result
+        result.update({
+            "base_label": match.group(1).strip() + "(" + element_text + ")",
+            "label_dilution_factor": factor,
+        })
+        return result
+
     elements = re.findall(
         r"[A-Z][a-z]?",
         element_text
@@ -96,7 +106,7 @@ def parse_dilution_label(sample_label):
 
     return result
 
-def parse_sample_variant(base_label):
+def parse_sample_variant(base_label, measured_element=None):
     """
     解析一般樣品與溶解態樣品標記。
 
@@ -114,23 +124,29 @@ def parse_sample_variant(base_label):
         "pdf_sample_tag": "",
         "analyte_variant": "TOTAL_OR_UNSPECIFIED",
         "variant_element": "",
+        "variant_elements": [],
         "variant_warning": "",
     }
 
     match = re.fullmatch(
-        r"([A-Z]\d{11})\s*\(\s*D-(Fe|Mn)\s*\)",
+        r"([A-Z]\d{11})\s*\(\s*((?:D-(?:Fe|Mn))+)\s*\)",
         label,
         re.IGNORECASE
     )
 
     if match:
-        element = match.group(2).capitalize()
+        elements = [value.capitalize() for value in
+                    re.findall(r"D-(Fe|Mn)", match.group(2), re.IGNORECASE)]
+        element = measured_element if measured_element in elements else (
+            elements[0] if len(elements) == 1 else ""
+        )
 
         result.update({
             "base_label": match.group(1).upper(),
-            "pdf_sample_tag": "D-" + element.upper(),
+            "pdf_sample_tag": "D-" + element.upper() if element else "",
             "analyte_variant": "DISSOLVED",
             "variant_element": element,
+            "variant_elements": elements,
         })
 
     elif re.search(r"\(\s*D-", label, re.IGNORECASE):
@@ -272,7 +288,7 @@ def parse_icp5800_pdf(pdf_source):
                 # 解析溶解態標記，保留原始 sample_label
                 row.update(
                     parse_sample_variant(
-                    row["base_label"]
+                    row["base_label"], row["element"]
                     )
                 )
 
@@ -297,8 +313,8 @@ def parse_icp5800_pdf(pdf_source):
                 )
 
                 elif (
-                   row["variant_element"]
-                   and row["element"] != row["variant_element"]
+                   row["variant_elements"]
+                   and row["element"] not in row["variant_elements"]
                 ):
                    row["element_applicability"] = "NOT_TARGET"
                    row["element_applicability_note"] = (

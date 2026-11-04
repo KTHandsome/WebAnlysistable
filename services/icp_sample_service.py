@@ -139,6 +139,8 @@ def build_sample_view(work, channel, category_view, calibrations, lookup_error=N
                    parent_source_sequence=None, parent_row_id="")
         source_samples[group["selection_key"]] = row
         buckets[batch_id].append(row)
+    groups_by_key = {g["selection_key"]: g for g in channel["sample_groups"]}
+    qaqc_parents = {}
     if lookup_error:
         warnings.append("LIMS 尚無法確認，暫不帶入一般樣品，也不開放儲存。")
     for source in raw_rows:
@@ -163,6 +165,35 @@ def build_sample_view(work, channel, category_view, calibrations, lookup_error=N
             selected_parent = source_samples.get(parent.get("parent_identity"))
             if selected_parent and selected_parent["batch_id"] != batch_id:
                 selected_parent = None
+            if (not selected_parent and not lookup_error and role in LINKED
+                    and settings[batch_id]["ready"]):
+                key = parent.get("parent_identity")
+                seq = text(parent.get("parent_source_sequence"))
+                original = raw_map.get(seq)
+                group = groups_by_key.get(key)
+                exam = settings[batch_id]["exam_no"]
+                if (original and group is not None and exam
+                        and not any(item.get("examno") == exam
+                                    for item in group.get("lims_items", []))
+                        and assignments.get(seq) == batch_id
+                        and original.get("role") == "SAMPLE"
+                        and original.get("element_applicability") == "APPLICABLE"
+                        and identity(original) == key
+                        and original.get("element") == source.get("element")
+                        and original.get("wavelength") == source.get("wavelength")):
+                    parent_key = (batch_id, seq)
+                    selected_parent = qaqc_parents.get(parent_key)
+                    if selected_parent is None:
+                        selected_parent = deepcopy(original)
+                        selected_parent.update(
+                            row_id="P:" + batch_id + ":" + seq,
+                            sample_id=parent["parent_sample_id"],
+                            selection_key=key, source_sequence=original["sequence"],
+                            batch_id=batch_id, parent_identity="", parent_sample_id="",
+                            parent_source_sequence=None, parent_row_id="",
+                            manual_adoption=None, qaqc_only=True)
+                        qaqc_parents[parent_key] = selected_parent
+                        buckets[batch_id].append(selected_parent)
             is_boundary = boundary_number(source) is not None
             row_id = "Q:" + text(source["sequence"]) + (":B:" + batch_id if is_boundary else "")
             row.update(row_id=row_id, sample_id=source["sample_label"],
@@ -206,6 +237,8 @@ def build_sample_view(work, channel, category_view, calibrations, lookup_error=N
                 qdl = optional_number(control.get("QDL"))
             source_rows.sort(key=lambda r: int(r["source_sequence"]))
             for row in source_rows:
+                if row.get("qaqc_only"):
+                    item["warnings"].append(row["sample_id"] + "：原樣僅供 QA/QC，不匯出 LIMS。")
                 selection = row.get("qaqc_spike_selection")
                 if selection and selection["error"]:
                     ready = False

@@ -93,7 +93,7 @@ def build_icp_lims_export_data(work, channels, selected_keys, configurations, lo
                 blank_result=_blank_result(active), remark=channel["label"] + "；" + qc["status"],
                 batch_no=batch_no, correlation_coefficient=_number(cal.get("r"), "相關係數")))
             for row in active:
-                if row.get("role") != "SAMPLE":
+                if row.get("role") != "SAMPLE" or row.get("qaqc_only") is True:
                     continue
                 group = groups.get(row["selection_key"]) or {}
                 commissioned = any(item.get("examno") == exam and item.get("user_decision") == "ACCEPT"

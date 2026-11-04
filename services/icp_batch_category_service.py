@@ -50,8 +50,14 @@ def build_batches(rows):
             if role == "SAMPLE":
                 batch["sample_ids"].add(text(row.get("lims_keepid") or row.get("base_label")))
             assignments[str(row.get("sequence"))] = str(target)
+    # Shared boundary checks must not resurrect a category-excluded batch.
+    scope_sets = [set(row["import_category_batch_ids"]) for row in rows
+                  if "import_category_batch_ids" in row]
+    allowed = set.intersection(*scope_sets) if scope_sets else None
     result = []
     for batch in sorted(batches.values(), key=lambda b: b["number"]):
+        if allowed is not None and batch["id"] not in allowed:
+            continue
         if not batch["sample_ids"] and not batch["has_end"]:
             continue  # Final CCBK alone is not an additional sample batch.
         batch["sample_count"] = len(batch.pop("sample_ids"))

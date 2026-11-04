@@ -33,6 +33,7 @@ from parsers.pe900_parser import parse_pe900_pdf
 from parsers.oi_toc_parser import parse_oi_toc_pdf
 from parsers.ra7000_parser import (parse_ra7000_pdf)
 from parsers.icp5800_parser import parse_icp5800_pdf
+from analysis.icp_category_scope import scope_icp_import_category
 from uuid import uuid4
 from routes.control_import_routes import control_import_bp
 from analysis.icp_workflow import (
@@ -1159,6 +1160,10 @@ def analysis_icp_import():
                             uploaded_file.stream
                         )
 
+                        parsed_data = scope_icp_import_category(
+                            parsed_data, form_data.get("category")
+                        )
+
                         rows = parsed_data["rows"]
 
                         parsed_row_count = len(rows)
@@ -1189,6 +1194,14 @@ def analysis_icp_import():
                             + " 組金屬／波長。金屬："
                             + "、".join(elements)
                             + "。尚未進行 LIMS 篩選或儲存。"
+                        )
+
+                        scope = parsed_data["category_scope"]
+                        upload_message += (
+                            " 已依基本資料 " + scope["category"]
+                            + " 類保留 " + str(len(scope["batch_ids"]))
+                            + " 個樣品批次；原始解析 " + str(scope["source_row_count"])
+                            + " 筆，帶入 " + str(scope["included_row_count"]) + " 筆。"
                         )
 
                         work_key = (

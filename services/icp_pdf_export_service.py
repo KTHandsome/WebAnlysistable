@@ -38,7 +38,14 @@ def assemble_pdf_channels(work, channels, selected_keys, configurations, lookup_
         samples = build_sample_view(work, channel, category, cards, lookup_error)
         if not samples.get("ready") or any(c.get("error") or not c.get("result") for c in cards):
             raise ValueError(channel["label"] + "：請先完成批次設定、檢量線及樣品關聯確認。")
-        if any(b.get("warnings") for b in samples["batches"]):
+        def has_blocking_warnings(batch):
+            informational = {
+                row["sample_id"] + "：原樣僅供 QA/QC，不匯出 LIMS。"
+                for row in batch["rows"] if row.get("qaqc_only") is True
+            }
+            return any(warning not in informational for warning in batch.get("warnings", []))
+
+        if any(has_blocking_warnings(b) for b in samples["batches"]):
             raise ValueError(channel["label"] + "：量測或設定已有提示，請確認並重新暫存後再匯出。")
         qc = build_icp_qaqc_view(category, samples, lookup_error)
         batches = []
