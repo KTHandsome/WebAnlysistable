@@ -82,6 +82,7 @@ def parse_ra7000_pdf(
             .splitlines()
         )
 
+        std_fragment = ""
         for raw_line in lines:
 
             line = (
@@ -135,11 +136,18 @@ def parse_ra7000_pdf(
                     )
                 )
 
+                if row is None and std_fragment:
+                    row = parse_std_row(std_fragment + line)
+                std_fragment = ""
                 if row is not None:
-
-                    standards.append(
-                        row
-                    )
+                    if row["row_no"] != len(standards) + 1:
+                        raise ValueError("RA-7000A STD TABLE 標準列序號不連續。")
+                    standards.append(row)
+                elif re.match(r"^\d", line):
+                    if re.search(r"\d{4}/\d{2}/\d{2}", line):
+                        raise ValueError("RA-7000A STD TABLE 無法解析資料列：" + line)
+                    if "." in line:
+                        std_fragment = line
 
                 continue
 
@@ -160,9 +168,9 @@ def parse_ra7000_pdf(
 
                 if row is not None:
 
-                    samples.append(
-                        row
-                    )
+                    samples.append(row)
+                elif re.match(r"^\d", line) and re.search(r"\d{4}/\d{2}/\d{2}", line):
+                    raise ValueError("RA-7000A SMP TABLE 無法解析資料列：" + line)
 
     # ========================================
     # 最基本完整性檢查
@@ -359,19 +367,15 @@ def parse_std_row(line):
     # 前面兩個整數為 No. 與 SMP NO.
     # 本版支援同為一位數的 STD 1~9
     match = re.match(
-        r"^(\d)(\d)"
-        r"(\d+\.\d{3})"
-        r"(\d+\.\d{3})"
-        r"(\d+\.\d{3})"
-        r"(\d+\.\d{3})"
-        r"\s*"
-        r"(\d+\.\d{3})"
-        r"\s+"
-        r"(\d+\.\d{6})"
-        r"\s+"
-        r"(\d+\.\d{4})"
-        r"\s+"
-        r"(-|\d+\.\d+)$",
+        r"^(\d)\s*(\d)\s*"
+        r"(\d+\.\d{3})\s*"
+        r"(\d+\.\d{3})\s*"
+        r"(\d+\.\d{3})\s*"
+        r"(\d+\.\d{3})\s*"
+        r"(\d+\.\d{3})\s*"
+        r"([+-]?\d+\.\d{6})\s+"
+        r"([+-]?\d+\.\d{4})\s+"
+        r"(-|[+-]?\d+\.\d+)$",
         data_part
     )
 
@@ -589,9 +593,9 @@ def parse_sample_row(
             r"\s*"
             r"(\d+\.\d{6})"
             r"\s+"
-            r"(\d+\.\d{4})"
+            r"([+-]?\d+\.\d{4})"
             r"\s+"
-            r"(\d+\.\d{3})"
+            r"([+-]?\d+\.\d{3})"
             r"$",
             numeric_text.strip()
         )

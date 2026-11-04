@@ -2,6 +2,7 @@
 import math
 import os
 from io import BytesIO
+from services.w430_performance_service import w430_pfm_display_name
 from xml.sax.saxutils import escape
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -129,9 +130,9 @@ def build_w430_pdf(report, method, control, form, analysis):
                       _number(r.get("back_calculated_x"),masses)] for i,r in enumerate(calibration.get("points",[]))],
                     [45,70,60,78],half)]
         pfm=[]
-        for r in analysis.get("prm_results",[]):
+        for r in analysis.get("prm_results", []):
             ctrl=r.get("control") or {}
-            pfm.append([str(r.get("sample_id") or "")+"\n"+str(r.get("analysis_datetime") or ""),
+            pfm.append([w430_pfm_display_name(str(r.get("sample_id") or ""))+"\n"+str(r.get("analysis_datetime") or ""),
                         _number(r.get("signal"),signals),_number(ctrl.get("lower_limit"),signals)+" ~ "+_number(ctrl.get("upper_limit"),signals),
                         {"PASS":"合格","FAIL":"不合格"}.get(r.get("status"),"無法判定")])
         # Align both table top borders using the actual regression paragraph height.

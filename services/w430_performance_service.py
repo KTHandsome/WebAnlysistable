@@ -3,12 +3,18 @@ import math
 from services.basic_info_validation_service import parse_basic_info_date
 
 
+def w430_pfm_display_name(sample_id):
+    names = {"最大吸光值": "石英槽比對", "石英槽比對": "最大吸光值"}
+    return names.get(sample_id, sample_id)
+
+
 def apply_w430_performance(analysis, preview, form, lookup):
     results = []
     for row in preview["rows"]:
         if row["role"] not in {"MAX_ABS", "CELL_CHECK", "PFM"}:
             continue
         item = {"sample_id": row["sample_id"], "analysis_datetime": row["measured_at"],
+                "display_sample_id": w430_pfm_display_name(row["sample_id"]),
                 "signal": row["absorbance"], "signal_field": "ABSORBANCE",
                 "control": {}, "status": "UNDETERMINED", "message": ""}
         results.append(item)
