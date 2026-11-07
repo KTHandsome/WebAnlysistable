@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}W433 硫化物匯入{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">W433 硫化物匯入</h1>
+  <a class="eacs-button" href="{{ url_for('basic_info') }}">返回基本資料</a>
+</div>
+{% if drafts %}<details class="eacs-card"><summary>我的 W433 暫存工作</summary><ul>
+{% for work in drafts %}<li><a href="{{ url_for('w433_import_bp.import_w433',work_id=work.work_id) }}">{{ work.day }}　{{ work.label }}</a></li>{% endfor %}
+</ul></details>{% endif %}
+<div class="eacs-card">
+  <h2 class="eacs-card-title">UV 儀器 TXT 匯入</h2>
+  <p>儀器：{{ form.get('instrument_id', '') }}　類別：{{ form.get('category', '') }}</p>
+  {% if csrf_token %}
+  <p>請同時選取檢量線與樣品 TXT 各一個，可另選一個 PFM TXT。單檔上限 5 MB。</p>
+  <form action="{{ url_for('w433_import_bp.import_w433') }}" method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="file" name="uv_files" accept=".txt" multiple required aria-label="檢量線與樣品 TXT">
+    <button type="submit" class="eacs-button eacs-button-primary">匯入 TXT</button>
+  </form>
+  {% endif %}
+  {% if error %}<p role="alert">{{ error }}</p>{% endif %}
+</div>
+<div class="eacs-card">
+  <h2 class="eacs-card-title">儀器性能查核</h2>
+  <p>儀器：{{ form.get('instrument_id', '') }}　類別：{{ form.get('category', '') }}　分析起始日期：{{ form.get('analysis_start_date', '') }}　波長：664 nm</p>
+  {% if pfm %}
+  <table class="eacs-table"><thead><tr><th>查核項目</th><th>量測時間</th><th>吸光度</th><th>參考值</th><th>下限</th><th>上限</th><th>判定</th></tr></thead>
+  <tbody>{% for item in pfm %}<tr>
+    <td>{{ item.label }}</td><td>{{ item.row.measured_at if item.row else '—' }}</td>
+    <td>{{ item.row.absorbance_text if item.row else '—' }}</td>
+    <td>{{ item.control.get('reference_value', '—') }}</td><td>{{ item.control.get('lower_limit', '—') }}</td>
+    <td>{{ item.control.get('upper_limit', '—') }}</td><td>{{ item.status }}{% if item.message %}：{{ item.message }}{% endif %}</td>
+  </tr>{% endfor %}</tbody></table>
+  {% else %}<p>尚未匯入 PFM。</p>{% endif %}
+</div>
+{% if result %}
+<div class="eacs-card w433-action-bar" aria-label="分析資料操作">
+  <span id="w433-save-status" class="w433-save-status {{ 'is-saved' if is_saved else 'is-unsaved' }}" role="status">{{ '分析資料已暫存' if is_saved else '分析資料已載入，尚未儲存' }}</span>
+  <div class="w433-action-buttons">
+    <button class="w433-action-primary" type="submit" form="w433-samples" name="edit_action" value="draft" {% if submitted %}disabled{% endif %}>暫存分析資料</button>
+    <button class="w433-action-primary" type="submit" form="w433-samples" name="edit_action" value="submit" {% if submitted %}disabled{% endif %}>儲存分析紀錄</button>
+    <button class="w433-action-pdf" type="submit" form="w433-samples" name="edit_action" value="pdf">匯出檢驗紀錄表</button>
+    <button class="w433-action-lims" type="submit" form="w433-samples" name="edit_action" value="excel">匯出 LIMS</button>
+  </div>
+</div>
+<style>
+.w433-action-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.w433-save-status{display:inline-block;padding:6px 12px;border-radius:20px;font-size:14px}
+.w433-save-status.is-unsaved{color:#c66a00;background:#fff7e8}
+.w433-save-status.is-saved{color:#16803c;background:#edf8ef}
+.w433-action-buttons{display:flex;gap:10px;flex-wrap:wrap;margin-left:auto}
+.w433-action-buttons button{padding:11px 20px;border-radius:6px;font:inherit;font-weight:600;cursor:pointer;background:white}
+.w433-action-buttons .w433-action-primary{background:#2862a5;color:white;border:1px solid #2862a5}
+.w433-action-buttons .w433-action-pdf{color:#2862a5;border:1px solid #2862a5}
+.w433-action-buttons .w433-action-lims{color:#00847d;border:1px solid #00847d}
+.w433-action-buttons button:disabled{opacity:.5;cursor:default}
+.w433-action-buttons button:focus-visible{outline:3px solid #88b7ee;outline-offset:3px}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+  document.querySelectorAll('input[name^="d_"],input[name^="std_"]').forEach(function(input){
+    if(input.readOnly)return;
+    input.addEventListener('input',function(){
+      var status=document.getElementById('w433-save-status');
+      status.textContent='分析資料已載入，尚未儲存';
+      status.classList.remove('is-saved');status.classList.add('is-unsaved');
+    });
+  });
+});
+</script>
+<form action="{{ url_for('w433_import_bp.import_w433') }}" method="post" class="eacs-card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="edit_state" value="{{ edit_state }}">
+  <h2 class="eacs-card-title">1. 檢量線</h2>
+  <p>斜率 a：{{ '%.6f'|format(result.calibration.slope) }}　截距 b：{{ '%.6f'|format(result.calibration.intercept) }}　相關係數 r：{{ '%.6f'|format(result.calibration.r) }}　判定：{{ '合格' if result.calibration.r >= 0.995 else '不合格' }}（r ≥ 0.995）</p>
+  <p>Y = {{ '%.6g'|format(result.calibration.slope) }} X {{ '%+.6g'|format(result.calibration.intercept) }}；r = {{ '%.6f'|format(result.calibration.r) }}</p>
+  <table class="eacs-table"><thead><tr><th>編號</th><th>設定濃度 (mg/L)</th><th>測定值（吸光度）</th><th>回歸濃度 (mg/L)</th></tr></thead>
+  <tbody>{% for row in result.standards %}<tr><td>{{ row.sample_id }}</td><td>{{ row.instrument_conc_text }}</td><td><input type="number" step="any" required name="std_{{ loop.index0 }}" value="{{ row.absorbance_text }}" {% if submitted %}readonly{% endif %} aria-label="{{ row.sample_id }} 測定值"></td><td>{{ '%.6f'|format((row.absorbance - result.calibration.intercept) / result.calibration.slope) }}</td></tr>{% endfor %}</tbody></table>
+  <button class="eacs-button eacs-button-primary" name="edit_action" value="curve" {% if submitted %}disabled{% endif %}>更新檢量線</button>
+</form>
+<form id="w433-samples" action="{{ url_for('w433_import_bp.import_w433') }}" method="post" class="eacs-card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="edit_state" value="{{ edit_state }}">
+  <h2 class="eacs-card-title">2. 樣品及 QA/QC 計算</h2>
+  {% set settings = method or {} %}
+  {% set statuses = {} %}
+  {% for item in checks if item.role == "BK" %}{% set _ = statuses.update({item.source_line: item.status}) %}{% endfor %}
+  <table class="eacs-table"><thead><tr><th>調整</th><th>批次</th><th>順序</th><th>樣品編號</th><th>樣品體積 (mL)</th><th>添加濃度 (mg/L)</th><th>取樣體積 (mL)</th><th>測定值（吸光度）</th><th>稀釋倍數 (D)</th><th>測定濃度 (mg/L)</th><th>樣品濃度 (mg/L)</th><th>判讀結果</th></tr></thead>
+  <tbody>{% for row in result.rows %}
+  <tr><td style="white-space:nowrap">
+<button type="submit" name="edit_action" value="move_up_{{ row.source_line }}" aria-label="{{ row.sample_id }} 上移" {% if loop.first or submitted %}disabled{% endif %}>↑</button>
+<button type="submit" name="edit_action" value="move_down_{{ row.source_line }}" aria-label="{{ row.sample_id }} 下移" {% if loop.last or submitted %}disabled{% endif %}>↓</button>
+</td><td>{{ row.batch }}</td><td>{{ loop.index }}</td><td>{{ row.sample_id }}</td>
+  <td>{{ settings.get('SAMPLE_VOLUME_DEFAULT') or '－' }}</td><td>{{ settings.get(('MS' if row.role == 'MSD' else row.role) ~ '_SPIKE_CONC') or '－' }}</td><td>－</td>
+  <td>{{ row.absorbance_text }}</td><td><input type="number" step="any" required name="d_{{ row.source_line }}" value="{{ row.dilution }}" {% if submitted %}readonly{% endif %} aria-label="{{ row.sample_id }} 稀釋倍數" style="width:6em"></td>
+  <td>{{ '%.6f'|format(row.equivalent_concentration) }}</td><td>{{ '%.6f'|format(row.sample_concentration) }}</td><td>{{ statuses.get(row.source_line, '－') }}</td></tr>
+  {% if row.blank %}<tr><td>－</td><td>{{ row.batch }}</td><td>－</td><td>{{ row.blank.sample_id }}（空白）</td><td>－</td><td>－</td><td>－</td><td>{{ row.blank.absorbance_text }}</td><td>－</td><td>－</td><td>－</td><td>－</td></tr>{% endif %}
+  {% endfor %}</tbody></table>
+  <button class="eacs-button eacs-button-primary" name="edit_action" value="samples" {% if submitted %}disabled{% endif %}>更新樣品及 QA/QC</button>
+</form>
+{% macro num(v, digits=6) %}{{ ('%.' ~ digits ~ 'f')|format(v) if v is not none else '－' }}{% endmacro %}
+{% macro decision(i) %}<span class="{{ 'pass' if i.status == '合格' or i.status.startswith('<') else 'fail' if i.status in ['超限','空白超出管制'] else 'warn' }}">{{ i.status }}</span>{% endmacro %}
+{% macro limits(i) %}
+{% if i.warning_low is not none and i.warning_high is not none %}<div class="warn">警告：{{ num(i.warning_low,1) }}～{{ num(i.warning_high,1) }}%</div>{% endif %}
+<div class="value">{{ i.criteria }}</div>
+{% endmacro %}
+<div class="eacs-card w433-qaqc">
+<h2 class="eacs-card-title">3. QA/QC 檢核</h2>
+{% if setting_message %}<p>{{ setting_message }}</p>{% endif %}
+{% for batch in checks|groupby('batch') %}
+<div class="batch-title">Batch {{ batch.grouper }}　｜　類別：{{ form.get('category','') }}</div>
+<h3>3-A 查核與品管</h3>
+<table class="eacs-table"><thead><tr><th>項目</th><th>樣品編號</th><th>添加濃度 (mg/L)</th><th>計算濃度 (mg/L)</th><th>判定方式</th><th>相對誤差／回收率 (%)</th><th>判定標準</th><th>判定</th></tr></thead><tbody>
+{% for i in batch.list if i.role in ['ICV','CCV','QC','BK'] %}<tr><td>{{ i.role }}</td><td>{{ i.sample_id }}</td><td class="value">{{ num(i.target) }}</td><td class="value">{{ num(i.measured) }}</td><td>{{ '相對誤差' if i.role in ['ICV','CCV'] else '回收率' if i.role == 'QC' else '空白查核' }}</td><td class="value">{{ num(i.metric,1) }}</td><td>{{ limits(i) }}</td><td>{{ decision(i) }}</td></tr>{% endfor %}
+</tbody></table>
+<h3>3-B 重複分析精密度</h3>
+<table class="eacs-table"><thead><tr><th>判定來源</th><th>樣品 A</th><th>樣品 B</th><th>RPD (%)</th><th>警告上限 (%)</th><th>管制上限 (%)</th><th>判定</th></tr></thead><tbody>
+{% for i in batch.list if i.role == 'DUP' %}<tr><td>原樣／DUP</td><td class="value">{{ i.original }}</td><td class="value">{{ i.sample_id }}</td><td class="value">{{ num(i.metric,1) }}</td><td class="warn">{{ num(i.warning_high,1) }}</td><td class="value">{{ num(i.control_high,1) }}</td><td>{{ decision(i) }}</td></tr>{% else %}<tr><td colspan="7">本批無 DUP。</td></tr>{% endfor %}
+</tbody></table>
+<h3>3-C 添加回收率</h3>
+<table class="eacs-table"><thead><tr><th>項目</th><th>樣品編號</th><th>原樣樣品</th><th>原樣濃度 (mg/L)</th><th>添加後濃度 (mg/L)</th><th>添加濃度 (mg/L)</th><th>回收率 (%)</th><th>判定標準</th><th>判定</th></tr></thead><tbody>
+{% for i in batch.list if i.role in ['MS','MSD'] %}<tr><td>{{ i.role }}</td><td class="value">{{ i.sample_id }}</td><td class="value">{{ i.original }}</td><td class="value">{{ num(i.original_value) }}</td><td class="value">{{ num(i.measured) }}</td><td class="value">{{ num(i.target) }}</td><td class="value">{{ num(i.metric,1) }}</td><td>{{ limits(i) }}</td><td>{{ decision(i) }}</td></tr>{% else %}<tr><td colspan="9">本批無添加樣品。</td></tr>{% endfor %}
+</tbody></table>
+{% endfor %}
+</div>
+<style>
+.w433-qaqc table{width:100%;border-collapse:collapse;margin-bottom:20px}
+.w433-qaqc th,.w433-qaqc td{border:1px solid #c5cdd5;padding:7px;text-align:center;font-size:13px}
+.w433-qaqc th{background:#eef4f9;color:#123552}
+.w433-qaqc h3,.w433-qaqc .batch-title{background:#f4f8fc;border:1px solid #d2deeb;padding:10px;font-size:14px;color:#123552}
+.w433-qaqc .value{color:#0059b3}.w433-qaqc .pass{color:#008000}.w433-qaqc .warn{color:#b66a00}.w433-qaqc .fail{color:#c62828;font-weight:600}
+</style>
+{% endif %}
+{% endblock %}

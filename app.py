@@ -378,6 +378,9 @@ app.register_blueprint(w430_import_bp)
 from routes.w427_import_routes import w427_import_bp
 app.register_blueprint(w427_import_bp)
 
+from routes.w433_import_routes import w433_import_bp
+app.register_blueprint(w433_import_bp)
+
 app.add_url_rule(
     "/analysis/icp/candidate-selection",
     endpoint="save_icp_candidate_selection",
@@ -3308,6 +3311,13 @@ def analysis_w330():
 def analysis_w43401():
 
     form_data = work_form_data(None) or {}
+
+    if str(form_data.get("method_code") or "").strip().upper() == "W433":
+        if request.method == "GET":
+            return redirect(url_for("w433_import_bp.import_w433"))
+        # Allow a previously open import page to submit without losing its TXT.
+        from routes.w433_import_routes import render_w433_import
+        return render_w433_import(form_data)
 
     current_method_code = str(
         form_data.get(

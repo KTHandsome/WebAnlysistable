@@ -467,6 +467,19 @@ def export_analysis_record_pdf(analysis_id):
         if record is None:
             return "查無此分析紀錄。", 404
 
+        if str(record.method_code or "").strip().upper() == "W433":
+            from services.w433_work_service import record_bundle
+            from services.w433_export_service import build_pdf
+            try:
+                b = record_bundle(db,record)
+                user = {"employee_id":record.analyst_employee_id or "",
+                        "employee_name":record.analyst_name or ""}
+                output=build_pdf(b,user)
+            except ValueError as exc:
+                return str(exc),400
+            return send_file(output,mimetype="application/pdf",as_attachment=True,
+                             download_name="W433_Analysis_Record.pdf")
+
         if str(record.method_code or "").strip().upper() == "W427":
             from services.w427_pdf_export_service import export_w427_record_pdf
             try:
@@ -624,6 +637,19 @@ def export_analysis_record_lims(analysis_id):
 
         if record is None:
             return "查無此分析紀錄。", 404
+
+        if str(record.method_code or "").strip().upper() == "W433":
+            from services.w433_work_service import record_bundle
+            from services.w433_export_service import build_excel
+            try:
+                b = record_bundle(db,record)
+                user = {"employee_id":record.analyst_employee_id or "",
+                        "employee_name":record.analyst_name or ""}
+                output=build_excel(b,user,os.path.join(current_app.root_path,"resources","lims","lims匯入表格.xlsx"))
+            except ValueError as exc:
+                return str(exc),400
+            return send_file(output,mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",as_attachment=True,
+                             download_name="W433_LIMS_Import.xlsx")
 
         if str(record.method_code or "").strip().upper() == "W427":
             from services.w427_lims_export_service import export_w427_record_excel

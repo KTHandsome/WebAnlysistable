@@ -203,6 +203,21 @@ def install_work_web(app):
         ).first()
         if row is None:
             abort(404, description="找不到指定的分析工作。")
+        if row.method_code == "W433" and request.endpoint == "analysis_w43401":
+            # Compatibility for W433 draft links generated before the dedicated route.
+            # Authenticate and validate ownership before forwarding the work ID.
+            try:
+                AnalysisWorkDraftRepository(db).load_draft(work_id, user_id, "W433")
+            except PermissionError:
+                abort(403, description="您沒有權限存取此分析工作。")
+            except ValueError as exc:
+                abort(400, description=str(exc))
+            if request.method == "GET":
+                return redirect(url_for("w433_import_bp.import_w433",work_id=work_id))
+            # A previous form may post to the shared endpoint. W433 validates its
+            # own CSRF, signed bundle and revision in its dedicated handler.
+            from routes.w433_import_routes import render_w433_import
+            return render_w433_import(session.get("basic_info_form") or {})
         if row.method_code != "W434":
             abort(400, description="此工作不適用目前的分析頁面。")
         repo = AnalysisWorkDraftRepository(db)
