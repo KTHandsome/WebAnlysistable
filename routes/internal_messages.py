@@ -20,6 +20,10 @@ CREATE TABLE IF NOT EXISTS messages (
     body TEXT NOT NULL, sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     read_at TEXT
 );
+CREATE TABLE IF NOT EXISTS message_clear (
+    employee TEXT NOT NULL, peer TEXT NOT NULL, through_id INTEGER NOT NULL,
+    PRIMARY KEY (employee, peer)
+);
 CREATE INDEX IF NOT EXISTS inbox ON messages(recipient, read_at, id);
 CREATE INDEX IF NOT EXISTS outbox ON messages(sender, recipient, id);
 """
@@ -145,7 +149,11 @@ def employees():
 def unread():
     with storage() as db:
         row = db.execute(
-            "SELECT COUNT(*) AS count, MAX(id) AS latest_id FROM messages WHERE recipient=? AND read_at IS NULL",
+            """SELECT COUNT(*) AS count, MAX(m.id) AS latest_id
+               FROM messages m LEFT JOIN message_clear c
+                 ON c.employee=m.recipient AND c.peer=m.sender
+               WHERE m.recipient=? AND m.read_at IS NULL
+                 AND m.id > COALESCE(c.through_id, 0)""",
             (g.message_employee,),
         ).fetchone()
     return jsonify(dict(row))
@@ -159,20 +167,36 @@ def messages():
     peer = request.args.get("peer", "").strip()
     employee = g.message_employee
     with storage() as db:
-        if peer:
-            rows = db.execute(
-                """SELECT * FROM messages WHERE id < ? AND
-                   ((sender=? AND recipient=?) OR (sender=? AND recipient=?))
-                   ORDER BY id DESC LIMIT 100""",
-                (before, employee, peer, peer, employee),
-            ).fetchall()
-        else:
-            rows = db.execute(
-                """SELECT * FROM messages WHERE id < ? AND (sender=? OR recipient=?)
-                   ORDER BY id DESC LIMIT 100""",
-                (before, employee, employee),
-            ).fetchall()
+        rows = db.execute(
+            """SELECT m.* FROM messages m LEFT JOIN message_clear c
+                 ON c.employee=? AND c.peer=CASE WHEN m.sender=? THEN m.recipient ELSE m.sender END
+               WHERE m.id < ? AND (m.sender=? OR m.recipient=?)
+                 AND (?='' OR CASE WHEN m.sender=? THEN m.recipient ELSE m.sender END=?)
+                 AND m.id > COALESCE(c.through_id, 0)
+               ORDER BY m.id DESC LIMIT 100""",
+            (employee, employee, before, employee, employee, peer, employee, peer),
+        ).fetchall()
     return jsonify(messages=[dict(row) for row in rows])
+
+
+@bp.post("/messages/clear")
+def clear_conversation():
+    peer = payload().get("peer")
+    if not isinstance(peer, str):
+        abort(400)
+    peer = peer.strip()
+    employee = g.message_employee
+    if not 1 <= len(peer) <= 80 or peer == employee:
+        abort(400)
+    with storage() as db:
+        db.execute(
+            """INSERT OR REPLACE INTO message_clear(employee, peer, through_id)
+               SELECT ?, ?, MAX(id) FROM messages
+               WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)
+               HAVING COUNT(*) > 0""",
+            (employee, peer, employee, peer, peer, employee),
+        )
+    return "", 204
 
 
 @bp.post("/messages")
@@ -212,7 +236,9 @@ def mark_read(message_id):
     with storage() as db:
         cursor = db.execute(
             """UPDATE messages SET read_at=COALESCE(read_at, CURRENT_TIMESTAMP)
-               WHERE id=? AND recipient=?""",
+               WHERE id=? AND recipient=? AND id > COALESCE(
+                   (SELECT through_id FROM message_clear c
+                    WHERE c.employee=messages.recipient AND c.peer=messages.sender), 0)""",
             (message_id, g.message_employee),
         )
         if not cursor.rowcount:
