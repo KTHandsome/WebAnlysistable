@@ -119,6 +119,10 @@ from analysis.analysis_route_helpers import (
     get_analysis_page_endpoint,
 )
 
+from routes.internal_messages import bp as internal_messages_bp
+
+
+
 import os
 import csv
 import io
@@ -320,6 +324,7 @@ register_performance_history_route(login_required)
 
 app.register_blueprint(performance_history_bp)
 
+
 # 保留舊 endpoint，供現有模板的 url_for() 使用
 app.add_url_rule(
     "/performance-history",
@@ -360,6 +365,8 @@ app.register_blueprint(performance_control_import_bp)
 app.register_blueprint(home_bp)
 
 app.register_blueprint(auth_bp)
+
+app.register_blueprint(internal_messages_bp)
 
 app.register_blueprint(icp_saved_work_bp)
 
