@@ -304,6 +304,27 @@ def method_settings_import():
                                      + " 列：REPORT_CODE 不可空白。"
                                 )    
 
+                            if method_code.upper() == "E215" and data_entry_mode == "MANUAL":
+                                # Manual E215 uses no instrument calibration or derived QDL.
+                                for field_name in ("CATEGORY_CODE", "EXAMNAME"):
+                                    if not (row.get(field_name) or "").strip():
+                                        validation_errors.append(
+                                            f"第 {row_index} 列：{field_name} 不可空白。"
+                                        )
+                                if report_code != "BIO_RECORD":
+                                    validation_errors.append(
+                                        f"第 {row_index} 列：E215 的 REPORT_CODE 必須是 BIO_RECORD。"
+                                    )
+                                if active not in {"Y", "N"}:
+                                    validation_errors.append(
+                                        f"第 {row_index} 列：ACTIVE 只能是 Y 或 N。"
+                                    )
+                                if import_type or signal_field:
+                                    validation_errors.append(
+                                        f"第 {row_index} 列：E215 手動模式的 IMPORT_TYPE 與 SIGNAL_FIELD 必須留空。"
+                                    )
+                                continue
+
                             # MAX_SAMPLE_PER_BATCH
                             try:
 
