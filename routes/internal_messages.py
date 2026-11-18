@@ -3,6 +3,7 @@ import base64
 import binascii
 import hashlib
 import io
+import json
 import secrets
 import sqlite3
 from contextlib import contextmanager
@@ -18,6 +19,12 @@ bp = Blueprint("internal_messages", __name__, url_prefix="/api/internal-messages
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
     digest TEXT PRIMARY KEY, employee TEXT NOT NULL, expires INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS web_identities (
+    session_digest TEXT PRIMARY KEY, identity TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS web_tickets (
+    digest TEXT PRIMARY KEY, session_digest TEXT NOT NULL, expires INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY, sender TEXT NOT NULL, recipient TEXT NOT NULL,
@@ -119,7 +126,53 @@ def sign_in():
             "INSERT INTO sessions VALUES (?, ?, strftime('%s','now') + 28800)",
             (digest(token), employee),
         )
+        db.execute("DELETE FROM web_identities WHERE session_digest NOT IN (SELECT digest FROM sessions)")
+        identity = {key: str(user.get(key) or "") for key in (
+            "user_id", "employee_id", "employee_name", "group_id", "dept_no", "dept_name"
+        )}
+        db.execute("INSERT INTO web_identities VALUES (?, ?)", (digest(token), json.dumps(identity)))
     return jsonify(token=token, employee_id=employee)
+
+
+@bp.post("/web-ticket")
+def issue_web_ticket():
+    if not request.is_secure:
+        abort(403)
+    ticket = secrets.token_urlsafe(32)
+    with storage() as db:
+        db.execute("DELETE FROM web_tickets WHERE expires <= strftime('%s','now')")
+        cursor = db.execute(
+            """INSERT INTO web_tickets
+               SELECT ?, i.session_digest, strftime('%s','now') + 60
+               FROM web_identities i JOIN sessions s ON s.digest=i.session_digest
+               WHERE i.session_digest=? AND s.expires > strftime('%s','now')""",
+            (digest(ticket), g.message_session),
+        )
+        if cursor.rowcount != 1:
+            abort(401)
+    return jsonify(ticket=ticket)
+
+
+def web_ticket_identity(ticket, consume=False):
+    if len(ticket) != 43 or not all(c.isascii() and (c.isalnum() or c in "-_") for c in ticket):
+        return None
+    ticket_digest = digest(ticket)
+    with storage() as db:
+        if consume:
+            db.execute("BEGIN IMMEDIATE")
+        row = db.execute(
+            """SELECT i.identity FROM web_tickets t
+               JOIN sessions s ON s.digest=t.session_digest
+               JOIN web_identities i ON i.session_digest=s.digest
+               WHERE t.digest=? AND t.expires > strftime('%s','now')
+                 AND s.expires > strftime('%s','now')""",
+            (ticket_digest,),
+        ).fetchone()
+        if row is None:
+            return None
+        if consume:
+            db.execute("DELETE FROM web_tickets WHERE digest=?", (ticket_digest,))
+        return json.loads(row["identity"])
 
 
 @bp.delete("/session")
