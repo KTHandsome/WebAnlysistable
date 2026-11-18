@@ -1,11 +1,15 @@
 """Private employee messages for the VB client."""
+import base64
+import binascii
 import hashlib
+import io
 import secrets
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
 import pyodbc
+from PIL import Image
 from flask import Blueprint, abort, current_app, g, jsonify, request
 from services.lims_auth_service import LIMS_CONNECTION_STRING, validate_lims_user
 
@@ -19,6 +23,9 @@ CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY, sender TEXT NOT NULL, recipient TEXT NOT NULL,
     body TEXT NOT NULL, sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     read_at TEXT
+);
+CREATE TABLE IF NOT EXISTS message_images (
+    message_id INTEGER PRIMARY KEY REFERENCES messages(id), png BLOB NOT NULL
 );
 CREATE TABLE IF NOT EXISTS message_clear (
     employee TEXT NOT NULL, peer TEXT NOT NULL, through_id INTEGER NOT NULL,
@@ -168,7 +175,8 @@ def messages():
     employee = g.message_employee
     with storage() as db:
         rows = db.execute(
-            """SELECT m.* FROM messages m LEFT JOIN message_clear c
+            """SELECT m.*, EXISTS(SELECT 1 FROM message_images i WHERE i.message_id=m.id) AS has_image
+               FROM messages m LEFT JOIN message_clear c
                  ON c.employee=? AND c.peer=CASE WHEN m.sender=? THEN m.recipient ELSE m.sender END
                WHERE m.id < ? AND (m.sender=? OR m.recipient=?)
                  AND (?='' OR CASE WHEN m.sender=? THEN m.recipient ELSE m.sender END=?)
@@ -191,9 +199,10 @@ def clear_conversation():
     with storage() as db:
         db.execute(
             """INSERT OR REPLACE INTO message_clear(employee, peer, through_id)
-               SELECT ?, ?, MAX(id) FROM messages
-               WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)
-               HAVING COUNT(*) > 0""",
+               SELECT ?, ?, latest_id FROM (
+                   SELECT MAX(id) AS latest_id FROM messages
+                   WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)
+               ) WHERE latest_id IS NOT NULL""",
             (employee, peer, employee, peer, peer, employee),
         )
     return "", 204
@@ -201,12 +210,34 @@ def clear_conversation():
 
 @bp.post("/messages")
 def send_message():
+    if request.content_length is None or request.content_length > 1450000:
+        abort(413)
     data = payload()
+    encoded = data.get("image")
+    png = None
+    if encoded is not None:
+        if not isinstance(encoded, str) or len(encoded) > 1398104:
+            abort(400)
+        try:
+            raw = base64.b64decode(encoded, validate=True)
+            if len(raw) > 1048576:
+                abort(413)
+            with Image.open(io.BytesIO(raw), formats=["PNG"]) as picture:
+                if picture.width > 4096 or picture.height > 4096 or picture.width * picture.height > 8000000:
+                    abort(400)
+                picture.load()
+                output = io.BytesIO()
+                picture.convert("RGB").save(output, format="PNG")
+                png = output.getvalue()
+            if len(png) > 1048576:
+                abort(413)
+        except (ValueError, OSError, binascii.Error, Image.DecompressionBombError):
+            abort(400)
     recipient, body = data.get("recipient"), data.get("body")
     if not isinstance(recipient, str) or not isinstance(body, str):
         abort(400)
     recipient, body = recipient.strip(), body.strip()
-    if not 1 <= len(recipient) <= 80 or recipient == g.message_employee or not 1 <= len(body) <= 4000:
+    if not 1 <= len(recipient) <= 80 or recipient == g.message_employee or len(body) > 4000 or (not body and png is None):
         abort(400)
     conn = pyodbc.connect(LIMS_CONNECTION_STRING)
     try:
@@ -226,7 +257,28 @@ def send_message():
         cursor = db.execute("INSERT INTO messages(sender, recipient, body) VALUES (?, ?, ?)",
                             (g.message_employee, recipient, body))
         message_id = cursor.lastrowid
+        if png is not None:
+            db.execute("INSERT INTO message_images(message_id, png) VALUES (?, ?)", (message_id, png))
     return jsonify(id=message_id), 201
+
+
+@bp.get("/messages/<int:message_id>/image")
+def message_image(message_id):
+    if not 1 <= message_id <= 9223372036854775807:
+        abort(404)
+    employee = g.message_employee
+    with storage() as db:
+        row = db.execute(
+            """SELECT i.png FROM message_images i JOIN messages m ON m.id=i.message_id
+               LEFT JOIN message_clear c ON c.employee=? AND
+                   c.peer=CASE WHEN m.sender=? THEN m.recipient ELSE m.sender END
+               WHERE m.id=? AND (m.sender=? OR m.recipient=?)
+                 AND m.id > COALESCE(c.through_id, 0)""",
+            (employee, employee, message_id, employee, employee),
+        ).fetchone()
+    if row is None:
+        abort(404)
+    return jsonify(image=base64.b64encode(row["png"]).decode("ascii"))
 
 
 @bp.post("/messages/<int:message_id>/read")
