@@ -177,7 +177,7 @@ def dev_login():
 
     set_current_user(
         user_id="DEV",
-        employee_id="S097-06",
+        employee_id="A100-33",
         employee_name="測試人員",
         group_id="04",
         group_name="分析部",
