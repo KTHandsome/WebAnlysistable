@@ -682,6 +682,223 @@ def load_method_analysis_modes():
         and modes <= {"SINGLE", "MULTI_ANALYTE"}
     }
 
+from services import e215_entry_service
+
+
+@app.route("/analysis/e215/manual", methods=["GET", "POST"])
+@login_required
+def e215_manual_entry():
+    import secrets
+    from uuid import uuid4
+    from flask import jsonify
+    from analysis.analysis_work_identity import AnalysisWorkIdentity
+    from analysis.analysis_work_draft_repository import AnalysisWorkDraftRepository, DraftConflictError
+    from services.e215_samples_service import load_page
+
+    form = session.get("basic_info_form") or {}
+    user = get_current_user() or {}
+    owner = str(user.get("user_id") or "").strip()
+    if not owner:
+        return "無法取得登入人員。", 403
+
+    if request.method == "POST":
+        if not request.is_json:
+            return jsonify(error="請由 E215 頁面暫存。"), 415
+        token = session.get("e215_draft_csrf", "")
+        if not token or not secrets.compare_digest(token, request.headers.get("X-E215-CSRF", "")):
+            return jsonify(error="頁面已失效，請重新開啟。"), 403
+        if len(request.get_data(cache=True)) > 512000:
+            return jsonify(error="暫存資料過大。"), 413
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify(error="暫存資料格式錯誤。"), 400
+    else:
+        payload = {}
+        session.setdefault("e215_draft_csrf", secrets.token_urlsafe(32))
+
+    manual_test = request.method == "GET" and request.args.get("manual_test") == "1"
+    work_id = payload.get("work_id") if request.method == "POST" else (
+        None if manual_test else request.args.get("draft"))
+    db = SessionLocal()
+    try:
+        repo = AnalysisWorkDraftRepository(db)
+        if work_id:
+            from models import AnalysisWorkDraft
+            from analysis.analysis_work_access import resolve_work_owner
+            draft = db.query(AnalysisWorkDraft).filter_by(work_id=work_id).first()
+            if draft is None:
+                raise ValueError("Invalid E215 draft")
+            owner = resolve_work_owner(db, draft, owner, "E215")
+        saved = repo.load_draft(work_id, owner, "E215") if work_id else None
+        if saved:
+            if saved["work_status"] != "EDITING" or saved["state"].get("e215_format") != 1:
+                raise ValueError("Invalid E215 draft")
+            form = saved["form_data"]
+        item, error = e215_entry_service.validate_entry(form, e215_entry_service.load_options(app.root_path))
+        if error:
+            return (jsonify(error=error), 400) if request.method == "POST" else redirect(url_for("basic_info"))
+        report, error = load_report_setting(item)
+        if error or not report:
+            message = error or "查無 BIO_RECORD 報表設定。"
+            return (jsonify(error=message), 400) if request.method == "POST" else (render_e215_basic_info(form, message), 400)
+
+        if request.method == "POST":
+            data = payload.get("data")
+            if not isinstance(data, dict) or set(data) != {"samples", "batches"}:
+                raise ValueError("Invalid draft data")
+            sids, batches = data["samples"], data["batches"]
+            if not isinstance(sids, list) or not 1 <= len(sids) <= 500 or any(not isinstance(s, str) for s in sids):
+                raise ValueError("Invalid samples")
+            if len(set(sids)) != len(sids) or not isinstance(batches, list) or len(batches) != (len(sids) + 9) // 10:
+                raise ValueError("Invalid batches")
+            for i, batch in enumerate(batches):
+                if not isinstance(batch, dict) or not isinstance(batch.get("fields"), list) or len(batch["fields"]) != 6:
+                    raise ValueError("Invalid batch fields")
+                rows = batch.get("rows")
+                if not isinstance(rows, list) or len(rows) != len(sids[i*10:i*10+10]) + 1:
+                    raise ValueError("Invalid rows")
+                for row in rows:
+                    if not isinstance(row, dict) or not isinstance(row.get("lines"), list) or not 1 <= len(row["lines"]) <= 50:
+                        raise ValueError("Invalid dilutions")
+                    if row.get("tray") not in ("", "51", "97") or not isinstance(row.get("time"), str) or len(row["time"]) > 16:
+                        raise ValueError("Invalid sample fields")
+                    dual = item["EXAMNO"] in ("W-E21502", "D-E21502", "G-E21502")
+                    for line in row["lines"]:
+                        if not isinstance(line, dict) or type(line.get("selected")) is not bool:
+                            raise ValueError("Invalid selection")
+                        if line.get("factor") not in ("", "1", "10", "100", "1000", "10000"):
+                            raise ValueError("Invalid factor")
+                        counts = line.get("counts")
+                        if not isinstance(counts, list) or len(counts) != (4 if dual else 2):
+                            raise ValueError("Invalid counts")
+                        if any(not isinstance(v, str) or len(v) > 24 for v in counts):
+                            raise ValueError("Invalid count value")
+                if any(not isinstance(v, str) or len(v) > 256 for v in batch["fields"]):
+                    raise ValueError("Invalid batch value")
+            if saved:
+                page = saved["state"]["lookup"]
+                revision = payload.get("revision")
+                if type(revision) is not int or revision != saved["revision"]:
+                    raise DraftConflictError("Stale E215 draft")
+            else:
+                revision = 0
+                if payload.get("manual_samples") is None:
+                    page = load_page(item, form, user, {"lookup": "1", "received_from": payload.get("start", "")}, app.logger)
+                else:
+                    page = dict(manual=True, start=form["analysis_start_date"], end=form["analysis_start_date"],
+                                rows=[], error=None)
+            entries = payload.get("manual_samples")
+            if page.get("manual"):
+                import re
+                if not isinstance(entries, list) or len(entries) != len(sids):
+                    return jsonify(error="手動樣品明細不完整。"), 400
+                names = set()
+                manual_rows = []
+                for sid, entry in zip(sids, entries):
+                    if not isinstance(entry, dict) or entry.get("sid") != sid or not re.fullmatch(r"MANUAL-[1-9][0-9]{0,2}", sid):
+                        return jsonify(error="手動樣品資料格式錯誤。"), 400
+                    raw = entry.get("number")
+                    name = raw.strip() if isinstance(raw, str) else ""
+                    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,63}", name) or name.upper() in names:
+                        return jsonify(error="請填寫不重複的樣品編號，可用英數字及 . _ / -。"), 400
+                    names.add(name.upper())
+                    manual_rows.append(dict(sid=sid, number=name, employee="", received=""))
+                page = dict(page, rows=manual_rows)
+            elif entries is not None:
+                return jsonify(error="此暫存使用 LIMS 樣品，不能切換為手動輸入。"), 409
+            rows = page.get("rows") or []
+            if not set(sids).issubset({str(row["sid"]) for row in rows}):
+                return jsonify(error="樣品清單已變更，請重新查詢。"), 409
+            page = dict(page, rows=[
+                dict(sid=str(row["sid"]), number=str(row["number"]),
+                     employee=str(row["employee"]), received=str(row["received"]))
+                for row in rows
+            ])
+            state = dict(e215_format=1, data=data, lookup=page)
+            if payload.get("action") == "preview_pdf":
+                from flask import send_file
+                from services.e215_formal_service import formal_state
+                from services.e215_pdf_service import build_coliform_pdf
+                if item["EXAMNO"] not in {"D-E21501", "W-E21501", "G-E21501"}:
+                    return jsonify(error="目前僅支援大腸桿菌群 PDF。"), 409
+                try:
+                    preview = formal_state(state, item["EXAMNO"])
+                    document = build_coliform_pdf(preview["e215_batches"], dict(report), preview=True)
+                except ValueError as exc:
+                    return jsonify(error=str(exc)), 400
+                return send_file(document, mimetype="application/pdf", as_attachment=True,
+                                 download_name="E215_Preview.pdf", max_age=0)
+            formal = payload.get("action") == "submit"
+            if saved and saved.get("formal_analysis_id"):
+                from models import AnalysisRecord
+                aid = saved["formal_analysis_id"]
+                bound = db.query(AnalysisRecord).filter_by(analysis_id=aid).first()
+                if not bound or bound.status != "REJECTED" or str(bound.analyst_user_id or "").strip() != owner:
+                    return jsonify(error="此正式紀錄已不可修正。"), 409
+                state["formal_analysis_id"] = aid
+            control = saved["control_data"] if saved else {}
+            method = saved["method_data"] if saved else {}
+            if formal:
+                from services.e215_formal_service import formal_state
+                try:
+                    state = formal_state(state, item["EXAMNO"])
+                except ValueError as exc:
+                    return jsonify(error=str(exc)), 400
+                control = dict(EXAMNO=item["EXAMNO"], EM_NO="NIEA E215.53C")
+                method = dict(METHOD_CODE="E215", DATA_ENTRY_MODE="MANUAL")
+            if not saved:
+                work_id = str(uuid4())
+                repo.create_draft(AnalysisWorkIdentity(work_id, owner, "E215"), {})
+            revision = repo.save_work_bundle(work_id, owner, "E215", revision, state=state,
+                form_data=form, control_data=control, method_data=method, report_data=dict(report))
+            if formal:
+                from services.analysis_record_service import save_analysis_record
+                try:
+                    record = save_analysis_record(form, control, method, dict(report), state, user,
+                        db=db, strict_work_identity=True)
+                    aid = record["analysis_id"]
+                    revision = repo.save_work_bundle(work_id, owner, "E215", revision,
+                        state=dict(state, formal_analysis_id=aid))
+                    repo.submit_draft(work_id, owner, "E215", revision, aid)
+                    url = url_for("analysis_record_bp.analysis_record_detail", analysis_id=aid)
+                except ValueError as exc:
+                    db.rollback()
+                    return jsonify(error=str(exc)), 400
+                db.commit()
+                return jsonify(formal=True, work_id=work_id, url=url)
+            db.commit()
+            return jsonify(revision=revision, work_id=work_id, url=url_for("e215_manual_entry", draft=work_id))
+
+        lookup = saved["state"]["lookup"] if saved else load_page(item, form, user, {} if manual_test else request.args, app.logger)
+        return render_template("methods/e215_entry.html", form=form, item=item, report=report,
+            active_page="analysis_basic", lookup=lookup, e215_csrf=session["e215_draft_csrf"],
+            e215_draft=dict(work_id=work_id, revision=saved["revision"], data=saved["state"]["data"]) if saved else None)
+    except DraftConflictError:
+        db.rollback()
+        return jsonify(error="暫存已有新版本，請重新開啟後再修改。"), 409
+    except (ValueError, PermissionError, TypeError):
+        db.rollback()
+        return (jsonify(error="資料格式不符或無法存取此暫存。"), 400) if request.method == "POST" else ("無法開啟此暫存。", 404)
+    except Exception:
+        db.rollback()
+        app.logger.exception("E215 draft operation failed")
+        return (jsonify(error="暫存失敗，請保留此頁並聯絡管理員。"), 500) if request.method == "POST" else ("無法開啟 E215 頁面。", 500)
+    finally:
+        db.close()
+
+
+def render_e215_basic_info(form, error=None):
+    return render_template(
+        "basic_info.html", form_data=form, control_data=None, method_data=None,
+        error_message=error, instrument_options=[],
+        e215_options=e215_entry_service.load_options(app.root_path),
+        method_analysis_modes=load_method_analysis_modes(),
+        basic_info_validation_message="",
+        basic_info_required_fields=REQUIRED_FIELDS,
+        basic_info_date_fields=DATE_FIELDS, active_page="analysis_basic"
+    )
+
+
 @app.route("/basic-info", methods=["GET", "POST"])
 @login_required
 def basic_info():
@@ -710,6 +927,9 @@ def basic_info():
         "basic_info_form",
         default_form_data.copy()
     )
+
+    if request.method == "GET" and e215_entry_service.is_e215(form_data):
+        return render_e215_basic_info(form_data)
 
     if request.method == "POST":
 
@@ -774,6 +994,17 @@ def basic_info():
             )
             .strip()
         )
+
+        if e215_entry_service.is_e215(form_data):
+            item, error = e215_entry_service.validate_entry(
+                form_data, e215_entry_service.load_options(app.root_path)
+            )
+            form_data.update(selected_exam_no=item["EXAMNO"] if item else "",
+                             instrument_id="", instrument_model="", wavelength="")
+            session["basic_info_form"] = form_data
+            if next_action == "e215_entry" and not error:
+                return redirect(url_for("e215_manual_entry"))
+            return render_e215_basic_info(form_data, error if next_action == "e215_entry" else None)
 
         instrument_options = (
             load_instrument_options(
@@ -981,6 +1212,7 @@ def basic_info():
         error_message=error_message,
         form_data=form_data,
         instrument_options=instrument_options,
+        e215_options=e215_entry_service.load_options(app.root_path),
         method_analysis_modes=load_method_analysis_modes(),
         basic_info_validation_message=basic_info_validation_message,
         basic_info_required_fields=REQUIRED_FIELDS,

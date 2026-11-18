@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}E215 手動登錄{% endblock %}
+{% block content %}
+<div class="eacs-card">
+  <h1>{{ report.FORM_TITLE }}</h1>
+  <p>{{ report.DOC_NO }}｜版次：{{ report.REVISION }}</p>
+  <p>E215｜{{ item.EXAMNAME }}｜{{ item.EXAMNO }}｜類別：{{ item.CATEGORY_CODE }}</p>
+  <p>分析日期：{{ form.analysis_start_date }} ～ {{ form.analysis_end_date }}｜填表日期：{{ form.form_date }}</p>
+  <p>基本資料已確認。檢驗紀錄欄位尚未開放登錄。</p>
+  <a href="{{ url_for('basic_info') }}">返回基本資料</a>
+</div>
+{% include "methods/e215_samples.html" %}
+{% endblock %}

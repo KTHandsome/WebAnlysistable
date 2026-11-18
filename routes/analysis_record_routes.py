@@ -355,6 +355,20 @@ def analysis_record_detail(analysis_id):
         if record is None:
             return "查無此分析紀錄。", 404
 
+        if str(record.method_code or "").strip().upper() == "E215":
+            import json
+            work = db.query(AnalysisWorkState).filter_by(analysis_id=analysis_id).first()
+            if not work:
+                return "查無 E215 正式紀錄快照。", 404
+            state = json.loads(work.state_json)
+            history = db.query(AnalysisReviewHistory).filter_by(analysis_id=analysis_id).order_by(
+                AnalysisReviewHistory.created_at.desc(), AnalysisReviewHistory.id.desc()).all()
+            actor = get_current_user() or {}
+            return render_template("methods/e215_record.html", record=record,
+                batches=state["e215_batches"], can_review=can_review_analysis(), review_history=history,
+                can_resume_e215=bool(record.analyst_user_id) and can_resume_analysis_record(record),
+                active_page="analysis_records")
+
         if record.source_type == "ICP_IMPORT":
             from services.icp_record_service import load_snapshot
             snapshot = load_snapshot(db, record)
@@ -466,6 +480,25 @@ def export_analysis_record_pdf(analysis_id):
 
         if record is None:
             return "查無此分析紀錄。", 404
+
+        if str(record.method_code or "").strip().upper() == "E215":
+            import json
+            from services.e215_pdf_service import build_coliform_pdf
+            if str(record.exam_no or "").strip() not in {"D-E21501", "W-E21501", "G-E21501"}:
+                return "目前僅開放大腸桿菌群檢驗紀錄表。", 409
+            work = db.query(AnalysisWorkState).filter_by(analysis_id=analysis_id).first()
+            if not work:
+                return "查無 E215 正式紀錄快照。", 404
+            try:
+                state = json.loads(work.state_json)
+                report = json.loads(work.report_data_json or "{}")
+                if not isinstance(report, dict):
+                    raise ValueError("Invalid report snapshot")
+                pdf = build_coliform_pdf(state["e215_batches"], report)
+            except (KeyError, ValueError, TypeError, IndexError):
+                return "E215 正式紀錄明細或報表設定不完整，無法匯出。", 422
+            return send_file(pdf, mimetype="application/pdf", as_attachment=True,
+                             download_name="E215_" + str(record.id) + ".pdf")
 
         if str(record.method_code or "").strip().upper() == "W433":
             from services.w433_work_service import record_bundle
@@ -637,6 +670,24 @@ def export_analysis_record_lims(analysis_id):
 
         if record is None:
             return "查無此分析紀錄。", 404
+
+        if str(record.method_code or "").strip().upper() == "E215":
+            import json
+            from services.e215_lims_service import build_coliform_lims
+            if str(record.exam_no or "").strip() not in {"D-E21501", "W-E21501", "G-E21501"}:
+                return "目前僅支援大腸桿菌群的 LIMS 匯出。", 409
+            work = db.query(AnalysisWorkState).filter_by(analysis_id=analysis_id).first()
+            if not work:
+                return "查無 E215 正式紀錄快照。", 404
+            try:
+                output = build_coliform_lims(record, json.loads(work.state_json),
+                    os.path.join(current_app.root_path, "resources", "lims", "lims匯入表格.xlsx"))
+            except (KeyError, IndexError, TypeError, ValueError):
+                return "E215 正式紀錄明細或 LIMS 範本不完整，無法匯出。", 422
+            except FileNotFoundError:
+                return "找不到 LIMS 匯入 Excel 範本。", 404
+            return send_file(output, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             as_attachment=True, download_name="E215_LIMS_" + str(record.id) + ".xlsx")
 
         if str(record.method_code or "").strip().upper() == "W433":
             from services.w433_work_service import record_bundle
@@ -884,7 +935,7 @@ def approve_analysis_record(analysis_id):
 
         return redirect(
             url_for(
-                "analysis_record_detail",
+                "analysis_record_bp.analysis_record_detail" if record.method_code == "E215" else "analysis_record_detail",
                 analysis_id=analysis_id,
             )
         )
@@ -967,7 +1018,7 @@ def reject_analysis_record(analysis_id):
 
         return redirect(
             url_for(
-                "analysis_record_detail",
+                "analysis_record_bp.analysis_record_detail" if record.method_code == "E215" else "analysis_record_detail",
                 analysis_id=analysis_id,
             )
         )
@@ -1053,7 +1104,7 @@ def reopen_approved_analysis_record(analysis_id):
 
         return redirect(
             url_for(
-                "analysis_record_detail",
+                "analysis_record_bp.analysis_record_detail" if record.method_code == "E215" else "analysis_record_detail",
                 analysis_id=analysis_id,
             )
         )
@@ -1081,6 +1132,34 @@ def resume_analysis_record(analysis_id):
 
         if record is None:
             return "查無此分析紀錄。", 404
+
+        if str(record.method_code or "").strip().upper() == "E215":
+            from models import AnalysisWorkDraft
+            from analysis.analysis_work_draft_repository import AnalysisWorkDraftRepository, DraftConflictError
+            from analysis.analysis_work_access import add_work_actor_history, resolve_work_owner
+            actor = str((get_current_user() or {}).get("user_id") or "").strip()
+            if not actor or not can_resume_analysis_record(record):
+                return "沒有權限續作此紀錄。", 403
+            if record.status != "REJECTED":
+                return "只有退回修正的紀錄可續作。", 409
+            drafts = db.query(AnalysisWorkDraft).filter_by(formal_analysis_id=analysis_id).limit(2).all()
+            if len(drafts) != 1:
+                return "找不到唯一的關聯工作，無法續作。", 409
+            try:
+                repo = AnalysisWorkDraftRepository(db)
+                owner = resolve_work_owner(db, drafts[0], actor, "E215")
+                bundle = repo.load_draft(drafts[0].work_id, owner, "E215")
+                work_id = bundle["work_id"]
+                if bundle["work_status"] == "SUBMITTED":
+                    revision = repo.resume_draft(work_id, owner, "E215", bundle["revision"])
+                    add_work_actor_history(db, analysis_id, "RESUME_DRAFT", work_id, revision, "REJECTED")
+                    db.commit()
+                elif bundle["work_status"] != "EDITING":
+                    return "目前工作狀態不可續作。", 409
+                return redirect(url_for("e215_manual_entry", draft=work_id))
+            except (DraftConflictError, ValueError, PermissionError):
+                db.rollback()
+                return "無法續作，請重新開啟紀錄後重試。", 409
 
         if record.status != "REJECTED":
             return "只有退回修正的分析紀錄可以重新進入修正。", 400
@@ -1338,3 +1417,4 @@ def delete_analysis_record(analysis_id):
 
     finally:
         db.close()
+# E215_REVIEW_RECOVERY

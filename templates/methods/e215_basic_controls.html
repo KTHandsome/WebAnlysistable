@@ -1,0 +1,36 @@
+<div id="e215-entry-controls" hidden style="grid-column:1/-1">
+    <label>檢驗項目代碼 <input id="e215-exam-no" readonly class="eacs-form-control"></label>
+    <button type="submit" class="eacs-button eacs-button-primary" id="e215-start" disabled>開始手動登錄</button>
+    <p id="e215-entry-message" role="status"></p>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("basic-info-form");
+    const options = {{ e215_options | default([]) | tojson }};
+    const get = id => document.getElementById(id);
+    const input = id => (get(id)?.value || "").trim();
+    const panel = get("e215-entry-controls");
+    const button = get("e215-start");
+    const query = get("query-control-button");
+    const instrument = get("instrument_id")?.closest(".eacs-form-field");
+    function refresh() {
+        const manual = input("method_code").toUpperCase() === "E215";
+        panel.hidden = !manual;
+        if (query) query.hidden = manual;
+        if (instrument) instrument.hidden = manual;
+        const matches = options.filter(r => r.CATEGORY_CODE === input("category") && r.EXAMNAME === input("exam_name"));
+        const item = matches.length === 1 ? matches[0] : null;
+        const start = input("analysis_start_date"), end = input("analysis_end_date"), date = input("form_date");
+        get("e215-exam-no").value = item ? item.EXAMNO : "";
+        const message = !item ? "請選擇唯一對應的 E215 類別與項目。" :
+            !start || !end || !date ? "請填妥三個日期。" :
+            end < start ? "分析結束日不可早於起始日。" : "";
+        get("e215-entry-message").textContent = message;
+        button.disabled = !!message || !manual;
+    }
+    button.addEventListener("click", () => { get("next_action").value = "e215_entry"; });
+    form.addEventListener("input", refresh);
+    form.addEventListener("change", refresh);
+    refresh();
+});
+</script>

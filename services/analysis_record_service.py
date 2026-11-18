@@ -214,6 +214,12 @@ def save_analysis_record(
             "尚未取得分析基本資料。"
         )
 
+    e215_manual = (
+        str(form_data.get("method_code") or "").strip().upper() == "E215"
+        and strict_work_identity and db is not None
+        and isinstance(analysis_state, dict) and analysis_state.get("e215_format") == 1
+    )
+
     if not control_data:
         raise ValueError(
             "尚未取得年度管制資料。"
@@ -263,12 +269,12 @@ def save_analysis_record(
             "目前沒有可建立正式紀錄的分析明細。"
         )
 
-    if not calibration_rows:
+    if not e215_manual and not calibration_rows:
         raise ValueError(
         "目前沒有可建立正式紀錄的檢量線資料。"
     )
 
-    if not calibration_result:
+    if not e215_manual and not calibration_result:
        raise ValueError(
         "目前沒有有效的檢量線計算結果。"
     )
@@ -853,72 +859,74 @@ def save_analysis_record(
         # AnalysisCalibrationSummary
         # ========================================
 
-        slope = _to_optional_float(
-              calibration_result.get(
-                    "slope"
-            )
-        )
-
-        intercept = _to_optional_float(
-            calibration_result.get(
-                 "intercept"
-            )
-        )
-
-        correlation_r = _to_optional_float(
-           calibration_result.get(
-                "r"
-            )
-        )
-
-        if slope is None:
-           raise ValueError(
-                 "檢量線斜率無效。"
-        )
-
-        if intercept is None:
-          raise ValueError(
-                 "檢量線截距無效。"
-        )
-
-        if correlation_r is None:
-          raise ValueError(
-               "檢量線相關係數無效。"
-        )
-
-
-        calibration_summary = AnalysisCalibrationSummary(
-           analysis_id=record.analysis_id,
-           slope=slope,
-           intercept=intercept,
-           correlation_r=correlation_r,
-           is_pass=bool(
-             calibration_result.get(
-                 "passed",
-                   False
+        calibration_points = []
+        if not e215_manual:
+            slope = _to_optional_float(
+                  calibration_result.get(
+                        "slope"
                 )
             )
-        )
 
-        db.add(
-             calibration_summary
-        )
+            intercept = _to_optional_float(
+                calibration_result.get(
+                     "intercept"
+                )
+            )
+
+            correlation_r = _to_optional_float(
+               calibration_result.get(
+                    "r"
+                )
+            )
+
+            if slope is None:
+               raise ValueError(
+                     "檢量線斜率無效。"
+            )
+
+            if intercept is None:
+              raise ValueError(
+                     "檢量線截距無效。"
+            )
+
+            if correlation_r is None:
+              raise ValueError(
+                   "檢量線相關係數無效。"
+            )
 
 
-        # ========================================
-        # AnalysisCalibrationPoint
-        # ========================================
+            calibration_summary = AnalysisCalibrationSummary(
+               analysis_id=record.analysis_id,
+               slope=slope,
+               intercept=intercept,
+               correlation_r=correlation_r,
+               is_pass=bool(
+                 calibration_result.get(
+                     "passed",
+                       False
+                    )
+                )
+            )
 
-        calibration_points = calibration_result.get(
-            "points",
-             []
-         )
+            db.add(
+                 calibration_summary
+            )
 
-        if not calibration_points:
 
-             raise ValueError(
-                "檢量線缺少標準點計算結果。"
-        )
+            # ========================================
+            # AnalysisCalibrationPoint
+            # ========================================
+
+            calibration_points = calibration_result.get(
+                "points",
+                 []
+             )
+
+            if not calibration_points:
+
+                 raise ValueError(
+                    "檢量線缺少標準點計算結果。"
+            )
 
 
         for index, point in enumerate(
@@ -1665,11 +1673,12 @@ def save_analysis_record(
         # PRM Performance History
         # 與正式分析紀錄使用同一個 Transaction
         # ========================================
-        sync_performance_history(
-            db=db,
-            analysis_record=record,
-            analysis_state=analysis_state
-        )
+        if not e215_manual:
+            sync_performance_history(
+                db=db,
+                analysis_record=record,
+                analysis_state=analysis_state
+            )
 
         if owns_session:
             db.commit()
