@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block title %}{{ method }} 濾膜法登錄{% endblock %}
+{% block content %}
+<style>
+/* mf-stable-input-v1 */
+.mf-table [data-mf-output] {display:block;box-sizing:border-box;height:84px;min-height:84px;max-height:84px;overflow:auto;scrollbar-gutter:stable;line-height:1.5}
+.mf-table [data-mf-output]:focus-visible {outline:2px solid #b5d0f2;outline-offset:1px}
+#mf-batches [data-time-check] {box-sizing:border-box;height:96px;min-height:96px;max-height:96px;overflow:auto;scrollbar-gutter:stable;padding:8px 10px;margin:8px 0;border-radius:6px;color:#64748b;background:#f8fafc}
+#mf-status {box-sizing:border-box;min-height:40px;padding:6px 10px;border:1px solid transparent;border-radius:6px;line-height:26px}
+#mf-status.mf-saved {border-color:#fed7aa}
+
+/* mf-ui-adjust-v1 */
+.mf-head {display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.mf-meta {display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:12px;margin:14px 0}
+.mf-meta label {display:grid;gap:4px;min-width:0;font-size:12px}
+.mf-meta input,.mf-time select {box-sizing:border-box;width:100%;min-width:0}
+.mf-time {display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:3px;align-items:center;min-width:0}
+.mf-datetime input {grid-column:1/-1}
+.mf-table {width:100%;table-layout:fixed;border-collapse:collapse;min-width:1680px;font-size:12px}
+.mf-table th,.mf-table td {border:1px solid #d3ddea;padding:6px;vertical-align:middle}
+.mf-table th {background:#edf3f7;text-align:left}
+.mf-table input.eacs-form-control,.mf-table select.eacs-form-control {
+ box-sizing:border-box;width:100% !important;max-width:100% !important;min-width:0 !important;
+ height:32px;min-height:32px;font-size:12px !important;line-height:1.3;
+ padding:5px 6px !important;border-width:1px !important;transform:none !important;
+ transition:none !important;animation:none !important;
+}
+.mf-table input.eacs-form-control:focus,.mf-table select.eacs-form-control:focus {
+ width:100% !important;max-width:100% !important;min-width:0 !important;
+ height:32px;font-size:12px !important;padding:5px 6px !important;border-width:1px !important;
+ transform:none !important;transition:none !important;animation:none !important;
+ outline:2px solid #b5d0f2;outline-offset:1px;
+}
+.mf-table .eacs-button {font-size:12px;line-height:1.3;padding:6px 8px;min-width:0;white-space:nowrap;transition:none}
+.mf-table>thead th {white-space:nowrap}
+.mf-table>tbody>tr>td {overflow-wrap:anywhere}
+.mf-meta .eacs-form-control,.mf-meta .eacs-form-control:focus {
+ box-sizing:border-box;width:100% !important;max-width:100% !important;min-width:0 !important;
+ height:32px;font-size:12px !important;padding:5px 6px !important;border-width:1px !important;
+ transform:none !important;transition:none !important;animation:none !important;
+}
+.mf-table .mf-time select.eacs-form-control {padding-left:3px !important;padding-right:1px !important}
+.mf-table .mf-time select.eacs-form-control:focus {padding-left:3px !important;padding-right:1px !important}
+.mf-table input {min-height:32px}
+.mf-rows {width:100%;table-layout:fixed;border-collapse:collapse;min-width:0;font-size:12px}
+.mf-rows td,.mf-rows th {padding:4px}
+.mf-result {min-width:0;overflow-wrap:anywhere;line-height:1.5}
+.mf-report,.mf-dup {white-space:nowrap;font-variant-numeric:tabular-nums}
+.mf-pass {color:#15803d;font-weight:600}
+.mf-fail {color:#b91c1c;font-weight:600}
+.mf-neutral {color:#64748b}
+.mf-error {color:#b91c1c}
+.mf-saved {color:#b45309;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:6px 10px}
+.mf-note {font-size:12px;color:#64748b}
+@media(max-width:1000px){.mf-meta{grid-template-columns:repeat(2,minmax(180px,1fr))}}
+/* mf-sample-widths-v1 */
+#mf-batches .mf-table {width:100% !important;min-width:0 !important;max-width:100% !important;table-layout:fixed}
+#mf-batches .mf-table>thead th {white-space:normal;overflow-wrap:anywhere;padding:5px 4px}
+#mf-batches .mf-table>tbody>tr>td {padding:5px 4px;min-width:0}
+#mf-batches .mf-rows {width:100% !important;min-width:0 !important;max-width:100%;table-layout:fixed}
+#mf-batches .mf-rows th,#mf-batches .mf-rows td {padding:3px;white-space:normal;overflow-wrap:anywhere}
+#mf-batches .mf-table input.eacs-form-control,#mf-batches .mf-table input.eacs-form-control:focus,
+#mf-batches .mf-table select.eacs-form-control,#mf-batches .mf-table select.eacs-form-control:focus {
+ width:100% !important;max-width:100% !important;min-width:0 !important;padding:4px 3px !important;font-size:12px !important;
+}
+#mf-batches .mf-time {min-width:0;gap:2px}
+#mf-batches .mf-table .eacs-button {padding:6px;font-size:12px}
+@media(max-width:1100px){ #mf-batches .mf-table{min-width:1100px !important;max-width:none !important}}
+</style>
+<section class="eacs-card">
+  <h1>{{ report.FORM_TITLE }}</h1>
+  <p>{{ report.DOC_NO }}｜版次 {{ report.REVISION }}｜{{ method }}｜{{ item.EXAMNO }}｜{{ item.EXAMNAME }}</p>
+  <p>分析期間：{{ form.analysis_start_date }} ～ {{ form.analysis_end_date }}｜分析人員：{{ current_user.employee_name }}</p>
+  <p>DUP 管制上限：<strong>{{ control.DC_UCL }}</strong>（{{ control.CTRL_YEAR }}年度）</p>
+  <p><a href="{{ url_for('basic_info') }}">返回基本資料</a></p>
+</section>
+<section class="eacs-card mf-head">
+  <span id="mf-status" role="status" style="margin-right:auto"></span>
+  <button type="button" id="mf-draft" class="eacs-button eacs-button-primary">暫存分析資料</button>
+  <button type="button" id="mf-submit" class="eacs-button eacs-button-primary">儲存分析紀錄</button>
+  <button type="button" id="mf-pdf" class="eacs-button">匯出檢驗紀錄表</button>
+  <button type="button" id="mf-lims" class="eacs-button">匯出 LIMS</button>
+</section>
+<section class="eacs-card">
+  <h2>查詢樣品</h2>
+  <form method="get" action="{{ url_for('membrane_bp.entry') }}" class="mf-head">
+    <input type="hidden" name="lookup" value="1"><input type="hidden" name="method" value="{{ method }}">
+    <label>收樣起日 <input type="date" name="received_from" value="{{ lookup.start }}" max="{{ lookup.end }}" required></label>
+    <span>至分析日 {{ lookup.end }}</span>
+    <button class="eacs-button eacs-button-primary">查詢樣品</button>
+  </form>
+  <p><button type="button" id="mf-manual" class="eacs-button">新增手動樣品（無 LIMS）</button>
+  {% if lookup.rows %}<button type="button" id="mf-picker-open" class="eacs-button">選擇樣品（{{ lookup.rows|length }}筆）</button>{% endif %}</p>
+  {% if lookup.error %}<p class="mf-error">{{ lookup.error }}</p>{% elif lookup.rows == [] %}<p>沒有符合條件的樣品。</p>{% endif %}
+  <dialog id="mf-picker" style="width:min(850px,90vw)">
+    <h2>選擇樣品</h2>
+    <div style="max-height:55vh;overflow:auto"><table class="eacs-table"><thead><tr><th>選取</th><th>樣品編號</th><th>分析人員</th><th>收樣日期</th></tr></thead><tbody>
+    {% for row in lookup.rows or [] %}<tr><td><input type="checkbox" data-sid="{{ row.sid }}" data-number="{{ row.number }}"></td><td>{{ row.number }}</td><td>{{ row.employee }}</td><td>{{ row.received }}</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="mf-head"><button type="button" id="mf-all" class="eacs-button">全選</button><button type="button" id="mf-cancel" class="eacs-button">取消</button><button type="button" id="mf-confirm" class="eacs-button eacs-button-primary">確定</button></p>
+  </dialog>
+</section>
+<section class="eacs-card"><h2>1. 樣品檢驗紀錄</h2><p id="mf-count"></p><div id="mf-batches"></div>
+<p class="mf-note">{{ '每皿過濾10 mL，稀釋倍數1＝原液、10＝10¹；程式依E202規定選皿。' if method == 'E202' else '每皿取100 mL原液，結果為兩皿菌落數平均。' }}<br>菌落數可填非負整數或TNTC。DUP以原始菌落數計算；一皿為0時兩皿都加1，兩皿均小於20免管制。<br>輸入後自動計算；可暫存未完成資料；儲存分析紀錄前須通過時間、空白及DUP檢查，儲存後進入待審核。數據頁PDF為預覽；正式紀錄頁PDF使用儲存快照。LIMS品管每批次匯出一筆代表DUP，備註記錄代表樣品。</p>
+</section>
+<script>
+(()=>{
+const method={{ method|tojson }}, upper={{ control.DC_UCL|tojson }}, draft={{ (draft or none)|tojson }};
+const get=id=>document.getElementById(id), root=get('mf-batches'), status=get('mf-status');
+let workId=draft?.work_id||null, revision=draft?.revision||0, busy=false, serial=0, version=0;
+let data=draft?.state?.data||{samples:[],batches:[]};
+const limsRows={{ (lookup.rows or [])|tojson }};
+let autoTimer=null, autoPending=false;
+function scheduleCalculation(){
+  clearTimeout(autoTimer);
+  if(!data.samples.length)return;
+  autoTimer=setTimeout(()=>{autoPending=false;persist('calculate',true);},450);
+}
+function showTimeChecks(checks){for(const check of checks||[]){const panel=root.querySelector('[data-time-check="'+check.batch+'"]');if(!panel)continue;panel.replaceChildren();panel.style.background=check.passed?'#f0fdf4':'#fff7ed';panel.style.color=check.passed?'#15803d':'#b45309';for(const text of check.passed?['時間檢查通過（採樣後24小時內開始培養；培養22～26小時）。']:check.issues){const line=document.createElement('div');line.textContent=text;panel.append(line);}}}
+const message=(text,error=false)=>{status.textContent=text;status.className=error?'mf-error':(text.includes('已暫存')?'mf-saved':'');};
+function input(type,value,label){const x=document.createElement('input');x.type=type;x.className='eacs-form-control';x.value=value||'';x.setAttribute('aria-label',label);return x;}
+function timeSelect(value,label,write,dateToo=false){
+ const group=document.createElement('div');group.className='mf-time'+(dateToo?' mf-datetime':'');
+ let day=null;if(dateToo){day=input('date',value.split('T')[0],label+'日期');group.append(day);}
+ const part=(count,label)=>{const x=document.createElement('select');x.className='eacs-form-control';x.setAttribute('aria-label',label);x.add(new Option(label,''));for(let i=0;i<count;i++){const v=String(i).padStart(2,'0');x.add(new Option(v,v));}return x;};
+ const h=part(24,label+'時'),m=part(60,label+'分'),t=dateToo?(value.split('T')[1]||''):value;
+ h.options[0].text='時';m.options[0].text='分';h.value=t.slice(0,2);m.value=t.slice(3,5);
+ const colon=document.createElement('span');colon.textContent=':';group.append(h,colon,m);
+ for(const x of [day,h,m].filter(Boolean))x.addEventListener('change',()=>write(h.value&&m.value&&(!day||day.value)?(day?day.value+'T':'')+h.value+':'+m.value:''));
+ return group;
+}
+const newLine=()=>({factor:'1',x:'',y:''});
+function newRow(sid,number,source=null){return {sid,number,time:'',sampled_at:source?.sampled_at||'',received_at:source?.received_at||'',inspection:'',lines:[newLine()]};}
+function newBatch(){return {medium:'m-ENDO-Agar',temperature:'35 ± 1',sampling_date:'',received_at:'',start:'',end:'',blank:{lines:[newLine()]}};}
+function td(tr,node){const c=tr.insertCell();if(node instanceof Node)c.append(node);else c.textContent=node;return c;}
+function render(){
+ while(data.batches.length<Math.ceil(data.samples.length/10))data.batches.push(newBatch());
+ data.batches.length=Math.ceil(data.samples.length/10);root.replaceChildren();
+ get('mf-count').textContent='已選 '+data.samples.length+' 筆樣品';
+ data.batches.forEach((batch,index)=>{
+ const section=document.createElement('section');const heading=document.createElement('h3');heading.textContent='批次 '+(index+1);section.append(heading);
+ if(!Object.prototype.hasOwnProperty.call(batch,'inspection_date'))batch.inspection_date={{ form.analysis_start_date|tojson }};
+ const timeCheck=document.createElement('div');timeCheck.dataset.timeCheck=String(index);timeCheck.setAttribute('role','status');section.append(timeCheck);
+ const meta=document.createElement('div');meta.className='mf-meta';
+ for(const [key,label,type] of [['method','檢驗方法','readonly'],['medium','培養基','text'],['temperature','培養溫度（°C）','text'],['inspection_date','檢驗分析日期','date'],['start','培養起始日期／時間','datetime'],['end','培養終止日期／時間','datetime']]){
+  const wrap=document.createElement('label');wrap.textContent=label;let control;
+  if(type==='datetime')control=timeSelect(batch[key]||'',label,v=>batch[key]=v,true);
+  else {control=input(type==='readonly'?'text':type,type==='readonly'?{{ control.EM_NO|tojson }}:batch[key],label);control.readOnly=type==='readonly';control.addEventListener('input',()=>batch[key]=control.value);}
+  wrap.append(control);meta.append(wrap);
+ }section.append(meta);
+ const scroll=document.createElement('div');scroll.style.overflowX='auto';const table=document.createElement('table');table.className='mf-table';
+ const columns=document.createElement('colgroup');for(const width of [10,11,11,8,29,10,8,6,7]){const col=document.createElement('col');col.style.width=width+'%';columns.append(col);}table.append(columns);
+ const header=table.createTHead().insertRow();for(const text of ['樣品編號','採樣日期時間','收檢日期時間','檢驗時間','原始數據','選用結果','報告值(CFU/100 mL)','DUP差異','符合性']){const th=document.createElement('th');th.textContent=text;header.append(th);}
+ const body=table.createTBody();
+ const rows=[{...batch.blank,sid:'BLANK-'+index,number:'實驗室空白',blank:true},...data.samples.slice(index*10,index*10+10)];
+ for(const row of rows){
+  const tr=body.insertRow();tr.dataset.sid=row.sid;
+  if(row.blank)td(tr,row.number);else{const name=input('text',row.number,'樣品編號');name.maxLength=64;name.addEventListener('input',()=>row.number=name.value);td(tr,name);}
+  td(tr,row.blank?'—':timeSelect(row.sampled_at||'','採樣日期時間',v=>{row.sampled_at=v;row.time=v.split('T')[1]||'';},true));
+  td(tr,row.blank?'—':timeSelect(row.received_at||'','收檢日期時間',v=>row.received_at=v,true));
+  td(tr,row.blank?'—':timeSelect(row.inspection,'檢驗時間',v=>row.inspection=v));
+  const details=document.createElement('div');const lines=document.createElement('table');lines.className='mf-rows';
+  const lineColumns=document.createElement('colgroup');for(const width of [20,10,26,26,18]){const col=document.createElement('col');col.style.width=width+'%';lineColumns.append(col);}lines.append(lineColumns);
+ const lh=lines.createTHead().insertRow();for(const text of ['稀釋倍數','體積(mL)','X培養皿','Y培養皿','操作']){const th=document.createElement('th');th.textContent=text;lh.append(th);}
+  const lb=lines.createTBody();row.lines.forEach((line,li)=>{
+   const lr=lb.insertRow();const factor=document.createElement('select');factor.className='eacs-form-control';
+   for(const v of (method==='E230'||row.blank?['1']:['1','10','100','1000','10000','100000','1000000']))factor.add(new Option(v,v));factor.value=line.factor;factor.addEventListener('change',()=>line.factor=factor.value);td(lr,factor);td(lr,method==='E230'?'100':'10');
+   for(const key of ['x','y']){const c=input('text',line[key],key.toUpperCase()+'菌落數或TNTC');c.maxLength=9;c.addEventListener('input',()=>line[key]=c.value.trim().toUpperCase());td(lr,c);}
+   const del=document.createElement('button');del.type='button';del.className='eacs-button';del.textContent='刪除';del.disabled=row.lines.length===1;del.addEventListener('click',()=>{row.lines.splice(li,1);version++;render();scheduleCalculation();});td(lr,del);
+  });details.append(lines);
+  if(method==='E202'&&!row.blank){const add=document.createElement('button');add.type='button';add.className='eacs-button';add.textContent='新增稀釋倍數';add.disabled=row.lines.length>=7;add.addEventListener('click',()=>{const used=new Set(row.lines.map(l=>l.factor));const f=['1','10','100','1000','10000','100000','1000000'].find(v=>!used.has(v));if(f){row.lines.push({factor:f,x:'',y:''});version++;render();scheduleCalculation();}});details.append(add);}
+  td(tr,details);
+  const res=stableOutput(tr,'尚未計算');res.className='mf-result';res.dataset.result='';
+  const report=stableOutput(tr,'—');report.className='mf-result mf-report';report.dataset.report='';
+  const dup=stableOutput(tr,'—');dup.className='mf-result mf-dup';dup.dataset.dup='';
+  const compliance=stableOutput(tr,'未判定');compliance.className='mf-result mf-neutral';compliance.dataset.compliance='';
+ }scroll.append(table);section.append(scroll);root.append(section);
+ });
+}
+function stableOutput(tr,text){const box=document.createElement('div');box.textContent=text;box.dataset.mfOutput='';box.tabIndex=0;td(tr,box);return box;}
+// Keep Enter in text/count inputs from invoking an implicit submit or a global shortcut.
+root.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.isComposing&&event.target.matches('input[type="text"],input[type="number"]')){event.preventDefault();event.stopPropagation();}});
+function invalidate(){version++;root.querySelectorAll('[data-time-check]').forEach(el=>{el.textContent='時間已修改，正在重新檢查。';el.style.color='#64748b';});root.querySelectorAll('[data-result]').forEach(el=>{el.textContent='尚未計算';el.classList.remove('mf-error');});root.querySelectorAll('[data-dup]').forEach(el=>{el.textContent='—';el.classList.remove('mf-error');});root.querySelectorAll('[data-report]').forEach(el=>{el.textContent='—';});root.querySelectorAll('[data-compliance]').forEach(el=>{el.textContent='未判定';el.className='mf-result mf-neutral';el.removeAttribute('title');});message('資料已修改，尚未暫存。');scheduleCalculation();}
+root.addEventListener('input',invalidate);root.addEventListener('change',invalidate);
+get('mf-manual').addEventListener('click',()=>{if(busy||data.samples.length>=500)return;let sid;do{sid='MANUAL-'+(++serial);}while(data.samples.some(s=>s.sid===sid));data.samples.push(newRow(sid,''));version++;render();scheduleCalculation();});
+const dialog=get('mf-picker'), boxes=[...dialog.querySelectorAll('input[type=checkbox]')];let picked=[];
+get('mf-picker-open')?.addEventListener('click',()=>{if(data.samples.length){message('請另開一份紀錄選取LIMS樣品，避免取代現有輸入。',true);return;}picked=[];boxes.forEach(b=>b.checked=false);dialog.showModal();});
+boxes.forEach(b=>b.addEventListener('change',()=>{if(b.checked)picked.push(b.dataset.sid);else picked=picked.filter(x=>x!==b.dataset.sid);}));
+get('mf-all').addEventListener('click',()=>{boxes.forEach(b=>{if(!b.checked){b.checked=true;picked.push(b.dataset.sid);}});});get('mf-cancel').addEventListener('click',()=>dialog.close());
+get('mf-confirm').addEventListener('click',()=>{if(picked.length>500){message('最多500筆。',true);return;}data.samples=picked.map(sid=>{const b=boxes.find(b=>b.dataset.sid===sid);return newRow(sid,b.dataset.number,limsRows.find(r=>String(r.sid)===sid));});version++;render();scheduleCalculation();dialog.close();});
+async function persist(action,automatic=false){
+ if(busy){if(automatic)autoPending=true;return;}
+ if(!data.samples.length){if(!data.samples.length)message('請先加入樣品。',true);return;}
+ busy=true;get('mf-draft').disabled=true;get('mf-submit').disabled=true;get('mf-pdf').disabled=true;get('mf-lims').disabled=true;if(action==='submit'){root.inert=true;message('正在檢查並儲存分析紀錄…');}const sentVersion=version;
+ try{
+  const response=await fetch({{ url_for('membrane_bp.entry')|tojson }},{method:'POST',headers:{'Content-Type':'application/json','X-Membrane-CSRF':{{ csrf|tojson }}},body:JSON.stringify({action,method,work_id:workId,revision,data})});
+  if(action==='export_pdf'&&response.ok){const blob=await response.blob();const link=document.createElement('a');const href=URL.createObjectURL(blob);link.href=href;link.download=method+'_Preview.pdf';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(href),60000);message('檢驗紀錄表已匯出（預覽）；本次匯出未儲存或送審。');return;}
+  if(action==='export_lims'&&response.ok){const blob=await response.blob();const link=document.createElement('a');const href=URL.createObjectURL(blob);link.href=href;link.download=method+'_LIMS_Import.xlsx';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(href),60000);message('LIMS檔案已匯出；本次匯出未儲存或送審。');return;}
+  const result=await response.json();if(!response.ok)throw new Error(result.error||'作業失敗');
+  if(sentVersion===version)showTimeChecks(result.time_checks);
+  if(result.formal){clearTimeout(autoTimer);autoPending=false;location.assign(result.url);return;}
+  if(action==='draft'){workId=result.work_id;revision=result.revision;history.replaceState(null,'',result.url);message(sentVersion===version?'分析資料已暫存；可保留此網址重新開啟。':'已暫存送出時的版本，目前仍有新修改。');}
+  else{
+   if(sentVersion!==version){scheduleCalculation();if(!automatic)message('資料已修改，正在重新計算。');return;}
+   let bad=0;for(const item of result.results){const tr=[...root.querySelectorAll('tr[data-sid]')].find(t=>t.dataset.sid===item.sid);if(!tr)continue;const cell=tr.querySelector('[data-result]'),report=tr.querySelector('[data-report]'),dup=tr.querySelector('[data-dup]'),compliance=tr.querySelector('[data-compliance]');
+    if(item.error){cell.textContent=item.error;cell.classList.add('mf-error');report.textContent='—';dup.textContent='—';compliance.textContent='未判定';compliance.className='mf-result mf-neutral';compliance.title=item.error;bad++;continue;}
+    const r=item.result;cell.classList.remove('mf-error');cell.textContent=r.factor===null?r.reason:r.factor+' 倍；'+r.reason;
+    report.textContent=r.report;
+    dup.textContent=r.dup.display;
+    compliance.title=r.dup.status;
+    if(r.dup.applicable===false){compliance.textContent='不適用';compliance.className='mf-result mf-neutral';}
+    else if(r.dup.passed===true){compliance.textContent=r.dup.exempt?'通過（免管制）':'通過';compliance.className='mf-result mf-pass';}
+    else if(r.dup.passed===false){compliance.textContent='不符合';compliance.className='mf-result mf-fail';}
+    else{compliance.textContent='待確認';compliance.className='mf-result mf-neutral';}
+    if(r.dup.passed===false||r.needs_review)bad++;
+   }if(!automatic)message(bad?'計算完成，有 '+bad+' 筆需確認或重新分析。':'計算完成。',!!bad);
+  }
+ }catch(e){message(e.message,true);}finally{root.inert=false;busy=false;get('mf-draft').disabled=false;get('mf-submit').disabled=false;get('mf-pdf').disabled=false;get('mf-lims').disabled=false;if(autoPending){autoPending=false;scheduleCalculation();}}
+}
+get('mf-draft').addEventListener('click',()=>persist('draft'));get('mf-submit').addEventListener('click',()=>persist('submit'));get('mf-pdf').addEventListener('click',()=>persist('export_pdf'));get('mf-lims').addEventListener('click',()=>persist('export_lims'));render();scheduleCalculation();
+})();
+</script>
+{% endblock %}

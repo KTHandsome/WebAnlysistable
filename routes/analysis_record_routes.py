@@ -355,6 +355,10 @@ def analysis_record_detail(analysis_id):
         if record is None:
             return "查無此分析紀錄。", 404
 
+        if str(record.method_code or "").strip().upper() in {"E202", "E230"}:
+            from services.membrane_record_service import detail
+            return detail(db, record)
+
         if str(record.method_code or "").strip().upper() == "E215":
             import json
             work = db.query(AnalysisWorkState).filter_by(analysis_id=analysis_id).first()
@@ -481,11 +485,15 @@ def export_analysis_record_pdf(analysis_id):
         if record is None:
             return "查無此分析紀錄。", 404
 
+        if str(record.method_code or "").strip().upper() in {"E202", "E230"}:
+            from services.membrane_pdf_service import export_formal_pdf
+            return export_formal_pdf(db, record)
+
         if str(record.method_code or "").strip().upper() == "E215":
             import json
             from services.e215_pdf_service import build_coliform_pdf
-            if str(record.exam_no or "").strip() not in {"D-E21501", "W-E21501", "G-E21501"}:
-                return "目前僅開放大腸桿菌群檢驗紀錄表。", 409
+            if str(record.exam_no or "").strip() not in {"D-E21501", "W-E21501", "G-E21501", "D-E21502", "W-E21502", "G-E21502"}:
+                return "不支援此 E215 檢測項目的檢驗紀錄表。", 409
             work = db.query(AnalysisWorkState).filter_by(analysis_id=analysis_id).first()
             if not work:
                 return "查無 E215 正式紀錄快照。", 404
@@ -494,7 +502,8 @@ def export_analysis_record_pdf(analysis_id):
                 report = json.loads(work.report_data_json or "{}")
                 if not isinstance(report, dict):
                     raise ValueError("Invalid report snapshot")
-                pdf = build_coliform_pdf(state["e215_batches"], report)
+                pdf = build_coliform_pdf(state["e215_batches"], report,
+                                         include_ecoli=str(record.exam_no or "").strip().endswith("E21502"))
             except (KeyError, ValueError, TypeError, IndexError):
                 return "E215 正式紀錄明細或報表設定不完整，無法匯出。", 422
             return send_file(pdf, mimetype="application/pdf", as_attachment=True,
@@ -671,11 +680,15 @@ def export_analysis_record_lims(analysis_id):
         if record is None:
             return "查無此分析紀錄。", 404
 
+        if str(record.method_code or "").strip().upper() in {"E202", "E230"}:
+            from services.membrane_lims_service import export_formal_lims
+            return export_formal_lims(db, record)
+
         if str(record.method_code or "").strip().upper() == "E215":
             import json
             from services.e215_lims_service import build_coliform_lims
-            if str(record.exam_no or "").strip() not in {"D-E21501", "W-E21501", "G-E21501"}:
-                return "目前僅支援大腸桿菌群的 LIMS 匯出。", 409
+            if str(record.exam_no or "").strip() not in {"D-E21501", "W-E21501", "G-E21501", "D-E21502", "W-E21502", "G-E21502"}:
+                return "不支援此 E215 檢測項目的 LIMS 匯出。", 409
             work = db.query(AnalysisWorkState).filter_by(analysis_id=analysis_id).first()
             if not work:
                 return "查無 E215 正式紀錄快照。", 404
@@ -893,6 +906,10 @@ def approve_analysis_record(analysis_id):
         if record is None:
             return "查無此分析紀錄。", 404
 
+        if str(record.method_code or "").strip().upper() in {"E202", "E230"}:
+            from services.membrane_record_service import review
+            return review(db, analysis_id, "approve")
+
         if record.status != "UNDER_REVIEW":
             return "只有待審核紀錄可以執行審核通過。", 400
 
@@ -979,6 +996,10 @@ def reject_analysis_record(analysis_id):
         if record is None:
             return "查無此分析紀錄。", 404
 
+        if str(record.method_code or "").strip().upper() in {"E202", "E230"}:
+            from services.membrane_record_service import review
+            return review(db, analysis_id, "reject")
+
         if record.status != "UNDER_REVIEW":
             return "只有待審核紀錄可以退回修正。", 400
 
@@ -1062,6 +1083,10 @@ def reopen_approved_analysis_record(analysis_id):
         if record is None:
             return "查無此分析紀錄。", 404
 
+        if str(record.method_code or "").strip().upper() in {"E202", "E230"}:
+            from services.membrane_record_service import review
+            return review(db, analysis_id, "reopen")
+
         if record.status != "APPROVED":
             return (
                 "只有已審核紀錄可以再次退回修正。",
@@ -1132,6 +1157,10 @@ def resume_analysis_record(analysis_id):
 
         if record is None:
             return "查無此分析紀錄。", 404
+
+        if str(record.method_code or "").strip().upper() in {"E202", "E230"}:
+            from services.membrane_record_service import resume
+            return resume(db, record)
 
         if str(record.method_code or "").strip().upper() == "E215":
             from models import AnalysisWorkDraft

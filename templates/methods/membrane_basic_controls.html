@@ -1,0 +1,39 @@
+<div id="membrane-controls" hidden style="grid-column:1/-1">
+  <div class="eacs-info-grid">
+    <label>檢驗項目代碼<input id="membrane-exam" readonly class="eacs-form-control"></label>
+    <label>DUP 對數差異管制上限<input id="membrane-upper" readonly class="eacs-form-control"></label>
+  </div>
+  <p id="membrane-basic-message" role="status"></p>
+  <button type="button" id="membrane-start" class="eacs-button eacs-button-primary" disabled>開始濾膜法登錄</button>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+  const options={{ membrane_options|default([])|tojson }};
+  const get=id=>document.getElementById(id);
+  const value=id=>(get(id)?.value||'').trim();
+  const form=get('basic-info-form'), panel=get('membrane-controls'), button=get('membrane-start');
+  function refresh(){
+    const method=value('method_code').toUpperCase(), active=['E202','E230'].includes(method);
+    panel.hidden=!active;
+    if(!active)return;
+    const query=get('query-control-button');if(query)query.hidden=true;
+    const instrument=get('instrument_id')?.closest('.eacs-form-field');if(instrument)instrument.hidden=true;
+    const matches=options.filter(o=>o.METHOD_CODE.toUpperCase()===method&&o.CATEGORY_CODE===value('category')&&o.EXAMNAME===value('exam_name'));
+    const item=matches.length===1?matches[0]:null;
+    get('membrane-exam').value=item?.EXAMNO||'';
+    get('membrane-upper').value=item?.control?.DC_UCL||'';
+    const error=!item?'請選擇唯一對應的方法、類別與測項。':!item.control?'請查詢此年度的管制設定。':item.control.DC!=='1'?'此檢項未啟用DUP管制。':item.control.DC_UCL===''?'DUP上限未填。':'';
+    get('membrane-basic-message').textContent=error||('年度 '+value('ctrl_year')+'；DUP使用對數差異值，非百分比。');
+    button.disabled=!!error;
+  }
+  button.addEventListener('click',event=>{
+    event.preventDefault();event.stopImmediatePropagation();
+    if(button.disabled||!form.reportValidity())return;
+    get('next_action').value='membrane_entry';form.target='_self';HTMLFormElement.prototype.submit.call(form);
+  },true);
+  form.addEventListener('input',refresh);form.addEventListener('change',event=>{
+    if(event.target.id==='ctrl_year'&&['E202','E230'].includes(value('method_code').toUpperCase())){get('next_action').value='';form.target='_self';HTMLFormElement.prototype.submit.call(form);return;}
+    refresh();
+  });refresh();
+});
+</script>

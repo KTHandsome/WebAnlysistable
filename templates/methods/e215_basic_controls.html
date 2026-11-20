@@ -1,6 +1,6 @@
 <div id="e215-entry-controls" hidden style="grid-column:1/-1">
     <label>檢驗項目代碼 <input id="e215-exam-no" readonly class="eacs-form-control"></label>
-    <button type="submit" class="eacs-button eacs-button-primary" id="e215-start" disabled>開始手動登錄</button>
+    <button type="button" class="eacs-button eacs-button-primary" id="e215-start" disabled>開始手動登錄</button>
     <p id="e215-entry-message" role="status"></p>
 </div>
 <script>
@@ -28,7 +28,15 @@ document.addEventListener("DOMContentLoaded", function () {
         get("e215-entry-message").textContent = message;
         button.disabled = !!message || !manual;
     }
-    button.addEventListener("click", () => { get("next_action").value = "e215_entry"; });
+    button.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (button.disabled || !form.reportValidity()) return;
+        get("next_action").value = "e215_entry";
+        form.target = "_self";
+        // Native submission bypasses generic submit handlers that open new tabs.
+        HTMLFormElement.prototype.submit.call(form);
+    }, true);
     form.addEventListener("input", refresh);
     form.addEventListener("change", refresh);
     refresh();

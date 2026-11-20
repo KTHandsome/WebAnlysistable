@@ -1,4 +1,4 @@
-"""Lab-A-W-068 export for the E215 Coliform formal snapshot."""
+"""E215 PDF export using report settings and saved analyte results."""
 from decimal import Decimal
 import re
 from datetime import date, datetime
@@ -23,7 +23,9 @@ def roc(value, with_time=False):
     return text + parsed.strftime("    %H:%M") if with_time else text
 
 
-def build_coliform_pdf(batches, report, preview=False):
+def build_coliform_pdf(batches, report, preview=False, include_ecoli=False):
+    from services.e215_validation_service import validate_batches
+    validate_batches(batches, include_ecoli=include_ecoli)
     keys = ("COMPANY_NAME", "FORM_TITLE", "DOC_NO", "REVISION", "ISSUE_DATE")
     company, title, doc_no, revision, issue_date = (str(report.get(k) or "").strip() for k in keys)
     if not all((company, title, doc_no, revision, issue_date)):
@@ -43,23 +45,33 @@ def build_coliform_pdf(batches, report, preview=False):
         current, spans = [], []
         for row in batch["rows"]:
             group = []
-            for line in row["lines"]:
-                output = next((x for x in line["outputs"] if x["analyte"] == "Coliform"), None)
-                if output is None:
-                    raise ValueError("正式紀錄缺少 Coliform 結果。")
-                group.append([row["sample_id"], "大腸桿菌群", row["time"] or "—", row["tray"],
-                              line["factor"], line["counts"][0],
-                              line["counts"][1] if row["tray"] == "97" else "—",
-                              output["adjusted"], "是" if line["selected"] else "—",
-                              output["report"] if line["selected"] else "—"])
+            analytes = [("Coliform", "大腸桿菌群", 0)]
+            if include_ecoli:
+                analytes.append(("E. coli", "大腸桿菌", 2))
+            for analyte, label, offset in analytes:
+                for line in row["lines"]:
+                    output = next((x for x in line["outputs"] if x["analyte"] == analyte), None)
+                    if output is None or len(line["counts"]) < offset + 2:
+                        raise ValueError("正式紀錄缺少 {} 結果，請確認原始紀錄。".format(analyte))
+                    group.append([row["sample_id"], label, row["time"] or "—", row["tray"],
+                                  line["factor"], line["counts"][offset],
+                                  line["counts"][offset+1] if row["tray"] == "97" else "—",
+                                  output["adjusted"], "是" if line["selected"] else "—",
+                                  output["report"] if line["selected"] and not (include_ecoli and analyte == "Coliform") else "-"])
             while group:
                 n = min(len(group), 29)
                 if current and len(current) + n > 29:
                     pages.append((batch_no, batch["fields"], current, spans))
                     current, spans = [], []
                 first = len(current) + 1  # table row 0 is the header
-                if n > 1:
-                    spans.extend(("SPAN", (col, first), (col, first+n-1)) for col in range(4))
+                # Repeat merged identifiers and analyte labels on continuation pages.
+                for col in range(4):
+                    start = 0
+                    for stop in range(1, n+1):
+                        if stop == n or group[stop][col] != group[start][col]:
+                            if stop-start > 1:
+                                spans.append(("SPAN", (col, first+start), (col, first+stop-1)))
+                            start = stop
                 current.extend(group[:n])
                 group = group[n:]
         if current:

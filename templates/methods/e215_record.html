@@ -31,7 +31,7 @@
 </section>
 <section class="eacs-card">
   <h2 class="eacs-card-title">正式輸出</h2>
-  {% if record.exam_no in ('D-E21501','W-E21501','G-E21501') %}
+  {% if record.exam_no in ('D-E21501','W-E21501','G-E21501','D-E21502','W-E21502','G-E21502') %}
   <a class="eacs-button e215-outline" href="{{ url_for('analysis_record_bp.export_analysis_record_pdf', analysis_id=record.analysis_id) }}">匯出檢驗紀錄表</a>
   {% else %}
   <button type="button" class="eacs-button e215-outline" disabled>匯出檢驗紀錄表</button>
@@ -41,7 +41,7 @@
   {% else %}
   <button type="button" class="eacs-button e215-outline e215-outline--lims" disabled>匯出 LIMS</button>
   {% endif %}
-  <p>目前開放大腸桿菌群檢驗紀錄表。LIMS 僅匯出選定倍數的報告值。</p>
+  <p>LIMS 僅匯出本檢項選定倍數的報告值，不含實驗室空白。</p>
 </section>
 {% if can_review and record.status == 'UNDER_REVIEW' %}
 <section class="eacs-card">

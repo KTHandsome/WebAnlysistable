@@ -3,6 +3,7 @@ import json
 import re
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
+from services.e215_validation_service import validate_batches
 
 TABLE_51, TABLE_97 = json.loads(Path(__file__).with_name("e215_mpn.json").read_text(encoding="utf-8"))
 
@@ -71,4 +72,5 @@ def formal_state(state, exam_no):
             samples.append(dict(sample_id=name, role="BLANK" if sid is None else "SAMPLE",
                 dilution_factor=int(report_line["factor"]), remark=target + " MPN/100 mL"))
         batches.append(dict(fields=batch["fields"], rows=detail))
+    validate_batches(batches, include_ecoli=dual)
     return dict(state, e215_batches=batches, sample_qaqc_rows=samples)

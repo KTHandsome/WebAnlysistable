@@ -682,6 +682,34 @@ def load_method_analysis_modes():
         and modes <= {"SINGLE", "MULTI_ANALYTE"}
     }
 
+from services import membrane_setting_service
+from routes.membrane_routes import bp as membrane_bp
+app.register_blueprint(membrane_bp)
+
+
+@app.context_processor
+def inject_membrane_options():
+    form = session.get("basic_info_form") or {}
+    year = form.get("ctrl_year") or "2026"
+    try:
+        options = membrane_setting_service.options(app.root_path, year)
+    except (OSError, ValueError):
+        options = []
+    return {"membrane_options": options}
+
+
+def render_membrane_basic_info(form, error=None):
+    return render_template(
+        "basic_info.html", form_data=form, control_data=None, method_data=None,
+        error_message=error, instrument_options=[],
+        e215_options=e215_entry_service.load_options(app.root_path),
+        method_analysis_modes=load_method_analysis_modes(),
+        basic_info_validation_message="",
+        basic_info_required_fields=REQUIRED_FIELDS,
+        basic_info_date_fields=DATE_FIELDS, active_page="analysis_basic"
+    )
+
+
 from services import e215_entry_service
 
 
@@ -819,15 +847,38 @@ def e215_manual_entry():
                 from flask import send_file
                 from services.e215_formal_service import formal_state
                 from services.e215_pdf_service import build_coliform_pdf
-                if item["EXAMNO"] not in {"D-E21501", "W-E21501", "G-E21501"}:
-                    return jsonify(error="目前僅支援大腸桿菌群 PDF。"), 409
+                if item["EXAMNO"] not in {"D-E21501", "W-E21501", "G-E21501", "D-E21502", "W-E21502", "G-E21502"}:
+                    return jsonify(error="不支援此 E215 檢測項目的 PDF。"), 409
                 try:
                     preview = formal_state(state, item["EXAMNO"])
-                    document = build_coliform_pdf(preview["e215_batches"], dict(report), preview=True)
+                    document = build_coliform_pdf(preview["e215_batches"], dict(report), preview=True,
+                                                  include_ecoli=item["EXAMNO"].endswith("E21502"))
                 except ValueError as exc:
                     return jsonify(error=str(exc)), 400
                 return send_file(document, mimetype="application/pdf", as_attachment=True,
                                  download_name="E215_Preview.pdf", max_age=0)
+            if payload.get("action") == "export_lims":
+                import os
+                from types import SimpleNamespace
+                from flask import send_file
+                from services.e215_formal_service import formal_state
+                from services.e215_lims_service import build_coliform_lims
+                try:
+                    export_state = formal_state(state, item["EXAMNO"])
+                    export_record = SimpleNamespace(
+                        exam_no=item["EXAMNO"], analysis_start_date=form["analysis_start_date"],
+                        analyst_employee_id=user.get("employee_id") or "",
+                        analyst_name=user.get("employee_name") or "",
+                        method_name=export_state["e215_batches"][0]["fields"][0])
+                    document = build_coliform_lims(export_record, export_state,
+                        os.path.join(app.root_path, "resources", "lims", "lims匯入表格.xlsx"))
+                except ValueError as exc:
+                    return jsonify(error=str(exc)), 400
+                except FileNotFoundError:
+                    return jsonify(error="找不到 LIMS 匯入 Excel 範本。"), 404
+                return send_file(document,
+                    mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    as_attachment=True, download_name=item["EXAMNO"] + "_LIMS_Import.xlsx", max_age=0)
             formal = payload.get("action") == "submit"
             if saved and saved.get("formal_analysis_id"):
                 from models import AnalysisRecord
@@ -928,6 +979,9 @@ def basic_info():
         default_form_data.copy()
     )
 
+    if request.method == "GET" and membrane_setting_service.is_membrane(form_data):
+        return render_membrane_basic_info(form_data)
+
     if request.method == "GET" and e215_entry_service.is_e215(form_data):
         return render_e215_basic_info(form_data)
 
@@ -994,6 +1048,21 @@ def basic_info():
             )
             .strip()
         )
+
+        if membrane_setting_service.is_membrane(form_data):
+            form_data.update(instrument_id="", instrument_model="", wavelength="")
+            session["basic_info_form"] = form_data
+            error = None
+            try:
+                item, control = membrane_setting_service.settings(app.root_path, form_data)
+                form_data["selected_exam_no"] = item["EXAMNO"]
+                session["basic_info_form"] = form_data
+                if next_action == "membrane_entry":
+                    membrane_setting_service.entry_dates(form_data)
+                    return redirect(url_for("membrane_bp.entry", method=item["METHOD_CODE"]))
+            except (ValueError, OSError) as exc:
+                error = str(exc)
+            return render_membrane_basic_info(form_data, error)
 
         if e215_entry_service.is_e215(form_data):
             item, error = e215_entry_service.validate_entry(

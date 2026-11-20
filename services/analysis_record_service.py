@@ -219,6 +219,17 @@ def save_analysis_record(
         and strict_work_identity and db is not None
         and isinstance(analysis_state, dict) and analysis_state.get("e215_format") == 1
     )
+    # Membrane methods have paired colony counts instead of calibration curves.
+    if (str(form_data.get("method_code") or "").strip().upper() in {"E202", "E230"}
+            and strict_work_identity and db is not None
+            and isinstance(analysis_state, dict) and analysis_state.get("membrane_format") == 1):
+        from services.membrane_formal_service import formal_state
+        rebuilt = formal_state(analysis_state["data"], form_data["method_code"].upper(), control_data,
+                               analysis_state.get("formal_analysis_id"))
+        if analysis_state != rebuilt:
+            raise ValueError("濾膜法正式快照與重新計算的數據不一致。")
+        e215_manual = True
+
 
     if not control_data:
         raise ValueError(

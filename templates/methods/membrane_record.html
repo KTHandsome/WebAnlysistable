@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}分析紀錄明細 - {{ record.method_code }}{% endblock %}
+{% block content %}
+<style>
+.e215-review-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.e215-review-panel {border:1px solid #b9dcd7;border-radius:6px;padding:16px;background:#f5faf9;color:#006b65}
+.e215-review-panel--return {border-color:#efc4c4;background:#fff8f8;color:#a52222}
+.e215-review-panel p {color:#475569}
+.e215-review-panel textarea {display:block;box-sizing:border-box;width:100%;min-height:64px;margin:6px 0 12px}
+.e215-outline {background:white;border:1px solid #2459ae;color:#2459ae}
+.e215-outline--lims {border-color:#00796f;color:#00796f}
+@media(max-width:680px){.e215-review-grid{grid-template-columns:1fr}}
+</style>
+<div class="page-header">
+  <h1 class="page-title">分析紀錄明細</h1>
+  <div class="page-subtitle">查看正式分析紀錄與分析明細。</div>
+</div>
+<section class="eacs-card">
+  <h2 class="eacs-card-title">基本資料</h2>
+  {% set statuses = {'UNDER_REVIEW':('待審核','#fff7e6','#9a6700'),'APPROVED':('已審核','#eef6f4','#0f766e'),'REJECTED':('退回修正','#fef2f2','#b91c1c')} %}
+  {% set badge = statuses.get(record.status,(record.status,'#f1f5f9','#334155')) %}
+  <div class="eacs-info-grid">
+  {% for label, value in [('分析紀錄 ID',record.id),('狀態',badge[0]),('測項',record.exam_name),('方法',record.method_code),('正式方法',record.method_name),('項目代碼',record.exam_no),('分析日期',record.analysis_start_date|string ~ ' ～ ' ~ record.analysis_end_date|string),('分析人員',record.analyst_name)] %}
+    <div class="eacs-info-item">
+      <div class="eacs-info-label">{{ label }}</div>
+      <div class="eacs-info-value">{% if label == '狀態' %}<span style="padding:4px 8px;border-radius:999px;background:{{ badge[1] }};color:{{ badge[2] }};font-weight:600">{{ value }}</span>{% else %}{{ value or '—' }}{% endif %}</div>
+    </div>
+  {% endfor %}
+  </div>
+  <p><a href="{{ url_for('analysis_record_bp.analysis_records') }}">返回分析紀錄</a></p>
+</section>
+<section class="eacs-card">
+  <h2 class="eacs-card-title">正式輸出</h2>
+  <form method="get" action="{{ url_for('analysis_record_bp.export_analysis_record_pdf',analysis_id=record.analysis_id) }}" style="display:inline-block;margin:0">
+    <button type="submit" class="eacs-button eacs-button-primary">匯出檢驗紀錄表</button>
+  </form>
+  <form method="get" action="{{ url_for('analysis_record_bp.export_analysis_record_lims',analysis_id=record.analysis_id) }}" style="display:inline-block;margin:0">
+    <button type="submit" class="eacs-button eacs-button-primary">匯出 LIMS</button>
+  </form>
+  <p class="page-subtitle">依本筆正式紀錄保存的原始數據、結果與報表表頭匯出。</p>
+</section>
+{% if can_review and record.status == 'UNDER_REVIEW' %}
+<section class="eacs-card">
+  <h2 class="eacs-card-title">審核作業</h2>
+  <div class="e215-review-grid">
+    <form class="e215-review-panel" method="post" action="{{ url_for('membrane_bp.review_record', analysis_id=record.analysis_id, action='approve') }}">
+      <input type="hidden" name="membrane_csrf" value="{{ csrf }}">
+      <strong>審核通過</strong>
+      <p>確認批次與稀釋明細後，將此紀錄標為已審核。</p>
+      <label for="e215-approve-comment">審核備註</label>
+      <textarea id="e215-approve-comment" class="eacs-form-control" name="review_comment"></textarea>
+      <button class="eacs-button" style="background:#006b65;color:white" type="submit">審核通過</button>
+    </form>
+    <form class="e215-review-panel e215-review-panel--return" method="post" action="{{ url_for('membrane_bp.review_record', analysis_id=record.analysis_id, action='reject') }}">
+      <input type="hidden" name="membrane_csrf" value="{{ csrf }}">
+      <strong>退回修正</strong>
+      <p>填寫退回原因，由原分析人員修正後重新送審。</p>
+      <label for="e215-reject-comment">退回原因</label>
+      <textarea id="e215-reject-comment" class="eacs-form-control" name="review_comment" required></textarea>
+      <button class="eacs-button" style="background:#b91c1c;color:white" type="submit">退回修正</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+
+{% if record.status in ('APPROVED', 'REJECTED') %}
+<section class="eacs-card">
+  <h2 class="eacs-card-title">審核資訊</h2>
+  <div class="eacs-info-grid">
+    {% for label, value in [('審核結果',badge[0]),('審核人員',record.reviewer_name),('審核時間',record.reviewed_at),('審核備註 / 退回原因',record.review_comment)] %}
+      <div class="eacs-info-item"><div class="eacs-info-label">{{ label }}</div><div class="eacs-info-value">{{ value or '—' }}</div></div>
+    {% endfor %}
+  </div>
+  {% if can_review and record.status == 'APPROVED' %}
+    <hr>
+    <form class="e215-review-panel e215-review-panel--return" method="post" action="{{ url_for('membrane_bp.review_record', analysis_id=record.analysis_id, action='reopen') }}">
+      <input type="hidden" name="membrane_csrf" value="{{ csrf }}">
+      <strong>再次退回修正</strong>
+      <p>退回原分析人員修正，並保留原審核歷程。</p>
+      <label for="e215-reopen-comment">再次退回原因</label>
+      <textarea id="e215-reopen-comment" class="eacs-form-control" name="review_comment" required></textarea>
+      <button class="eacs-button" style="background:#b91c1c;color:white" type="submit">再次退回修正</button>
+    </form>
+  {% elif record.status == 'REJECTED' %}
+    <hr>
+    <form method="post" action="{{ url_for('analysis_record_bp.resume_analysis_record', analysis_id=record.analysis_id) }}">
+      <input type="hidden" name="membrane_csrf" value="{{ csrf }}">
+      <button class="eacs-button eacs-button-primary" type="submit" {% if not can_correct %} disabled{% endif %}>進入修正</button>
+      <p class="page-subtitle">{% if can_correct %}回到原分析資料進行修正，保留批次、原始數據與時間，不需重新選取樣品。{% else %}請由原分析人員或具審核權限的帳號登入後進入修正。{% endif %}</p>
+    </form>
+  {% endif %}
+</section>
+{% endif %}
+{% if true %}
+<section class="eacs-card">
+  <h2 class="eacs-card-title">審核歷程</h2>
+  <table class="eacs-table">
+    <thead><tr><th>時間</th><th>動作</th><th>狀態變更</th><th>執行人</th><th>備註 / 原因</th></tr></thead>
+    <tbody>
+    {% set status_names = {'UNDER_REVIEW':'待審核','APPROVED':'已審核','REJECTED':'退回修正','DRAFT':'暫存'} %}
+    {% for event in review_history|reverse %}
+      <tr><td>{{ event.created_at }}</td><td>{{ {'APPROVE':'審核通過','REJECT':'退回修正','REOPEN_AFTER_APPROVAL':'再次退回修正','RESUME_DRAFT':'繼續修正','RESUBMIT':'重新送審','SUBMIT':'送審'}.get(event.action, event.action) }}</td><td>{{ status_names.get(event.from_status, event.from_status or '—') }} → {{ status_names.get(event.to_status, event.to_status or '—') }}</td><td>{{ event.reviewer_name or '—' }}</td><td>{{ event.comment or '—' }}</td></tr>
+    {% else %}
+      {% if record.reviewed_at %}
+      <tr><td>{{ record.reviewed_at }}</td><td>最近審核結果（紀錄摘要）</td><td>— → {{ badge[0] }}</td><td>{{ record.reviewer_name or '—' }}</td><td>{{ record.review_comment or '—' }}</td></tr>
+      {% else %}
+      <tr><td colspan="5">查無已登錄的審核歷程。</td></tr>
+      {% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% for batch in batches %}
+<section class="eacs-card">
+  <h3>批次 {{ loop.index }}</h3>
+  <p>培養基：{{ batch.medium }}　培養溫度：{{ batch.temperature }} °C</p>
+  <p>檢驗分析日期：{{ batch.inspection_date }}　培養起迄：{{ batch.start|replace('T',' ') }} ～ {{ batch.end|replace('T',' ') }}</p>
+  <div style="overflow-x:auto"><table class="eacs-table" style="font-size:12px;width:100%;min-width:1000px">
+    <thead><tr><th>樣品編號</th><th>採樣日期時間</th><th>收檢日期時間</th><th>檢驗時間</th><th>稀釋倍數</th><th>體積(mL)</th><th>X培養皿</th><th>Y培養皿</th><th>選用結果</th><th>報告值(CFU/100 mL)</th><th>DUP差異</th><th>符合性</th></tr></thead>
+    <tbody>
+    {% for row in batch.rows %}
+      {% set r = row.result %}
+      {% for line in row.lines %}
+      <tr>
+        {% if loop.first %}<td rowspan="{{ row.lines|length }}">{{ row.number }}</td><td rowspan="{{ row.lines|length }}">{{ row.sampled_at|default((batch.sampling_date ~ 'T' ~ row.time) if row.time else '—')|replace('T',' ') }}</td><td rowspan="{{ row.lines|length }}">{{ (row.received_at|default(batch.received_at))|replace('T',' ') if not row.blank else '—' }}</td><td rowspan="{{ row.lines|length }}">{{ row.inspection or '—' }}</td>{% endif %}
+        <td>{{ line.factor }}</td><td>{{ 100 if record.method_code == 'E230' else 10 }}</td><td>{{ line.x }}</td><td>{{ line.y }}</td>
+        {% if loop.first %}
+        <td rowspan="{{ row.lines|length }}">{% if r.factor is not none %}{{ r.factor }} 倍；{% endif %}{{ r.reason }}</td>
+        <td rowspan="{{ row.lines|length }}">{{ r.report }}</td><td rowspan="{{ row.lines|length }}">{{ r.dup.display }}</td>
+        <td rowspan="{{ row.lines|length }}" style="color:{{ '#15803d' if r.dup.passed else ('#64748b' if r.dup.applicable is defined and not r.dup.applicable else '#b91c1c') }}">{{ '不適用' if r.dup.applicable is defined and not r.dup.applicable else ('通過（免管制）' if r.dup.exempt else ('通過' if r.dup.passed else '不符合')) }}</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody></table></div>
+</section>
+{% endfor %}
+{% endblock %}
