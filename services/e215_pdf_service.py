@@ -105,6 +105,13 @@ def build_coliform_pdf(batches, report, preview=False, include_ecoli=False):
         pdf.drawString(left, y, company)
         pdf.drawRightString(right, y, doc_no + "  版次：" + revision)
         pdf.drawRightString(right, y - 14, "發行日期：" + issue_date)
+        # e215-preview-header-v1
+        if preview:
+            pdf.saveState()
+            pdf.setFont(FONT, 8)
+            pdf.setFillGray(0.35)
+            pdf.drawRightString(right, y - 27, "預覽｜非正式紀錄")
+            pdf.restoreState()
         pdf.setFont(FONT, 15)
         pdf.setFont(FONT, min(15, 15 * (right-left) / max(1, pdfmetrics.stringWidth(title, FONT, 15))))
         pdf.drawCentredString(width / 2, y - 36, title)

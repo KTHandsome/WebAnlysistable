@@ -149,7 +149,7 @@ def import_w427():
                 from services.w427_record_service import _validate
                 from services.w427_pdf_renderer import build_w427_pdf
                 _validate(analysis)
-                output = build_w427_pdf(report, method, control, form, analysis)
+                output = build_w427_pdf(report, method, control, form, analysis, preview=True)
                 return send_file(output, mimetype="application/pdf", as_attachment=True,
                                  download_name="W427_Analysis_Record.pdf")
             if action == "submit_record":

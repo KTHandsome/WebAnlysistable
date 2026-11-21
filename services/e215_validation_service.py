@@ -18,6 +18,9 @@ def _batch_dates(fields, prefix):
             raise ValueError('Expected local datetime')
     except (ValueError, TypeError, IndexError):
         raise ValueError(prefix + '採樣日期或培養起迄日期／時間未填或格式錯誤。')
+    # e215-sampling-date-order-v1
+    if sampling > start.date():
+        raise ValueError(prefix + '採樣日期不可晚於培養起始日期。')
     duration = end - start
     if not timedelta(hours=18) <= duration <= timedelta(hours=22):
         hours = duration.total_seconds() / 3600

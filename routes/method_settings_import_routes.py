@@ -304,6 +304,28 @@ def method_settings_import():
                                      + " 列：REPORT_CODE 不可空白。"
                                 )    
 
+                            # membrane-manual-csv-validation-v1
+                            if method_code.upper() in {"E202", "E230"} and data_entry_mode == "MANUAL":
+                                # Membrane methods do not use instrument calibration or derived QDL.
+                                for field_name in ("CATEGORY_CODE", "EXAMNAME"):
+                                    if not (row.get(field_name) or "").strip():
+                                        validation_errors.append(
+                                            f"第 {row_index} 列：{field_name} 不可空白。"
+                                        )
+                                if report_code != "COLIFORM_RECORD":
+                                    validation_errors.append(
+                                        f"第 {row_index} 列：{method_code} 的 REPORT_CODE 必須是 COLIFORM_RECORD。"
+                                    )
+                                if active not in {"Y", "N"}:
+                                    validation_errors.append(
+                                        f"第 {row_index} 列：ACTIVE 只能是 Y 或 N。"
+                                    )
+                                if import_type or signal_field:
+                                    validation_errors.append(
+                                        f"第 {row_index} 列：{method_code} 手動模式的 IMPORT_TYPE 與 SIGNAL_FIELD 必須留空。"
+                                    )
+                                continue
+
                             if method_code.upper() == "E215" and data_entry_mode == "MANUAL":
                                 # Manual E215 uses no instrument calibration or derived QDL.
                                 for field_name in ("CATEGORY_CODE", "EXAMNAME"):

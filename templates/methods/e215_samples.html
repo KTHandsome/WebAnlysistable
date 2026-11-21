@@ -5,10 +5,44 @@
 </style>
 <div class="eacs-card e215-actions" role="group" aria-label="分析資料操作">
   <span id="e215-draft-status" role="status" style="margin-inline-end:auto"></span>
-  <button type="button" class="eacs-button e215-action" id="e215-draft-save" disabled style="--edge:#2c5a9b;--bg:#2c5a9b;--ink:#fff">暫存分析資料</button>
-  <button type="button" class="eacs-button e215-action" id="e215-formal-save" disabled style="--edge:#2c5a9b;--bg:#2c5a9b;--ink:#fff">儲存分析紀錄</button>
-  <button type="button" class="eacs-button e215-action" id="e215-preview-pdf" disabled style="--edge:#2459ae;--bg:#fff;--ink:#2459ae">匯出檢驗紀錄表</button>
-  <button type="button" class="eacs-button e215-action" id="e215-export-lims" disabled style="--edge:#00796f;--bg:#fff;--ink:#00796f">匯出 LIMS</button>
+  <style>
+/* phyon-record-action-standard-v2 */
+button.phyon-record-action {
+  border-style:solid !important;
+  border-width:1px !important;
+  border-radius:6px;
+  opacity:1;
+}
+button.phyon-record-action.phyon-record-action-save {
+  background:#2c61a3 !important;
+  color:#fff !important;
+  border-color:#2c61a3 !important;
+}
+button.phyon-record-action.phyon-record-action-pdf {
+  background:#fff !important;
+  color:#2459ae !important;
+  border-color:#2459ae !important;
+}
+button.phyon-record-action.phyon-record-action-lims {
+  background:#fff !important;
+  color:#009688 !important;
+  border-color:#009688 !important;
+}
+button.phyon-record-action:focus-visible {
+  outline:3px solid #88b7ee;
+  outline-offset:3px;
+}
+button.phyon-record-action:disabled {
+  background:#e5e7eb !important;
+  color:#8b95a1 !important;
+  border-color:#d5dbe2 !important;
+  cursor:not-allowed;
+}
+</style>
+<button type="button" class="eacs-button eacs-button-primary phyon-record-action phyon-record-action-save" id="e215-draft-save" disabled>暫存分析資料</button>
+  <button type="button" class="eacs-button eacs-button-primary phyon-record-action phyon-record-action-save" id="e215-formal-save" disabled>儲存分析紀錄</button>
+  <button type="button" class="eacs-button eacs-button-primary phyon-record-action phyon-record-action-pdf" id="e215-preview-pdf" disabled>匯出檢驗紀錄表</button>
+  <button type="button" class="eacs-button eacs-button-primary phyon-record-action phyon-record-action-lims" id="e215-export-lims" disabled>匯出 LIMS</button>
 </div>
 
 <section class="eacs-card">
@@ -681,5 +715,112 @@
     dirty();
     sampleRows.get(sid)?.querySelector(".e215-sample-id input")?.focus();
   });
+})();
+</script>
+
+<!-- e215-realtime-time-check-v2 -->
+<script>
+(() => {
+  "use strict";
+  // Use UTC solely for arithmetic on local wall-clock components (no timezone conversion).
+  function parseDay(value) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+    if (!m) return null;
+    const year = Number(m[1]), month = Number(m[2]), day = Number(m[3]);
+    if (year < 1000 || year > 9999) return null;
+    const stamp = Date.UTC(year, month - 1, day);
+    const d = new Date(stamp);
+    return d.getUTCFullYear() === year && d.getUTCMonth() === month - 1 && d.getUTCDate() === day ? stamp : null;
+  }
+  function parseClock(value) {
+    const m = /^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?$/.exec(value || "");
+    if (!m || Number(m[1]) > 23 || Number(m[2]) > 59 || Number(m[3] || 0) > 59) return null;
+    return Number(m[1]) * 3600000 + Number(m[2]) * 60000 + Number(m[3] || 0) * 1000 + Number('0.' + (m[4] || '0')) * 1000;
+  }
+  function parseStamp(value) {
+    const m = /^(\d{4}-\d{2}-\d{2})[T ](.+)$/.exec(value || "");
+    if (!m) return null;
+    const day = parseDay(m[1]), clock = parseClock(m[2]);
+    return day === null || clock === null ? null : day + clock;
+  }
+  function checkE215Times(batches) {
+    const issues = [];
+    batches.forEach((batch, index) => {
+      const prefix = '批次 ' + (index + 1) + '：';
+      const sampling = parseDay(batch.fields[3]);
+      const start = parseStamp(batch.fields[4]);
+      const end = parseStamp(batch.fields[5]);
+      if (sampling === null) issues.push(prefix + '請填寫有效的採樣日期。');
+      if (start === null) issues.push(prefix + '請填寫完整且有效的培養起始日期／時間。');
+      if (end === null) issues.push(prefix + '請填寫完整且有效的培養結束日期／時間。');
+      if (sampling !== null && start !== null && sampling > start) {
+        issues.push(prefix + '採樣日期不可晚於培養起始日期。');
+      }
+      if (start !== null && end !== null) {
+        const elapsed = end - start;
+        if (elapsed < 18 * 3600000 || elapsed > 22 * 3600000) {
+          const hours = Number((elapsed / 3600000).toFixed(3));
+          issues.push(prefix + '培養時間須介於 18～22 小時（含上下限），目前為 ' + hours + ' 小時。');
+        }
+      }
+      batch.rows.forEach(row => {
+        const clock = parseClock(row.time);
+        if (clock === null) {
+          issues.push(prefix + row.name + '：請填寫有效的採樣時間。');
+        } else if (sampling !== null && start !== null && Math.floor(start / 86400000) === Math.floor(sampling / 86400000) && start <= sampling + clock) {
+          issues.push(prefix + row.name + '：同日採樣時，培養起始時間必須晚於採樣時間。');
+        }
+      });
+    });
+    return issues;
+  }
+  const list = document.getElementById('e215-preview-list');
+  if (!list || document.getElementById('e215-time-feedback')) return;
+  const panel = document.createElement('div');
+  panel.id = 'e215-time-feedback';
+  panel.setAttribute('role', 'status');
+  panel.setAttribute('aria-live', 'polite');
+  panel.setAttribute('aria-atomic', 'true');
+  panel.style.cssText = 'box-sizing:border-box;height:96px;overflow:auto;padding:8px 10px;margin:8px 0;border:1px solid #e2e5e9;border-radius:6px;font-size:12px;line-height:1.6';
+  list.parentNode.insertBefore(panel, list);
+  const analysis = document.createElement('p');
+  analysis.id = 'e215-analysis-date-display';
+  const analysisStart = {{ form.get('analysis_start_date', '') | tojson }};
+  const analysisEnd = {{ form.get('analysis_end_date', '') | tojson }};
+  analysis.textContent = '檢驗分析日期：' + (analysisStart || '未填') +
+    (analysisEnd && analysisEnd !== analysisStart ? ' ～ ' + analysisEnd : '') + '（依基本資料）';
+  analysis.style.cssText = 'margin:8px 0;font-size:13px';
+  list.parentNode.insertBefore(analysis, panel);
+  let timer;
+  function refresh() {
+    const batches = [...list.querySelectorAll('.e215-batch-head')].map(head => {
+      const table = head.nextElementSibling?.firstElementChild;
+      return {
+        fields: [...head.querySelectorAll('.e215-batch-value')].map(field => field.value),
+        rows: [...(table?.tBodies?.[0]?.rows || [])].slice(1).map(row => ({
+          name: row.cells[0].querySelector('input')?.value.trim() || row.cells[0].textContent.trim() || '未填樣品編號',
+          time: row.querySelector('input[type="time"]')?.value || ''
+        }))
+      };
+    });
+    if (!batches.length) {
+      panel.textContent = '載入樣品後，會即時檢查 E215 日期與時間。';
+      panel.style.background = '#f7f8fa'; panel.style.color = '#596579';
+      return;
+    }
+    const issues = checkE215Times(batches);
+    const lines = issues.length ? issues : ['時間檢查通過：培養時間介於 18～22 小時，同日採樣的培養起始時間晚於採樣時間。'];
+    const nodes = lines.map(text => {
+      const line = document.createElement('div'); line.textContent = text; return line;
+    });
+    panel.replaceChildren(...nodes);
+    panel.style.background = issues.length ? '#fff3e6' : '#ecfdf5';
+    panel.style.color = issues.length ? '#9a5700' : '#187443';
+  }
+  const schedule = () => { clearTimeout(timer); timer = setTimeout(refresh, 350); };
+  list.addEventListener('input', schedule);
+  list.addEventListener('change', schedule);
+  new MutationObserver(schedule).observe(list, {childList: true, subtree: true});
+  refresh();
 })();
 </script>

@@ -96,7 +96,9 @@ def can_resume_analysis_record(record):
 
 def get_resume_work_conflict_reason(method_code, analysis_id):
     """Explain the existing conservative check without changing its decisions."""
+    # legacy-resume-conflict-v2
     method_code = str(method_code or "").strip().upper()
+    is_legacy_resume = method_code in {"W532", "W341", "W434"}
     analysis_id = str(analysis_id or "").strip()
 
     # ICP's separate work lifecycle has not yet been integrated here.
@@ -119,7 +121,7 @@ def get_resume_work_conflict_reason(method_code, analysis_id):
     db = SessionLocal()
     try:
         methods = {method_code}
-        if current_method:
+        if current_method and not is_legacy_resume:
             methods.add(current_method)
 
         for candidate_method in methods:
@@ -138,9 +140,19 @@ def get_resume_work_conflict_reason(method_code, analysis_id):
             ).strip()
             form_id = str((form or {}).get("formal_analysis_id") or "").strip()
             identifiers = {value for value in (state_id, session_id, form_id) if value}
+            if is_legacy_resume and not state:
+                # Basic selections alone contain no analytical results to overwrite.
+                # Other methods have independent state keys and are not changed.
+                continue
             if len(identifiers) != 1:
-                return '目前分析狀態、session 或基本資料的正式紀錄編號缺漏或不一致。'
-            formal_id = next(iter(identifiers))
+                # Recover only the requested record, never guess another record ID.
+                if not (is_legacy_resume and analysis_id and state
+                        and state_id in {"", analysis_id}
+                        and form_id in {"", analysis_id}):
+                    return '目前分析狀態、session 或基本資料的正式紀錄編號缺漏或不一致。'
+                formal_id = analysis_id
+            else:
+                formal_id = next(iter(identifiers))
 
             record = db.query(AnalysisRecord).filter(
                 AnalysisRecord.analysis_id == formal_id
@@ -150,7 +162,8 @@ def get_resume_work_conflict_reason(method_code, analysis_id):
             ).first()
             if record is None or snapshot is None:
                 return '目前工作所關聯的正式紀錄或分析快照不存在。'
-            if str(record.analyst_user_id or "").strip() != user_id:
+            if (str(record.analyst_user_id or "").strip() != user_id
+                    and not (is_legacy_resume and can_review_analysis())):
                 return '目前工作屬於其他分析員，現有衝突檢查尚未允許切換。'
             if str(record.method_code or "").strip().upper() != candidate_method:
                 return '目前工作與正式紀錄的分析方法不一致。'
@@ -176,8 +189,14 @@ def get_resume_work_conflict_reason(method_code, analysis_id):
                 if live_content != saved_content:
                     return '目前分析數據與已儲存快照不同，請先保留尚未儲存的修改。'
 
-            if form is not None and form != saved_form:
-                return '目前基本資料與已儲存快照不同，請先保留尚未儲存的修改。'
+            if form is not None:
+                live_form = dict(form)
+                snapshot_form = dict(saved_form)
+                if is_legacy_resume:
+                    live_form.pop("formal_analysis_id", None)
+                    snapshot_form.pop("formal_analysis_id", None)
+                if live_form != snapshot_form:
+                    return '目前基本資料與已儲存快照不同，請先保留尚未儲存的修改。'
 
         return ""
     finally:
@@ -211,10 +230,33 @@ def analysis_records():
         for name in filter_names
     }
 
+    # record-method-choices-v1
+    selected_method_exam = request.args.get("method_exam", "").strip()
+    selected_pair = None
+    if selected_method_exam:
+        try:
+            selected_pair = json.loads(selected_method_exam)
+            if (not isinstance(selected_pair, list) or len(selected_pair) != 2
+                    or not all(isinstance(v, str) and v for v in selected_pair)):
+                raise ValueError("Invalid method/exam selection")
+        except (ValueError, TypeError):
+            return "方法／測項選項無效，請清除條件後重新選擇。", 400
     db = SessionLocal()
 
     try:
+        # Options come from stored formal records, independently of current filters.
+        pairs = db.query(AnalysisRecord.method_code, AnalysisRecord.exam_name).distinct().all()
+        method_exam_options = [
+            {"value": json.dumps([method, exam], ensure_ascii=False),
+             "label": method + "｜" + exam}
+            for method, exam in sorted({(m, e) for m, e in pairs if m and e})
+        ]
+        selected_method_exam = (json.dumps(selected_pair, ensure_ascii=False)
+                                if selected_pair else "")
         query = db.query(AnalysisRecord)
+        if selected_pair:
+            query = query.filter(AnalysisRecord.method_code == selected_pair[0],
+                                 AnalysisRecord.exam_name == selected_pair[1])
 
         # 精確比對
         for field in (
@@ -244,6 +286,8 @@ def analysis_records():
             "analyst_name",
         ):
             value = search_data[field]
+            if selected_pair and field in {"exam_name", "method_code"}:
+                continue
 
             if value:
                 if field == "exam_name":
@@ -288,6 +332,8 @@ def analysis_records():
         return render_template(
             "analysis_records.html",
             records=records,
+            method_exam_options=method_exam_options,
+            selected_method_exam=selected_method_exam,
             search_data=search_data,
             can_delete_analysis=can_delete_analysis(),
             can_view_delete_history=(
@@ -360,7 +406,7 @@ def analysis_record_detail(analysis_id):
             return detail(db, record)
 
         if str(record.method_code or "").strip().upper() == "E215":
-            import json
+            # json uses the module-level import (analysis-detail-json-fix-v1)
             work = db.query(AnalysisWorkState).filter_by(analysis_id=analysis_id).first()
             if not work:
                 return "查無 E215 正式紀錄快照。", 404
@@ -1243,7 +1289,7 @@ def resume_analysis_record(analysis_id):
             from analysis.analysis_work_draft_repository import (
                 AnalysisWorkDraftRepository, DraftConflictError,
             )
-            if method_code not in {"W434", "W430", "W427"}:
+            if method_code not in {"W434", "W430", "W427", "W433"}:
                 return "此方法尚未接入新版工作恢復流程。", 400
             actor = get_current_user() or {}
             actor_id = str(actor.get("user_id") or "").strip()
@@ -1264,7 +1310,7 @@ def resume_analysis_record(analysis_id):
                 elif bundle["work_status"] != "EDITING":
                     return "此工作狀態不可進入修正。", 409
                 # Existing EDITING work is reopened without reverting its edits.
-                endpoint = {"W430":"w430_import_bp.import_w430", "W427":"w427_import_bp.import_w427"}.get(method_code, "analysis_w43401")
+                endpoint = {"W430":"w430_import_bp.import_w430", "W427":"w427_import_bp.import_w427", "W433":"w433_import_bp.import_w433"}.get(method_code, "analysis_w43401")
                 return redirect(url_for(endpoint, saved="1", work_id=work_id))
             except PermissionError as exc:
                 db.rollback()

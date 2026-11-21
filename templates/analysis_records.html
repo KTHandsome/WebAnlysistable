@@ -64,9 +64,16 @@
 
             <div class="eacs-form-field">
                 <label class="eacs-form-label" for="category">檢測類別</label>
-                <input type="text" id="category" name="category"
-                       class="eacs-form-control" placeholder="輸入類別代碼（精確比對）"
-                       value="{{ search_data.category | default('', true) }}">
+                {# record-category-choices-v1 #}
+                <select id="category" name="category" class="eacs-form-control">
+                    <option value="">全部</option>
+                    {% for code in ['A', 'P', 'S', 'W', 'D', 'G', 'R', 'I', 'B'] %}
+                    <option value="{{ code }}" {% if search_data.category == code %}selected{% endif %}>{{ code }}</option>
+                    {% endfor %}
+                    {% if search_data.category and search_data.category not in ['A', 'P', 'S', 'W', 'D', 'G', 'R', 'I', 'B'] %}
+                    <option value="{{ search_data.category }}" selected>{{ search_data.category }}</option>
+                    {% endif %}
+                </select>
             </div>
 
             <div class="eacs-form-field">
@@ -80,17 +87,13 @@
             </div>
 
             <div class="eacs-form-field">
-                <label class="eacs-form-label" for="exam_name">測項</label>
-                <input type="text" id="exam_name" name="exam_name"
-                       class="eacs-form-control" placeholder="例如：TOC"
-                       value="{{ search_data.exam_name | default('', true) }}">
-            </div>
-
-            <div class="eacs-form-field">
-                <label class="eacs-form-label" for="method_code">方法</label>
-                <input type="text" id="method_code" name="method_code"
-                       class="eacs-form-control" placeholder="例如：W532"
-                       value="{{ search_data.method_code | default('', true) }}">
+                <label class="eacs-form-label" for="method_exam">方法／測項</label>
+                <select id="method_exam" name="method_exam" class="eacs-form-control">
+                    <option value="">全部</option>
+                    {% for option in method_exam_options %}
+                    <option value="{{ option.value }}" {% if selected_method_exam == option.value %}selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
             </div>
 
             <div class="eacs-form-field">

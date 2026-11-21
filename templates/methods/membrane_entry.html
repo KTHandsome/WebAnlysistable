@@ -76,10 +76,44 @@
 </section>
 <section class="eacs-card mf-head">
   <span id="mf-status" role="status" style="margin-right:auto"></span>
-  <button type="button" id="mf-draft" class="eacs-button eacs-button-primary">暫存分析資料</button>
-  <button type="button" id="mf-submit" class="eacs-button eacs-button-primary">儲存分析紀錄</button>
-  <button type="button" id="mf-pdf" class="eacs-button">匯出檢驗紀錄表</button>
-  <button type="button" id="mf-lims" class="eacs-button">匯出 LIMS</button>
+  <style>
+/* phyon-record-action-standard-v2 */
+button.phyon-record-action {
+  border-style:solid !important;
+  border-width:1px !important;
+  border-radius:6px;
+  opacity:1;
+}
+button.phyon-record-action.phyon-record-action-save {
+  background:#2c61a3 !important;
+  color:#fff !important;
+  border-color:#2c61a3 !important;
+}
+button.phyon-record-action.phyon-record-action-pdf {
+  background:#fff !important;
+  color:#2459ae !important;
+  border-color:#2459ae !important;
+}
+button.phyon-record-action.phyon-record-action-lims {
+  background:#fff !important;
+  color:#009688 !important;
+  border-color:#009688 !important;
+}
+button.phyon-record-action:focus-visible {
+  outline:3px solid #88b7ee;
+  outline-offset:3px;
+}
+button.phyon-record-action:disabled {
+  background:#e5e7eb !important;
+  color:#8b95a1 !important;
+  border-color:#d5dbe2 !important;
+  cursor:not-allowed;
+}
+</style>
+<button type="button" id="mf-draft" class="eacs-button eacs-button-primary phyon-record-action phyon-record-action-save">暫存分析資料</button>
+  <button type="button" id="mf-submit" class="eacs-button eacs-button-primary phyon-record-action phyon-record-action-save">儲存分析紀錄</button>
+  <button type="button" id="mf-pdf" class="eacs-button eacs-button-primary phyon-record-action phyon-record-action-pdf">匯出檢驗紀錄表</button>
+  <button type="button" id="mf-lims" class="eacs-button eacs-button-primary phyon-record-action phyon-record-action-lims">匯出 LIMS</button>
 </section>
 <section class="eacs-card">
   <h2>查詢樣品</h2>

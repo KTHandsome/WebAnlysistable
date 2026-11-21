@@ -68,12 +68,46 @@
   <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
     <h2 class="eacs-card-title">基本資料與儀器性能查核</h2>
     <div style="display:flex;gap:8px;">
-    {% if preview_token %}<button id="w430-draft-save" type="submit" form="sample-qaqc-form" class="eacs-button eacs-button-primary">暫存分析資料</button>
-    <button id="w430-record-save" type="submit" form="sample-qaqc-form" class="eacs-button eacs-button-primary">儲存分析紀錄</button>
-    <button id="w430-pdf-export" type="submit" form="sample-qaqc-form" class="eacs-button eacs-button-primary">匯出檢驗紀錄表 PDF</button>
-    <button id="w430-excel-export" type="submit" form="sample-qaqc-form" class="eacs-button eacs-button-primary">匯出 LIMS Excel</button>{% endif %}
-    {% if work_submitted and formal_analysis_id %}<button id="w430-pdf-export" type="button" class="eacs-button eacs-button-primary" data-export-url="{{ url_for('export_analysis_record_pdf', analysis_id=formal_analysis_id) }}">匯出檢驗紀錄表 PDF</button>{% endif %}
-    {% if work_submitted and formal_analysis_id %}<button id="w430-excel-export" type="button" class="eacs-button eacs-button-primary" data-export-url="{{ url_for('export_analysis_record_lims', analysis_id=formal_analysis_id) }}">匯出 LIMS Excel</button>{% endif %}
+    {% if preview_token %}<style>
+/* phyon-record-action-standard-v2 */
+button.phyon-record-action {
+  border-style:solid !important;
+  border-width:1px !important;
+  border-radius:6px;
+  opacity:1;
+}
+button.phyon-record-action.phyon-record-action-save {
+  background:#2c61a3 !important;
+  color:#fff !important;
+  border-color:#2c61a3 !important;
+}
+button.phyon-record-action.phyon-record-action-pdf {
+  background:#fff !important;
+  color:#2459ae !important;
+  border-color:#2459ae !important;
+}
+button.phyon-record-action.phyon-record-action-lims {
+  background:#fff !important;
+  color:#009688 !important;
+  border-color:#009688 !important;
+}
+button.phyon-record-action:focus-visible {
+  outline:3px solid #88b7ee;
+  outline-offset:3px;
+}
+button.phyon-record-action:disabled {
+  background:#e5e7eb !important;
+  color:#8b95a1 !important;
+  border-color:#d5dbe2 !important;
+  cursor:not-allowed;
+}
+</style>
+<button id="w430-draft-save" type="submit" form="sample-qaqc-form" class="eacs-button eacs-button-primary phyon-record-action phyon-record-action-save">暫存分析資料</button>
+    <button id="w430-record-save" type="submit" form="sample-qaqc-form" class="eacs-button eacs-button-primary phyon-record-action phyon-record-action-save">儲存分析紀錄</button>
+    <button id="w430-pdf-export" type="submit" form="sample-qaqc-form" class="eacs-button eacs-button-primary phyon-record-action phyon-record-action-pdf">匯出檢驗紀錄表 PDF</button>
+    <button id="w430-excel-export" type="submit" form="sample-qaqc-form" class="eacs-button eacs-button-primary phyon-record-action phyon-record-action-lims">匯出 LIMS Excel</button>{% endif %}
+    {% if work_submitted and formal_analysis_id %}<button id="w430-pdf-export" type="button" class="eacs-button eacs-button-primary phyon-record-action phyon-record-action-pdf" data-export-url="{{ url_for('export_analysis_record_pdf', analysis_id=formal_analysis_id) }}">匯出檢驗紀錄表 PDF</button>{% endif %}
+    {% if work_submitted and formal_analysis_id %}<button id="w430-excel-export" type="button" class="eacs-button eacs-button-primary phyon-record-action phyon-record-action-lims" data-export-url="{{ url_for('export_analysis_record_lims', analysis_id=formal_analysis_id) }}">匯出 LIMS Excel</button>{% endif %}
     </div>
   </div>
   {% if work_notice %}<p role="status" style="color:#15803d;font-size:13px;">{{ work_notice }}</p>{% endif %}

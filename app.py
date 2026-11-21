@@ -1030,6 +1030,9 @@ def basic_info():
                 ""
             ).strip(),
 
+            # preserve-basic-entry-mode-v1
+            "data_entry_mode": request.form.get("data_entry_mode", "").strip().upper(),
+
             "selected_exam_no": request.form.get(
                 "selected_exam_no",
                 ""

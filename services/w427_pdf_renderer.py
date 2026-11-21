@@ -54,7 +54,7 @@ def _remark(row, control, places):
     return value
 
 
-def build_w427_pdf(report, method, control, form, analysis):
+def build_w427_pdf(report, method, control, form, analysis, preview=False):
     font = _font()
     width, height = A4
     usable, top, bottom = width - 80, height - 122, 57
@@ -116,6 +116,13 @@ def build_w427_pdf(report, method, control, form, analysis):
         c.drawString(40,y,str(report.get("COMPANY_NAME") or ""))
         c.drawRightString(width-40,y,str(report.get("DOC_NO") or "")+" 版次："+str(report.get("REVISION") or ""))
         c.drawRightString(width-40,y-13,"發行日期："+str(report.get("ISSUE_DATE") or ""))
+        # w427-preview-header-v1
+        if preview:
+            c.saveState()
+            c.setFont(font, 7.5)
+            c.setFillGray(0.35)
+            c.drawRightString(width-40, y-25, "預覽｜非正式紀錄")
+            c.restoreState()
         c.setFont(font,12)
         c.drawCentredString(width/2,y-25,str(report.get("FORM_TITLE") or "W427 磷檢驗紀錄表"))
         c.setFont(font,8)

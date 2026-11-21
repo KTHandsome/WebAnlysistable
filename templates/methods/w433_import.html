@@ -38,10 +38,44 @@
 <div class="eacs-card w433-action-bar" aria-label="分析資料操作">
   <span id="w433-save-status" class="w433-save-status {{ 'is-saved' if is_saved else 'is-unsaved' }}" role="status">{{ '分析資料已暫存' if is_saved else '分析資料已載入，尚未儲存' }}</span>
   <div class="w433-action-buttons">
-    <button class="w433-action-primary" type="submit" form="w433-samples" name="edit_action" value="draft" {% if submitted %}disabled{% endif %}>暫存分析資料</button>
-    <button class="w433-action-primary" type="submit" form="w433-samples" name="edit_action" value="submit" {% if submitted %}disabled{% endif %}>儲存分析紀錄</button>
-    <button class="w433-action-pdf" type="submit" form="w433-samples" name="edit_action" value="pdf">匯出檢驗紀錄表</button>
-    <button class="w433-action-lims" type="submit" form="w433-samples" name="edit_action" value="excel">匯出 LIMS</button>
+    <style>
+/* phyon-record-action-standard-v2 */
+button.phyon-record-action {
+  border-style:solid !important;
+  border-width:1px !important;
+  border-radius:6px;
+  opacity:1;
+}
+button.phyon-record-action.phyon-record-action-save {
+  background:#2c61a3 !important;
+  color:#fff !important;
+  border-color:#2c61a3 !important;
+}
+button.phyon-record-action.phyon-record-action-pdf {
+  background:#fff !important;
+  color:#2459ae !important;
+  border-color:#2459ae !important;
+}
+button.phyon-record-action.phyon-record-action-lims {
+  background:#fff !important;
+  color:#009688 !important;
+  border-color:#009688 !important;
+}
+button.phyon-record-action:focus-visible {
+  outline:3px solid #88b7ee;
+  outline-offset:3px;
+}
+button.phyon-record-action:disabled {
+  background:#e5e7eb !important;
+  color:#8b95a1 !important;
+  border-color:#d5dbe2 !important;
+  cursor:not-allowed;
+}
+</style>
+<button class="w433-action-primary phyon-record-action phyon-record-action-save" type="submit" form="w433-samples" name="edit_action" value="draft" {% if submitted %}disabled{% endif %}>暫存分析資料</button>
+    <button class="w433-action-primary phyon-record-action phyon-record-action-save" type="submit" form="w433-samples" name="edit_action" value="submit" {% if submitted %}disabled{% endif %}>儲存分析紀錄</button>
+    <button class="w433-action-pdf phyon-record-action phyon-record-action-pdf" type="submit" form="w433-samples" name="edit_action" value="pdf">匯出檢驗紀錄表</button>
+    <button class="w433-action-lims phyon-record-action phyon-record-action-lims" type="submit" form="w433-samples" name="edit_action" value="excel">匯出 LIMS</button>
   </div>
 </div>
 <style>

@@ -402,6 +402,11 @@
                 %}
 
                 {% if entry_mode == "BOTH" %}
+                {# preserve-basic-entry-mode-v1 #}
+                {% set selected_entry_mode = form_data.get('data_entry_mode', '') | trim | upper %}
+                {% if selected_entry_mode not in ('MANUAL', 'IMPORT') %}
+                    {% set selected_entry_mode = 'IMPORT' if form_data.get('method_code', '') | trim | upper == 'W427' and method_data.get('IMPORT_TYPE', '') | trim | upper == 'UV_TXT' else 'MANUAL' %}
+                {% endif %}
 
                 <label style="
                     display: inline-flex;
@@ -413,8 +418,9 @@
                     <input
                         type="radio"
                         name="data_entry_mode"
+                        form="basic-info-form"
                         value="MANUAL"
-                        checked
+                        {% if selected_entry_mode == "MANUAL" %}checked{% endif %}
                         onchange="updateDataEntryMode()"
                         style="width: auto;"
                     >
@@ -430,7 +436,9 @@
                     <input
                         type="radio"
                         name="data_entry_mode"
+                        form="basic-info-form"
                         value="IMPORT"
+                        {% if selected_entry_mode == "IMPORT" %}checked{% endif %}
                         onchange="updateDataEntryMode()"
                         style="width: auto;"
                     >
@@ -448,6 +456,7 @@
                     <input
                         type="radio"
                         name="data_entry_mode"
+                        form="basic-info-form"
                         value="MANUAL"
                         checked
                         style="width: auto;"
@@ -466,6 +475,7 @@
                     <input
                         type="radio"
                         name="data_entry_mode"
+                        form="basic-info-form"
                         value="IMPORT"
                         checked
                         style="width: auto;"
@@ -659,6 +669,11 @@
 
         {% else %}
 
+            {# resolved-exam-form-value-v1 #}
+            {% if control_data and control_data.EXAMNO %}
+            <input type="hidden" name="selected_exam_no" form="basic-info-form"
+                   value="{{ control_data.EXAMNO }}">
+            {% endif %}
             {{ control_data.EXAMNO if control_data else "-" }}
 
         {% endif %}
@@ -1237,6 +1252,9 @@ function submitSelectedExamNo() {
         return;
     }
 
+    // selected-exam-reload-v1
+    const nextAction = document.getElementById("next_action");
+    if (nextAction) nextAction.value = "";
     form.submit();
 }
 

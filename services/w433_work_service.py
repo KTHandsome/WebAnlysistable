@@ -23,7 +23,17 @@ def new_bundle(result, form, control, method, report):
                 state=dict(w433_format=1, original=clean_result(result), result=clean_result(result)))
 
 
+# w433-resume-owner-v1
+def _work_owner(db, work_id, actor):
+    from analysis.analysis_work_access import resolve_work_owner
+    draft = db.query(AnalysisWorkDraft).filter(AnalysisWorkDraft.work_id == work_id).first()
+    if draft is None:
+        raise ValueError("找不到 W433 工作。")
+    return resolve_work_owner(db, draft, actor, "W433")
+
+
 def load_bundle(db, work_id, owner):
+    owner = _work_owner(db, work_id, owner)
     b = AnalysisWorkDraftRepository(db).load_draft(work_id, owner, "W433")
     if b["state"].get("w433_format") != 1:
         raise ValueError("W433 工作快照格式不符。")
@@ -31,6 +41,9 @@ def load_bundle(db, work_id, owner):
 
 
 def save_bundle(db, owner, b):
+    actor = owner
+    if b["revision"] is not None:
+        owner = _work_owner(db, b["work_id"], actor)
     repo = AnalysisWorkDraftRepository(db)
     if b["revision"] is None:
         repo.create_draft(AnalysisWorkIdentity(b["work_id"], owner, "W433"),
@@ -46,6 +59,9 @@ def save_bundle(db, owner, b):
     b["revision"] = repo.save_work_bundle(b["work_id"], owner, "W433", revision,
         state=b["state"], form_data=b["form_data"], control_data=b["control_data"],
         method_data=b["method_data"], report_data=b["report_data"])
+    if actor != owner and b.get("formal_analysis_id"):
+        from analysis.analysis_work_access import add_work_actor_history
+        add_work_actor_history(db, b["formal_analysis_id"], "EDIT_DRAFT", b["work_id"], b["revision"], "REJECTED")
     return b
 
 
@@ -164,10 +180,11 @@ def submit_bundle(db, user, b, checks):
     snapshot = db.query(AnalysisWorkState).filter(AnalysisWorkState.analysis_id == aid).one()
     snapshot.state_json = json.dumps(b["state"],ensure_ascii=False)
     # Submission verifies all five draft/snapshot sections in the same transaction.
+    owner = _work_owner(db, b["work_id"], str(user["user_id"]))
     b["revision"] = AnalysisWorkDraftRepository(db).save_work_bundle(
-        b["work_id"],str(user["user_id"]),"W433",b["revision"],state=b["state"])
+        b["work_id"],owner,"W433",b["revision"],state=b["state"])
     b["revision"] = AnalysisWorkDraftRepository(db).submit_draft(
-        b["work_id"],str(user["user_id"]),"W433",b["revision"],aid)
+        b["work_id"],owner,"W433",b["revision"],aid)
     b.update(formal_analysis_id=aid, work_status="SUBMITTED")
     return b
 
